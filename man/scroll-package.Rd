@@ -4,9 +4,9 @@
 \name{scroll-package}
 \alias{scroll}
 \alias{scroll-package}
-\title{scroll: Scroll-Driven Single-Cell Stories from Seurat Objects}
+\title{scroll: Interactive Single-Cell Explorers from Seurat Objects}
 \description{
-Turns a processed Seurat object into an interactive, scroll-driven web story for presenting single-cell analyses. A heavy offline build phase extracts lightweight on-disk artifacts (metadata and embeddings as a small Parquet table, expression as a feature-partitioned Parquet store) that a memory-light Quarto closeread + Shiny runtime reads one feature at a time, so runtime memory stays flat regardless of matrix size.
+Turns a processed Seurat object into a polished, interactive single-cell explorer (a Shiny app with DimPlot, FeaturePlot and DotPlot panels, each with its own controls). A heavy offline build phase extracts lightweight on-disk artifacts (metadata and embeddings as a small Parquet table, expression as a feature-partitioned Parquet store) that the app reads one feature at a time via duckdb, so runtime memory stays flat regardless of matrix size.
 }
 \author{
 \strong{Maintainer}: Shihan Li \email{shihanli1992@gmail.com}

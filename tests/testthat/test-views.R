@@ -50,6 +50,32 @@ test_that("render_view dispatches by ctx and honours feature override", {
   expect_error(render_view("nope", ctx), "Unknown view type")
 })
 
+test_that("view cores honour palette / size / order / scale controls", {
+  cells <- read_cells(test_project())
+  expect_s3_class(
+    view_umap_colorby(cells, list(embedding = "umap", color_by = "celltype"),
+                      state = list(palette = "Okabe-Ito", point_size = 1.2, alpha = 0.5)),
+    "ggplot")
+  vals <- data.frame(cell = cells$cell[1:10], value = runif(10))
+  expect_s3_class(
+    view_feature_plot(cells, list(embedding = "umap", feature = "CD3D"), vals,
+                      state = list(palette = "magma", order = FALSE, point_size = 1)),
+    "ggplot")
+  el <- data.frame(feature = c("CD3D", "CD3D", "MS4A1"), cell = cells$cell[1:3],
+                   value = c(1, 2, 3))
+  expect_s3_class(
+    view_dotplot(cells, list(group_by = "celltype", features = c("CD3D", "MS4A1")), el,
+                 state = list(scale = TRUE, dot_size = c(2, 8), palette = "viridis")),
+    "ggplot")
+})
+
+test_that("discrete colors are deterministic by level name", {
+  a <- scroll:::.scroll_discrete_colors(c("B", "T", "NK"))
+  b <- scroll:::.scroll_discrete_colors(c("NK", "B"))   # subset, different order
+  expect_equal(a[["B"]], b[["B"]])                       # B keeps its color
+  expect_equal(a[["NK"]], b[["NK"]])
+})
+
 test_that("toggles: split_by facets and overrides group_by", {
   cells <- read_cells(test_project())
   p <- view_umap_colorby(cells, list(embedding = "umap", color_by = "celltype"),

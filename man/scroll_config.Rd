@@ -2,7 +2,7 @@
 % Please edit documentation in R/scaffold.R
 \name{scroll_config}
 \alias{scroll_config}
-\title{Read a scroll project config}
+\title{Read a scroll project config (optional defaults), or \code{NULL} if absent}
 \usage{
 scroll_config(dir)
 }
@@ -10,8 +10,8 @@ scroll_config(dir)
 \item{dir}{A scroll project directory.}
 }
 \value{
-The parsed config as a list.
+The parsed config list, or \code{NULL} when there is no \code{config.yaml}.
 }
 \description{
-Read a scroll project config
+Read a scroll project config (optional defaults), or \code{NULL} if absent
 }

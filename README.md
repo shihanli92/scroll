@@ -1,29 +1,28 @@
 # scroll
 
-*Scroll-driven single-cell stories, served from your own infrastructure.*
+*Interactive single-cell explorers, served from your own infrastructure.*
 
-`scroll` turns a processed Seurat object into an interactive, scroll-driven web
-story for presenting single-cell analyses. A heavy **build phase** touches the
-object once and emits lightweight on-disk artifacts; a memory-light **runtime
-phase** (Quarto [closeread](https://closeread.dev) + Shiny) reads only those
-artifacts, querying expression one feature at a time off disk — so runtime RAM
-stays flat regardless of matrix size.
+`scroll` turns a processed Seurat object into a polished, interactive web
+explorer — a scrolling page of analysis panels (DimPlot, FeaturePlot, DotPlot),
+each with its own fine-grained controls. A heavy offline **build phase** extracts
+lightweight on-disk artifacts; the **runtime** (a bslib Shiny app) reads only
+those, querying expression one feature at a time via duckdb — so runtime memory
+stays flat regardless of dataset size. It deploys as a plain `app.R` on an
+open-source Shiny Server, with no render step.
 
-> **Status: Phase 2.** Single-assay build; the full view grammar
-> (`umap_colorby`, `feature_plot`, `dotplot`, `violin`, `proportions`,
-> `de_table`); toggles (embedding / split / subset / labels); duckdb feature
-> lookups; and the scroll × reactive coupling. Multi-assay, `register_view()`,
-> and WebGL scatter are planned for later phases.
+> **Status:** build phase + DimPlot / FeaturePlot / DotPlot panels, wired
+> end-to-end and validated live on pbmc3k. Violin / Proportions / DE panels,
+> `register_panel()`, multi-assay selectors, and WebGL scatter are next.
 
 ## The two phases
 
 ```
-Seurat .rds ──scroll_build()──▶  project/            ──scroll_serve()──▶  web story
+Seurat .rds ──scroll_build()──▶  project/            ──scroll_serve()──▶  explorer
  (heavy, once)                    cells.parquet        (light, per session)
                                   expr/<assay>/feature=*/…
                                   manifest.yaml
-                                  config.yaml   ← authored
-                                  story.qmd     ← authored
+                                  config.yaml   ← optional defaults
+                                  app.R         ← deploy to a Shiny Server
 ```
 
 The running app **never loads the Seurat object**. It loads `cells.parquet`
@@ -33,17 +32,9 @@ with a duckdb query that reads only that feature's Parquet partition.
 ## Install
 
 ```r
-# install.packages(c("SeuratObject", "Matrix", "arrow", "duckdb", "DBI",
-#                     "ggplot2", "yaml", "shiny"))
+# install.packages(c("SeuratObject","Matrix","arrow","duckdb","DBI",
+#                     "ggplot2","scales","shiny","bslib","yaml"))
 R CMD INSTALL scroll        # from the repo root
-```
-
-For the runtime app you also need the **Quarto CLI** and the closeread
-extension (installed *inside a project directory*):
-
-```sh
-# Quarto: https://quarto.org
-quarto add qmd-lab/closeread
 ```
 
 ## Build a project
@@ -54,98 +45,58 @@ library(SeuratData)                    # for the pbmc3k example object
 data("pbmc3k.final", package = "pbmc3k.SeuratData")
 obj <- SeuratObject::UpdateSeuratObject(pbmc3k.final)
 
-scroll_build(obj, "pbmc3k-story")      # object -> project directory
+scroll_build(obj, "pbmc3k")            # object -> project directory
 ```
 
-`scroll_build()` writes `cells.parquet`, the `expr/RNA/` feature-partitioned
-store, `manifest.yaml`, and authorable `config.yaml` + `story.qmd` scaffolding.
-Expression is quantized to `uint8` by default (`quantize = FALSE` to keep full
-precision).
+`scroll_build()` writes `cells.parquet`, the feature-partitioned `expr/` store,
+`manifest.yaml`, a starter `config.yaml`, and a deployable `app.R`. Expression is
+quantized to `uint8` by default (`quantize = FALSE` to keep full precision).
+
+## Explore
+
+```r
+scroll_serve("pbmc3k")                 # runs the app locally
+```
+
+Or deploy: copy the `pbmc3k/` directory to a Shiny Server — its `app.R`
+(`scroll_app(".")`) launches the explorer. Every control auto-populates from the
+manifest; `config.yaml` optionally sets defaults:
+
+```yaml
+title: "PBMC 3k"          # app-bar label
+default_embedding: umap
+default_assay: RNA
+markers: [CD3D, CD8A, MS4A1, CD14, NKG7]   # DotPlot's starting panel
+```
+
+### Panels (v1)
+
+| Panel | Controls |
+|-------|----------|
+| **DimPlot** | reduction · color-by (metadata, categorical or numeric) · palette · point size · opacity · cluster labels · split-by |
+| **FeaturePlot** | gene (server-side search over ~all genes) · assay · reduction · palette · point size · expressing-on-top · split-by |
+| **DotPlot** | marker genes (ordered multi-select) · group-by · assay · z-score scaling · palette · dot-size range |
+
+Categorical colors are assigned **deterministically by level name**, so a cell
+type keeps its color across every panel.
 
 ## Query features directly (no app needed)
 
 ```r
-con <- scroll_connect("pbmc3k-story")
+con <- scroll_connect("pbmc3k")
 hit <- scroll_query_feature(con, "RNA", "MS4A1")   # reads one partition
-man <- scroll_manifest("pbmc3k-story")
+man <- scroll_manifest("pbmc3k")
 hit$value <- scroll_dequantize(hit$value, man, "RNA")
 scroll_disconnect(con)
 ```
-
-## Author + serve the story
-
-Edit `config.yaml` (ordered sections + view specs) and `story.qmd` (the
-closeread narrative), then:
-
-```r
-scroll_serve("pbmc3k-story")     # quarto preview (localhost, for the meeting)
-scroll_render("pbmc3k-story")    # rendered output to upload to a Shiny Server
-```
-
-## View grammar
-
-Sections in `config.yaml` name a view type and its params:
-
-| View | Params | Purpose |
-|------|--------|---------|
-| `umap_colorby` | `embedding`, `color_by` | embedding colored by a metadata column |
-| `feature_plot` | `embedding`, `feature`, `assay` | expression on the embedding (live search target) |
-| `dotplot` | `group_by`, `features`, `assay` | mean expression × fraction expressing across groups |
-| `violin` | `group_by`, `feature`, `assay` | per-group distribution for a feature |
-| `proportions` | `group_by`, `fill_by` | stacked composition of one categorical within another |
-| `de_table` | `contrast`, `top` | a precomputed DE table (see below) |
-
-**Toggles** (embedding, split-by, subset, labels) are Shiny inputs carried as
-state on the active view; the feature search box retargets whatever view is in
-focus (scatter recolors, violin switches feature, dotplot adds the gene).
-
-### Precomputed DE tables (`de/`)
-
-`de_table` reads a per-contrast file the author drops into the project's `de/`
-directory — `de/<contrast>.parquet` (or `.csv` / `.tsv`) — and a section
-references it by name:
-
-```yaml
-- id: bcell_de
-  view: de_table
-  params: { contrast: B_vs_rest, top: 50 }
-```
-
-`scroll` reads the table as-is (e.g. a `FindMarkers()` result written to
-`de/B_vs_rest.parquet`); it does not compute DE.
-
-## How scroll × reactivity works
-
-Each `config.yaml` section owns **its own closeread sticky** — one Shiny output
-rendering that section's view (`scroll_sticky_ui()`). closeread pins whichever
-section is on screen, so **scroll position is closeread's job and reactivity is
-Shiny's, with no bridge between them**: there's no `active_section` input and no
-custom scroll JS. A section renders once; scrolling only toggles which sticky is
-visible (no re-render).
-
-The **persistent header** (`scroll_app_ui()`) holds the feature search + toggles
-as global Shiny inputs. Every section's sticky reactive reads them, so the
-search recolors whatever section is in focus and toggles apply everywhere. The
-per-section context logic (`.scroll_section_ctx()`) and the views are unit-tested
-without Quarto (`tests/testthat/`).
-
-Because a `server: shiny` deployment serves `story_files/` but not
-`_extensions/`, closeread's stylesheet would 404 and the sticky layout collapse
-— so `scroll_app_ui()` inlines closeread's CSS into the page, keeping the layout
-identical under `quarto preview` and on a Shiny Server.
-
-**Validated end-to-end** against pbmc3k under `quarto preview`: each section pins
-its own view (`umap_colorby`, `dotplot`, `violin`, …), the global feature search
-recolors the focused section (`MS4A1` lights up the B-cell cluster), and the
-subset toggle restricts to a cell type.
 
 ## Layout
 
 | Path | What |
 |------|------|
 | `R/build.R` | `scroll_build()` + Seurat v5 extraction |
-| `R/manifest.R` / `R/scaffold.R` | manifest + `config.yaml`/`story.qmd` scaffolding |
-| `R/query.R` | duckdb connection + `scroll_query_feature()` |
-| `R/views.R` | `umap_colorby`, `feature_plot`, `render_view()` dispatch |
-| `R/coupling.R` | per-section stickies: header + `scroll_sticky_ui()` + server |
-| `R/serve.R` | `scroll_serve()` / `scroll_render()` (Quarto wrappers) |
+| `R/manifest.R` / `R/scaffold.R` | manifest + `app.R`/`config.yaml` scaffolding |
+| `R/query.R` | duckdb connection + `scroll_query_feature()` / `scroll_query_features()` |
+| `R/views.R` | plot cores: `view_umap_colorby`, `view_feature_plot`, `view_dotplot`, … |
+| `R/app.R` | `scroll_app()`, `scroll_serve()`, the panel modules |
+| `R/styles.R` | the bslib app's design-system CSS + scroll-spy |

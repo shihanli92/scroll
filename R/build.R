@@ -54,7 +54,7 @@ scroll_build <- function(object, outdir,
   # --- manifest + authored scaffolding
   .scroll_write_manifest(outdir, object, assay_info, embeddings, md, meta_cols,
                          n_cells = nrow(cells), quantize = quantize)
-  scroll_scaffold(outdir, assay_info, embeddings, meta_cols, md)
+  scroll_scaffold_app(outdir)
 
   message("scroll project built at: ", normalizePath(outdir))
   invisible(outdir)

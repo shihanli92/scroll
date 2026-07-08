@@ -3,7 +3,7 @@ test_that("scroll_build emits the expected artifacts", {
   expect_true(file.exists(file.path(dir, "cells.parquet")))
   expect_true(file.exists(file.path(dir, "manifest.yaml")))
   expect_true(file.exists(file.path(dir, "config.yaml")))
-  expect_true(file.exists(file.path(dir, "story.qmd")))
+  expect_true(file.exists(file.path(dir, "app.R")))
   expect_true(dir.exists(file.path(dir, "expr", "RNA")))
 
   cells <- as.data.frame(arrow::read_parquet(file.path(dir, "cells.parquet")))
