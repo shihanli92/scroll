@@ -123,13 +123,15 @@
 scroll_app_ui <- function(id = "main", dir = ".") {
   .scroll_require_shiny()
   ids <- .scroll_ids(id)
-  ch <- .scroll_toggle_choices(scroll_manifest(dir))
+  manifest <- scroll_manifest(dir)
+  ch <- .scroll_toggle_choices(manifest)
   subset_choices <- c("(all)" = "")
   if (length(ch$categoricals))
     subset_choices <- c(subset_choices,
                         stats::setNames(ch$categoricals, ch$categoricals))
 
   shiny::tagList(
+    shiny::tags$style(shiny::HTML(.scroll_closeread_css(dir))),
     shiny::tags$script(shiny::HTML(.scroll_bridge_script())),
     shiny::div(
       class = "scroll-searchbox",
@@ -137,7 +139,8 @@ scroll_app_ui <- function(id = "main", dir = ".") {
     ),
     shiny::div(
       class = "scroll-toggles",
-      shiny::selectInput(ids$embedding, "Embedding", choices = ch$embeddings),
+      shiny::selectInput(ids$embedding, "Embedding", choices = ch$embeddings,
+                         selected = manifest$default_embedding),
       shiny::selectInput(ids$split, "Split by",
                          choices = c("(none)" = "", stats::setNames(ch$categoricals, ch$categoricals))),
       shiny::selectInput(ids$subset_col, "Subset column", choices = subset_choices),
@@ -163,6 +166,12 @@ scroll_app_ui <- function(id = "main", dir = ".") {
 #' @export
 scroll_app_server <- function(id = "main", dir = ".") {
   .scroll_require_shiny()
+  # A `server: shiny` deployment serves story_files/ but not _extensions/, so
+  # closeread's linked CSS 404s and the sticky layout collapses. Serve the
+  # extension assets ourselves so the story lays out the same on a Shiny Server
+  # as under `quarto preview`.
+  ext <- file.path(dir, "_extensions")
+  if (dir.exists(ext)) shiny::addResourcePath("_extensions", normalizePath(ext))
   ids <- .scroll_ids(id)
   data <- .scroll_data(dir)
   domain <- shiny::getDefaultReactiveDomain()
@@ -214,6 +223,17 @@ scroll_app_server <- function(id = "main", dir = ".") {
 .scroll_require_shiny <- function() {
   if (!requireNamespace("shiny", quietly = TRUE))
     stop("The scroll app requires the 'shiny' package.", call. = FALSE)
+}
+
+# Inline closeread's stylesheet into the rendered HTML. A `server: shiny`
+# deployment doesn't serve `_extensions/`, so closeread's linked CSS 404s and the
+# sticky layout collapses; baking it into the page makes the layout robust in
+# preview and on a Shiny Server alike.
+.scroll_closeread_css <- function(dir) {
+  hits <- Sys.glob(file.path(dir, "_extensions", "*", "closeread", "closeread.css"))
+  if (!length(hits)) hits <- Sys.glob(file.path(dir, "_extensions", "closeread", "closeread.css"))
+  if (!length(hits)) return("")
+  paste(readLines(hits[[1]], warn = FALSE), collapse = "\n")
 }
 
 .scroll_bridge_script <- function() {

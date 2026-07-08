@@ -124,6 +124,18 @@ as the global input `active_section`; the two drivers meet only inside
 `.scroll_resolve()` and never contend for the DOM. The pure resolve logic and
 the views are unit-tested without Quarto (`tests/testthat/`).
 
+Each scaffolded trigger carries a `data-section` span (which the bridge reads)
+and focuses the single sticky via `@cr-sticky`. Because a `server: shiny`
+deployment serves `story_files/` but not `_extensions/`, closeread's stylesheet
+would 404 and the sticky layout collapse — so `scroll_app_ui()` inlines
+closeread's CSS into the page, keeping the layout identical under `quarto
+preview` and on a Shiny Server.
+
+**Validated end-to-end** against pbmc3k under `quarto preview`: the two-column
+sticky pins, section scrolling switches `umap_colorby → dotplot → violin`, the
+feature search recolors the pinned view (`MS4A1` lights up the B-cell cluster),
+and the subset toggle restricts to a cell type.
+
 ## Layout
 
 | Path | What |

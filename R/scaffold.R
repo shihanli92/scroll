@@ -22,8 +22,9 @@ scroll_scaffold <- function(outdir, assay_info, embeddings, meta_cols, md) {
   default_assay <- names(assay_info)[[1]]
   features <- unlist(assay_info[[default_assay]]$features)
 
-  .scroll_write_config(outdir, default_assay, default_embedding, cats, features)
-  .scroll_write_story(outdir)
+  sections <- .scroll_build_sections(default_assay, default_embedding, cats, features)
+  .scroll_write_config(outdir, default_assay, default_embedding, sections)
+  .scroll_write_story(outdir, sections)
   invisible(outdir)
 }
 
@@ -35,7 +36,8 @@ scroll_scaffold <- function(outdir, assay_info, embeddings, meta_cols, md) {
   if (length(hit) >= 3) utils::head(hit, n) else utils::head(features, n)
 }
 
-.scroll_write_config <- function(outdir, assay, embedding, cats, features) {
+# Build the ordered example sections from what the data supports.
+.scroll_build_sections <- function(assay, embedding, cats, features) {
   color_by <- if (length(cats)) cats[[1]] else NULL
   feature <- features[[1]]
   panel <- .scroll_pick_features(features)
@@ -58,7 +60,10 @@ scroll_scaffold <- function(outdir, assay_info, embeddings, meta_cols, md) {
       list(id = "composition", view = "proportions",
            params = list(group_by = cats[[2]], fill_by = cats[[1]]))))
   }
+  sections
+}
 
+.scroll_write_config <- function(outdir, assay, embedding, sections) {
   config <- list(
     title = "A scroll story",
     default_assay = assay,
@@ -69,24 +74,35 @@ scroll_scaffold <- function(outdir, assay_info, embeddings, meta_cols, md) {
   if (!file.exists(path)) yaml::write_yaml(config, path)
 }
 
-.scroll_write_story <- function(outdir) {
+.scroll_write_story <- function(outdir, sections) {
   path <- file.path(outdir, "story.qmd")
   if (file.exists(path)) return(invisible())
-  writeLines(.scroll_story_template(), path)
+  writeLines(.scroll_story_template(sections), path)
 }
 
-# A closeread + Shiny narrative. The sticky visual and the persistent search box
-# come from scroll_app_ui(); server logic from scroll_app_server(). Each
-# closeread trigger's id matches a section id in config.yaml; cr-bridge.js pushes
-# the active trigger to Shiny as `active_section`.
-.scroll_story_template <- function() {
-  c(
+# Default narrative copy per view type (authors edit these freely).
+.scroll_trigger_prose <- function(view) switch(view,
+  umap_colorby = "The cells, laid out by their embedding and coloured by annotation. Scroll on.",
+  feature_plot = "Search any gene in the box above and the pinned view recolours live to its expression.",
+  dotplot      = "A marker panel: dot size is the fraction of cells expressing, colour the mean expression, across groups.",
+  violin       = "The same signal as a per-group distribution.",
+  proportions  = "How composition shifts across groups.",
+  de_table     = "Differential expression for this contrast.",
+  "This section of the story."
+)
+
+# A closeread + Shiny narrative built from the config sections. One persistent
+# sticky (`#cr-sticky`) holds scroll_app_ui(); every trigger focuses it via
+# `@cr-sticky` and carries a `data-section` span that cr-bridge.js reports to
+# Shiny as `active_section`. The section ids here match config.yaml.
+.scroll_story_template <- function(sections) {
+  head <- c(
     "---",
     "title: \"A scroll story\"",
     "format:",
     "  closeread-html:",
     "    cr-style:",
-    "      narrative-background-color-overlay: \"#111111\"",
+    "      narrative-background-color-overlay: \"#1a1a1a\"",
     "server: shiny",
     "---",
     "",
@@ -103,21 +119,14 @@ scroll_scaffold <- function(outdir, assay_info, embeddings, meta_cols, md) {
     "scroll_app_ui(\"main\", dir = project_dir)",
     "```",
     ":::",
-    "",
-    "Welcome. Scroll to walk through the analysis; the visual on the",
-    "right stays pinned and answers to both your scroll position and the",
-    "feature search box above it. [@cr-overview]{#overview}",
-    "",
-    "Search any gene above - the pinned view recolors live to that",
-    "feature's expression. [@cr-overview]{#feature}",
-    "",
-    "A marker panel: dot size is the fraction of cells expressing, colour is",
-    "mean expression, across groups. [@cr-overview]{#markers}",
-    "",
-    "The same markers as per-group distributions. [@cr-overview]{#distribution}",
-    "",
-    "And how composition shifts across conditions. [@cr-overview]{#composition}",
-    "",
+    ""
+  )
+  triggers <- unlist(lapply(sections, function(s) c(
+    sprintf("%s <span data-section=\"%s\"></span> @cr-sticky",
+            .scroll_trigger_prose(s$view), s$id),
+    ""
+  )))
+  tail <- c(
     ":::",
     "",
     "```{r}",
@@ -125,6 +134,7 @@ scroll_scaffold <- function(outdir, assay_info, embeddings, meta_cols, md) {
     "scroll_app_server(\"main\", dir = project_dir)",
     "```"
   )
+  c(head, triggers, tail)
 }
 
 #' Read a scroll project config

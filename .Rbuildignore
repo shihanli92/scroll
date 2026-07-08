@@ -1,0 +1,6 @@
+^demo$
+^demo/
+^.*\.tar\.gz$
+^scroll\.Rcheck$
+^\.git$
+^LICENSE\.md$
