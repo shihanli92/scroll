@@ -313,15 +313,19 @@ view_dotplot <- function(cells, params, expr_long, state = list()) {
 .scroll_dotplot_trees <- function(p, hr, hc) {
   if (is.null(hr) && is.null(hc)) return(p)
   if (!requireNamespace("ggtree", quietly = TRUE) ||
-      !requireNamespace("aplot", quietly = TRUE)) return(p)
+      !requireNamespace("aplot", quietly = TRUE) ||
+      !requireNamespace("ape", quietly = TRUE)) return(p)
+  # as.phylo() carries the merge heights as branch lengths, so the tree is drawn
+  # ultrametric (an hclust dendrogram): every leaf lands at the same position
+  # against the plot, instead of a topology-only cladogram with ragged tips.
   # ggtree emits its own deprecation warnings (aes_(), ...) — suppress that noise.
   suppressWarnings({
     pp <- p
     if (!is.null(hr))
-      pp <- aplot::insert_left(pp, ggtree::ggtree(hr), width = 0.16)
+      pp <- aplot::insert_left(pp, ggtree::ggtree(ape::as.phylo(hr)), width = 0.16)
     if (!is.null(hc))
-      pp <- aplot::insert_top(pp, ggtree::ggtree(hc) + ggtree::layout_dendrogram(),
-                              height = 0.16)
+      pp <- aplot::insert_top(pp, ggtree::ggtree(ape::as.phylo(hc)) +
+                                ggtree::layout_dendrogram(), height = 0.16)
   })
   pp
 }

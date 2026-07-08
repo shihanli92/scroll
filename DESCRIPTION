@@ -36,6 +36,7 @@ Suggests:
     shinycssloaders,
     ggtree,
     aplot,
+    ape,
     testthat (>= 3.0.0),
     SeuratData
 Config/testthat/edition: 3
