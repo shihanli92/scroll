@@ -80,9 +80,10 @@ dimplot_ui <- function(id, data) {
         bslib::input_switch(ns("legend"), "Legend", TRUE)),
       .scroll_group("Layout",
         selectInput(ns("split"), "Split by",
-                    c("None" = "", stats::setNames(cats, cats))))
+                    c("None" = "", stats::setNames(cats, cats))),
+        .scroll_aspect_input(ns))
     ),
-    div(class = "scroll-plot", plotOutput(ns("plot"), height = "460px"))
+    div(class = "scroll-plot", plotOutput(ns("plot"), height = "auto"))
   )
 }
 
@@ -129,7 +130,7 @@ dimplot_server <- function(id, data) {
                     split_by = .scroll_nz(input$split),
                     highlight = input$highlight, manual_colors = manual_colors())
       view_umap_colorby(data$cells, params, state)
-    })
+    }, height = function() .scroll_plot_height(input$aspect))
   })
 }
 
@@ -158,9 +159,10 @@ featureplot_ui <- function(id, data) {
         bslib::input_switch(ns("order"), "Expressing cells on top", TRUE),
         bslib::input_switch(ns("legend"), "Legend", TRUE)),
       .scroll_group("Layout",
-        selectInput(ns("split"), "Split by", c("None" = "", stats::setNames(cats, cats))))
+        selectInput(ns("split"), "Split by", c("None" = "", stats::setNames(cats, cats))),
+        .scroll_aspect_input(ns))
     ),
-    div(class = "scroll-plot", plotOutput(ns("plot"), height = "460px"))
+    div(class = "scroll-plot", plotOutput(ns("plot"), height = "auto"))
   )
 }
 
@@ -179,7 +181,7 @@ featureplot_server <- function(id, data) {
                     order = isTRUE(input$order), legend = isTRUE(input$legend),
                     clip = input$clip / 100, split_by = .scroll_nz(input$split))
       view_feature_plot(data$cells, params, data$query1(assay(), feat), state)
-    })
+    }, height = function() .scroll_plot_height(input$aspect))
   })
 }
 
@@ -208,7 +210,7 @@ dotplot_ui <- function(id, data) {
       .scroll_group("Layout",
         selectInput(ns("cluster"), "Cluster (hclust)",
                     c("Off" = "off", "Rows" = "rows", "Columns" = "columns", "Both" = "both")),
-        sliderInput(ns("height"), "Plot height", 0.5, 3, 1, 0.1))
+        .scroll_aspect_input(ns))
     ),
     div(class = "scroll-plot", plotOutput(ns("plot"), height = "auto"))
   )
@@ -229,7 +231,7 @@ dotplot_server <- function(id, data) {
       state <- list(scale = isTRUE(input$scale), palette = input$palette,
                     dot_size = input$dotrange, cluster = input$cluster)
       view_dotplot(data$cells, params, data$queryN(assay(), feats), state)
-    }, height = function() as.integer(520 * (input$height %||% 1)))
+    }, height = function() .scroll_plot_height(input$aspect, 520))
   })
 }
 
@@ -253,9 +255,10 @@ violin_ui <- function(id, data) {
       .scroll_group("Appearance",
         selectInput(ns("palette"), "Palette", names(.scroll_discrete_palettes)),
         bslib::input_switch(ns("jitter"), "Show points", FALSE),
-        bslib::input_switch(ns("legend"), "Legend", FALSE))
+        bslib::input_switch(ns("legend"), "Legend", FALSE)),
+      .scroll_group("Layout", .scroll_aspect_input(ns))
     ),
-    div(class = "scroll-plot", plotOutput(ns("plot"), height = "460px"))
+    div(class = "scroll-plot", plotOutput(ns("plot"), height = "auto"))
   )
 }
 
@@ -273,7 +276,7 @@ violin_server <- function(id, data) {
       state <- list(palette = input$palette, jitter = isTRUE(input$jitter),
                     legend = isTRUE(input$legend))
       view_violin(data$cells, params, data$query1(assay(), feat), state)
-    })
+    }, height = function() .scroll_plot_height(input$aspect))
   })
 }
 
@@ -293,9 +296,10 @@ proportions_ui <- function(id, data) {
       .scroll_group("Appearance",
         selectInput(ns("palette"), "Palette", names(.scroll_discrete_palettes)),
         bslib::input_switch(ns("normalize"), "Normalize to 100%", TRUE),
-        bslib::input_switch(ns("legend"), "Legend", TRUE))
+        bslib::input_switch(ns("legend"), "Legend", TRUE)),
+      .scroll_group("Layout", .scroll_aspect_input(ns))
     ),
-    div(class = "scroll-plot", plotOutput(ns("plot"), height = "460px"))
+    div(class = "scroll-plot", plotOutput(ns("plot"), height = "auto"))
   )
 }
 
@@ -307,7 +311,7 @@ proportions_server <- function(id, data) {
       state <- list(palette = input$palette, normalize = isTRUE(input$normalize),
                     legend = isTRUE(input$legend))
       view_proportions(data$cells, params, state)
-    })
+    }, height = function() .scroll_plot_height(input$aspect))
   })
 }
 
@@ -341,6 +345,14 @@ proportions_server <- function(id, data) {
 .scroll_group <- function(title, ...) {
   div(class = "scroll-cgroup", div(class = "scroll-cgroup-h", title), ...)
 }
+
+# Shared aspect-ratio control, applied uniformly as a rendered-height multiplier
+# (works for every panel including the aplot dendrogram composite, where
+# theme(aspect.ratio) would detach the trees). Every panel adds the input and
+# sets its renderPlot height via .scroll_plot_height(); future panels get it for
+# free by doing the same.
+.scroll_aspect_input <- function(ns) sliderInput(ns("aspect"), "Aspect ratio", 0.4, 3, 1, 0.1)
+.scroll_plot_height <- function(aspect, base = 460) as.integer(base * (aspect %||% 1))
 
 .scroll_stat <- function(value, label)
   div(class = "scroll-stat", span(class = "scroll-stat-v", value),

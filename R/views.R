@@ -336,9 +336,7 @@ view_dotplot <- function(cells, params, expr_long, state = list()) {
   list(
     ggplot2::theme_bw(base_size = 13),
     ggplot2::theme(
-      panel.grid.minor = ggplot2::element_blank(),
-      panel.grid.major.x = ggplot2::element_blank(),
-      panel.grid.major.y = ggplot2::element_line(color = "grey92"),
+      panel.grid = ggplot2::element_blank(),
       panel.border = ggplot2::element_rect(color = "black", linewidth = 0.7, fill = NA),
       axis.text.x = ggplot2::element_text(angle = 45, hjust = 1),
       legend.position = if (isTRUE(legend)) "right" else "none")
