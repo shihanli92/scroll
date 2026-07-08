@@ -4,12 +4,14 @@
 \alias{view_umap_colorby}
 \title{Embedding colored by a metadata column}
 \usage{
-view_umap_colorby(cells, params)
+view_umap_colorby(cells, params, state = list())
 }
 \arguments{
 \item{cells}{The globally-loaded cells data.frame.}
 
 \item{params}{List with \code{embedding} and \code{color_by}.}
+
+\item{state}{Optional toggle state (\code{embedding}, \code{split_by}, \code{show_labels}).}
 }
 \value{
 A ggplot.

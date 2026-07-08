@@ -19,31 +19,46 @@ scroll_scaffold <- function(outdir, assay_info, embeddings, meta_cols, md) {
   cats <- meta_cols[vapply(meta_cols, function(c)
     is.factor(md[[c]]) || is.character(md[[c]]) || is.logical(md[[c]]),
     logical(1))]
-  color_by <- if (length(cats)) cats[[1]] else meta_cols[[1]]
   default_assay <- names(assay_info)[[1]]
-  default_feature <- assay_info[[default_assay]]$features[[1]]
+  features <- unlist(assay_info[[default_assay]]$features)
 
-  .scroll_write_config(outdir, default_assay, default_embedding, color_by,
-                       cats, default_feature)
+  .scroll_write_config(outdir, default_assay, default_embedding, cats, features)
   .scroll_write_story(outdir)
   invisible(outdir)
 }
 
-.scroll_write_config <- function(outdir, assay, embedding, color_by, cats,
-                                 feature) {
+# Prefer recognisable marker genes for the demo panels, else fall back.
+.scroll_pick_features <- function(features, n = 6) {
+  markers <- c("CD3D", "CD8A", "IL7R", "CCR7", "MS4A1", "CD79A", "CD14", "LYZ",
+               "FCGR3A", "NKG7", "GNLY", "PPBP")
+  hit <- intersect(markers, features)
+  if (length(hit) >= 3) utils::head(hit, n) else utils::head(features, n)
+}
+
+.scroll_write_config <- function(outdir, assay, embedding, cats, features) {
+  color_by <- if (length(cats)) cats[[1]] else NULL
+  feature <- features[[1]]
+  panel <- .scroll_pick_features(features)
+
   sections <- list(
     list(id = "overview", view = "umap_colorby",
-         params = list(embedding = embedding, color_by = color_by)),
+         params = list(embedding = embedding, color_by = color_by %||% "orig.ident")),
     list(id = "feature", view = "feature_plot",
          params = list(embedding = embedding, assay = assay, feature = feature))
   )
-  # Add a second colorby section if a second categorical exists.
-  if (length(cats) >= 2) {
-    sections <- append(sections, list(
-      list(id = "second", view = "umap_colorby",
-           params = list(embedding = embedding, color_by = cats[[2]]))),
-      after = 1)
+  if (length(cats) >= 1) {
+    sections <- c(sections, list(
+      list(id = "markers", view = "dotplot",
+           params = list(assay = assay, group_by = cats[[1]], features = as.list(panel))),
+      list(id = "distribution", view = "violin",
+           params = list(assay = assay, group_by = cats[[1]], feature = feature))))
   }
+  if (length(cats) >= 2) {
+    sections <- c(sections, list(
+      list(id = "composition", view = "proportions",
+           params = list(group_by = cats[[2]], fill_by = cats[[1]]))))
+  }
+
   config <- list(
     title = "A scroll story",
     default_assay = assay,
@@ -85,7 +100,7 @@ scroll_scaffold <- function(outdir, assay_info, embeddings, meta_cols, md) {
     "",
     "::: {#cr-sticky .sticky}",
     "```{r}",
-    "scroll_app_ui(\"main\")",
+    "scroll_app_ui(\"main\", dir = project_dir)",
     "```",
     ":::",
     "",
@@ -93,11 +108,15 @@ scroll_scaffold <- function(outdir, assay_info, embeddings, meta_cols, md) {
     "right stays pinned and answers to both your scroll position and the",
     "feature search box above it. [@cr-overview]{#overview}",
     "",
-    "As we scroll, the same cells are recolored by the next annotation.",
-    "[@cr-overview]{#second}",
-    "",
-    "Now search any gene above - the pinned view recolors live to that",
+    "Search any gene above - the pinned view recolors live to that",
     "feature's expression. [@cr-overview]{#feature}",
+    "",
+    "A marker panel: dot size is the fraction of cells expressing, colour is",
+    "mean expression, across groups. [@cr-overview]{#markers}",
+    "",
+    "The same markers as per-group distributions. [@cr-overview]{#distribution}",
+    "",
+    "And how composition shifts across conditions. [@cr-overview]{#composition}",
     "",
     ":::",
     "",

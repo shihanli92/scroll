@@ -12,6 +12,6 @@ scroll_app_server(id = "main", dir = ".")
 \item{dir}{The scroll project directory.}
 }
 \description{
-Wires the single \verb{(active_section, feature)} reactive to the single sticky
-output.
+Wires the single \verb{(active_section, feature, toggles)} reactive to the single
+sticky output.
 }

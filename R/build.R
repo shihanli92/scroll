@@ -39,6 +39,7 @@ scroll_build <- function(object, outdir,
            call. = FALSE)
   }
   dir.create(file.path(outdir, "expr"), recursive = TRUE, showWarnings = FALSE)
+  dir.create(file.path(outdir, "de"), showWarnings = FALSE)
 
   # --- cells.parquet: metadata + all embeddings, the only globally-loaded file
   cells <- .scroll_extract_cells(object, md, meta_cols, embeddings)

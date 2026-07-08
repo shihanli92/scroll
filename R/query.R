@@ -44,6 +44,32 @@ scroll_query_feature <- function(con, assay, feature) {
   DBI::dbGetQuery(con, sql, params = list(glob, feature))
 }
 
+#' Query several features at once
+#'
+#' Reads only the named features' partitions (via `feature IN (...)` predicate
+#' pushdown). Used by aggregate views (e.g. dotplot) that draw a bounded marker
+#' panel; still touches only those partitions, never the whole store.
+#'
+#' @param con A connection from [scroll_connect()].
+#' @param assay Assay name.
+#' @param features Character vector of feature names.
+#' @return A data.frame with columns `feature`, `cell`, `value` (zero-valued
+#'   cells absent).
+#' @export
+scroll_query_features <- function(con, assay, features) {
+  features <- unique(features)
+  if (length(features) == 0)
+    return(data.frame(feature = character(), cell = character(), value = numeric()))
+  dir <- attr(con, "scroll_dir")
+  glob <- file.path(dir, "expr", assay, "**", "*.parquet")
+  placeholders <- paste(rep("?", length(features)), collapse = ", ")
+  sql <- paste0(
+    "SELECT feature, cell, value FROM read_parquet(?, hive_partitioning = true) ",
+    "WHERE feature IN (", placeholders, ")"
+  )
+  DBI::dbGetQuery(con, sql, params = c(list(glob), as.list(features)))
+}
+
 #' Map stored (possibly quantized) values back to normalized expression
 #'
 #' @param values Numeric/integer vector of stored values.

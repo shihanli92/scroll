@@ -9,10 +9,11 @@ phase** (Quarto [closeread](https://closeread.dev) + Shiny) reads only those
 artifacts, querying expression one feature at a time off disk — so runtime RAM
 stays flat regardless of matrix size.
 
-> **Status: Phase 1 walking skeleton.** Single-assay build, `umap_colorby` +
-> live `feature_plot` views, duckdb feature lookups, and the scroll × reactive
-> coupling. Multi-assay, the full view grammar, `register_view()`, and WebGL
-> scatter are planned for later phases.
+> **Status: Phase 2.** Single-assay build; the full view grammar
+> (`umap_colorby`, `feature_plot`, `dotplot`, `violin`, `proportions`,
+> `de_table`); toggles (embedding / split / subset / labels); duckdb feature
+> lookups; and the scroll × reactive coupling. Multi-assay, `register_view()`,
+> and WebGL scatter are planned for later phases.
 
 ## The two phases
 
@@ -80,6 +81,38 @@ closeread narrative), then:
 scroll_serve("pbmc3k-story")     # quarto preview (localhost, for the meeting)
 scroll_render("pbmc3k-story")    # rendered output to upload to a Shiny Server
 ```
+
+## View grammar
+
+Sections in `config.yaml` name a view type and its params:
+
+| View | Params | Purpose |
+|------|--------|---------|
+| `umap_colorby` | `embedding`, `color_by` | embedding colored by a metadata column |
+| `feature_plot` | `embedding`, `feature`, `assay` | expression on the embedding (live search target) |
+| `dotplot` | `group_by`, `features`, `assay` | mean expression × fraction expressing across groups |
+| `violin` | `group_by`, `feature`, `assay` | per-group distribution for a feature |
+| `proportions` | `group_by`, `fill_by` | stacked composition of one categorical within another |
+| `de_table` | `contrast`, `top` | a precomputed DE table (see below) |
+
+**Toggles** (embedding, split-by, subset, labels) are Shiny inputs carried as
+state on the active view; the feature search box retargets whatever view is in
+focus (scatter recolors, violin switches feature, dotplot adds the gene).
+
+### Precomputed DE tables (`de/`)
+
+`de_table` reads a per-contrast file the author drops into the project's `de/`
+directory — `de/<contrast>.parquet` (or `.csv` / `.tsv`) — and a section
+references it by name:
+
+```yaml
+- id: bcell_de
+  view: de_table
+  params: { contrast: B_vs_rest, top: 50 }
+```
+
+`scroll` reads the table as-is (e.g. a `FindMarkers()` result written to
+`de/B_vs_rest.parquet`); it does not compute DE.
 
 ## How the coupling works
 

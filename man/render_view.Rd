@@ -4,31 +4,20 @@
 \alias{render_view}
 \title{Dispatch a section's view to its renderer}
 \usage{
-render_view(
-  view_type,
-  cells,
-  params,
-  feature_values = NULL,
-  feature_name = NULL
-)
+render_view(view_type, ctx)
 }
 \arguments{
-\item{view_type}{One of \code{"umap_colorby"}, \code{"feature_plot"}.}
+\item{view_type}{One of the built-in view types.}
 
-\item{cells}{The cells data.frame.}
-
-\item{params}{The section's params from config.yaml.}
-
-\item{feature_values}{Optional data.frame(cell, value) for an active feature.}
-
-\item{feature_name}{Optional active feature name (for labelling).}
+\item{ctx}{A context list (see Details).}
 }
 \value{
-A ggplot.
+A ggplot (for plot views) or a data.frame (for \code{de_table}).
 }
 \description{
-The single entry point the app calls. When \code{feature_values} is supplied, the
-active feature search overrides the section's native coloring (the persistent
-search box retargets whatever view is in focus); otherwise the view renders
-its configured coloring.
+The single entry point the app calls. \code{ctx} carries \code{cells}, \code{params},
+\code{state} (toggles), and whatever payload the view needs (\code{feature_values},
+\code{feature_name}, \code{expr_long}, \code{de_data}). When a feature search is active it
+retargets the focused view: scatter views recolor, violin switches feature,
+dotplot includes the gene; proportions/de_table are unaffected.
 }

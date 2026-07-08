@@ -14,6 +14,16 @@ test_that("scroll_query_feature reads a single feature and dequantizes", {
   expect_true(all(deq >= 0 & deq <= man$assays$RNA$max + 1e-9))
 })
 
+test_that("scroll_query_features reads several partitions at once", {
+  dir <- test_project()
+  con <- scroll_connect(dir)
+  on.exit(scroll_disconnect(con))
+  hit <- scroll_query_features(con, "RNA", c("CD3D", "MS4A1", "NOT_A_GENE"))
+  expect_true(all(c("feature", "cell", "value") %in% names(hit)))
+  expect_setequal(unique(hit$feature), c("CD3D", "MS4A1"))
+  expect_equal(nrow(scroll_query_features(con, "RNA", character(0))), 0)
+})
+
 test_that("querying a missing feature returns zero rows, not an error", {
   dir <- test_project()
   con <- scroll_connect(dir)

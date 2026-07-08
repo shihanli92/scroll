@@ -4,15 +4,16 @@
 \alias{view_feature_plot}
 \title{Embedding colored by a feature's expression}
 \usage{
-view_feature_plot(cells, params, values = NULL)
+view_feature_plot(cells, params, values = NULL, state = list())
 }
 \arguments{
 \item{cells}{The globally-loaded cells data.frame.}
 
 \item{params}{List with \code{embedding} (and \code{feature}, for the title).}
 
-\item{values}{A data.frame(cell, value) in normalized units, or \code{NULL}.
-Cells absent from \code{values} are treated as 0 (sparse).}
+\item{values}{A data.frame(cell, value) in normalized units, or \code{NULL}.}
+
+\item{state}{Optional toggle state.}
 }
 \value{
 A ggplot.
