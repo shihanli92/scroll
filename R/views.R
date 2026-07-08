@@ -291,7 +291,9 @@ view_dotplot <- function(cells, params, expr_long, state = list()) {
 
   dsize <- .scroll_opt(params, state, "dot_size", c(1, 6))
   pal <- .scroll_opt(params, state, "palette", "magma")
-  aspect <- .scroll_opt(params, state, "aspect", NULL)
+  # Plot shape is controlled by the rendered canvas height (set in the module),
+  # not theme(aspect.ratio): the latter letterboxes the main panel and detaches
+  # the aplot dendrograms, so it must not be used with the trees.
   p <- ggplot2::ggplot(agg, ggplot2::aes(x = .data$group, y = .data$feature)) +
     ggplot2::geom_point(ggplot2::aes(size = .data$frac, color = .data$mean)) +
     ggplot2::scale_size(range = dsize, limits = c(0, 1), labels = scales::percent,
@@ -302,8 +304,6 @@ view_dotplot <- function(cells, params, expr_long, state = list()) {
     ggplot2::theme(panel.grid = ggplot2::element_blank(),
                    panel.border = ggplot2::element_rect(color = "black", linewidth = 0.7, fill = NA),
                    axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
-  if (!is.null(aspect) && is.numeric(aspect) && aspect > 0)
-    p <- p + ggplot2::theme(aspect.ratio = aspect)
 
   .scroll_dotplot_trees(p, hr, hc)
 }
