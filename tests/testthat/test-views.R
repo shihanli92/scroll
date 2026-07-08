@@ -82,6 +82,18 @@ test_that("DimPlot highlight greys unselected groups; manual colors override", {
   expect_equal(unname(cols[["B"]]), "#123456")
 })
 
+test_that("FeaturePlot quantile caps clip the color scale", {
+  cells <- read_cells(test_project())
+  expect_null(scroll:::.scroll_expr_limits(1:100, c(0, 1)))          # no clip
+  lim <- scroll:::.scroll_expr_limits(1:100, c(0.1, 0.9))
+  expect_length(lim, 2)
+  expect_lt(lim[1], lim[2])
+  vals <- data.frame(cell = cells$cell, value = seq_len(nrow(cells)))
+  p <- view_feature_plot(cells, list(embedding = "umap", feature = "CD3D"), vals,
+                         state = list(clip = c(0.1, 0.9)))
+  expect_s3_class(p, "ggplot")
+})
+
 test_that("legend can be switched off", {
   cells <- read_cells(test_project())
   p <- view_umap_colorby(cells, list(embedding = "umap", color_by = "celltype"),

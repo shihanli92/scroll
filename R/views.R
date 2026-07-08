@@ -43,21 +43,30 @@
   stats::setNames(pal[((seq_along(lv) - 1L) %% length(pal)) + 1L], lv)
 }
 
-.scroll_continuous_scale <- function(palette, name = NULL) {
+# `limits` clip the scale (values beyond are squished to the end color, not
+# dropped) — used by FeaturePlot's quantile caps.
+.scroll_continuous_scale <- function(palette, name = NULL, limits = NULL) {
+  vir <- function(opt) ggplot2::scale_color_viridis_c(
+    name = name, option = opt, limits = limits, oob = scales::squish)
+  grad <- function(hi) ggplot2::scale_color_gradient(
+    low = "grey88", high = hi, name = name, limits = limits, oob = scales::squish)
   switch(palette %||% "viridis",
-    viridis = ggplot2::scale_color_viridis_c(name = name),
-    magma   = ggplot2::scale_color_viridis_c(name = name, option = "magma"),
-    plasma  = ggplot2::scale_color_viridis_c(name = name, option = "plasma"),
-    inferno = ggplot2::scale_color_viridis_c(name = name, option = "inferno"),
-    cividis = ggplot2::scale_color_viridis_c(name = name, option = "cividis"),
-    turbo   = ggplot2::scale_color_viridis_c(name = name, option = "turbo"),
-    rocket  = ggplot2::scale_color_viridis_c(name = name, option = "rocket"),
-    mako    = ggplot2::scale_color_viridis_c(name = name, option = "mako"),
-    `grey-purple` = ggplot2::scale_color_gradient(low = "grey88", high = "#3b0f70", name = name),
-    `grey-red`    = ggplot2::scale_color_gradient(low = "grey88", high = "#b2182b", name = name),
-    `grey-blue`   = ggplot2::scale_color_gradient(low = "grey88", high = "#08519c", name = name),
-    ggplot2::scale_color_viridis_c(name = name)
+    viridis = vir("viridis"), magma = vir("magma"), plasma = vir("plasma"),
+    inferno = vir("inferno"), cividis = vir("cividis"), turbo = vir("turbo"),
+    rocket = vir("rocket"), mako = vir("mako"),
+    `grey-purple` = grad("#3b0f70"), `grey-red` = grad("#b2182b"),
+    `grey-blue` = grad("#08519c"),
+    vir("viridis")
   )
+}
+
+# Color-scale limits from min/max quantile fractions (or NULL = no clipping).
+.scroll_expr_limits <- function(expr, clip) {
+  if (is.null(clip) || length(clip) != 2) return(NULL)
+  if (clip[1] <= 0 && clip[2] >= 1) return(NULL)
+  lims <- unname(stats::quantile(expr, c(max(0, clip[1]), min(1, clip[2])), na.rm = TRUE))
+  if (!all(is.finite(lims)) || lims[1] >= lims[2]) return(NULL)
+  lims
 }
 
 # --- shared helpers -----------------------------------------------------------
@@ -178,6 +187,8 @@ view_umap_colorby <- function(cells, params, state = list()) {
       ggplot2::labs(color = color_by)
     label_df <- df
   }
+  # legend key glyphs, sized independently of the (small) plotted points
+  p <- p + ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(size = 4)))
   if (isTRUE(.scroll_opt(params, state, "show_labels", FALSE)) && nrow(label_df))
     p <- p + .scroll_group_labels(label_df, ".col") + ggplot2::guides(color = "none")
   .scroll_maybe_facet(p, df, state)
@@ -198,10 +209,11 @@ view_feature_plot <- function(cells, params, values = NULL, state = list()) {
   if (isTRUE(.scroll_opt(params, state, "order", TRUE)))
     df <- df[order(df$.expr), , drop = FALSE]   # expressing cells drawn on top
   size <- .scroll_opt(params, state, "point_size", 0.7)
+  lims <- .scroll_expr_limits(df$.expr, .scroll_opt(params, state, "clip", NULL))
   p <- .scroll_base_scatter(df, embedding, .scroll_opt(params, state, "legend", TRUE)) +
     ggplot2::geom_point(ggplot2::aes(color = .data$.expr), size = size) +
     .scroll_continuous_scale(.scroll_opt(params, state, "palette", "grey-purple"),
-                             params$feature %||% "expression")
+                             params$feature %||% "expression", lims)
   .scroll_maybe_facet(p, df, state)
 }
 

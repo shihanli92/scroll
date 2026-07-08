@@ -154,6 +154,7 @@ featureplot_ui <- function(id, data) {
       .scroll_group("Appearance",
         selectInput(ns("palette"), "Palette", .scroll_continuous_palettes, selected = "grey-purple"),
         sliderInput(ns("size"), "Point size", 0.1, 5, 0.7, 0.1),
+        sliderInput(ns("clip"), "Color quantiles (%)", 0, 100, c(0, 100), 1),
         bslib::input_switch(ns("order"), "Expressing cells on top", TRUE),
         bslib::input_switch(ns("legend"), "Legend", TRUE)),
       .scroll_group("Layout",
@@ -176,7 +177,7 @@ featureplot_server <- function(id, data) {
       params <- list(embedding = input$reduction, feature = feat)
       state <- list(palette = input$palette, point_size = input$size,
                     order = isTRUE(input$order), legend = isTRUE(input$legend),
-                    split_by = .scroll_nz(input$split))
+                    clip = input$clip / 100, split_by = .scroll_nz(input$split))
       view_feature_plot(data$cells, params, data$query1(assay(), feat), state)
     })
   })
