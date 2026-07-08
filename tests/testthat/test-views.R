@@ -38,6 +38,19 @@ test_that("violin and proportions render ggplots", {
   expect_s3_class(view_proportions(cells, list(group_by = "condition", fill_by = "celltype")), "ggplot")
 })
 
+test_that("violin honours palette/jitter/legend; proportions honours normalize", {
+  cells <- read_cells(test_project())
+  vals <- data.frame(cell = cells$cell[1:20], value = runif(20))
+  expect_s3_class(
+    view_violin(cells, list(feature = "CD3D", group_by = "celltype"), vals,
+                state = list(palette = "Set1", jitter = TRUE, legend = TRUE)),
+    "ggplot")
+  pc <- view_proportions(cells, list(group_by = "condition", fill_by = "celltype"),
+                         state = list(normalize = FALSE))
+  expect_s3_class(pc, "ggplot")
+  expect_equal(pc$labels$y, "cells")     # raw counts, not "composition"
+})
+
 test_that("de_table returns a data.frame (and a message when absent)", {
   df <- data.frame(gene = c("A", "B"), avg_log2FC = c(1.2, -0.5))
   expect_s3_class(view_de_table(df, list(top = 1)), "data.frame")

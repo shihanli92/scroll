@@ -330,12 +330,28 @@ view_dotplot <- function(cells, params, expr_long, state = list()) {
   pp
 }
 
+# Shared theme for the bar/violin panels: black box, no vertical gridlines, a
+# faint horizontal guide for reading values, optional legend.
+.scroll_box_theme <- function(legend = TRUE) {
+  list(
+    ggplot2::theme_bw(base_size = 13),
+    ggplot2::theme(
+      panel.grid.minor = ggplot2::element_blank(),
+      panel.grid.major.x = ggplot2::element_blank(),
+      panel.grid.major.y = ggplot2::element_line(color = "grey92"),
+      panel.border = ggplot2::element_rect(color = "black", linewidth = 0.7, fill = NA),
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1),
+      legend.position = if (isTRUE(legend)) "right" else "none")
+  )
+}
+
 #' Violin: a feature's per-group distribution
 #'
 #' @param cells The cells data.frame.
 #' @param params List with `feature`, `group_by`, optionally `assay`.
 #' @param values A data.frame(cell, value) for the feature, or `NULL`.
-#' @param state Optional toggle state (`split_by` overrides `group_by`).
+#' @param state Optional toggle state (`palette`, `jitter`, `legend`;
+#'   `split_by` overrides `group_by`).
 #' @return A ggplot.
 #' @export
 view_violin <- function(cells, params, values = NULL, state = list()) {
@@ -345,20 +361,24 @@ view_violin <- function(cells, params, values = NULL, state = list()) {
   df <- data.frame(cell = cells$cell, group = as.character(cells[[group_by]]),
                    stringsAsFactors = FALSE)
   df$expr <- .scroll_expr_vector(cells, values)
-  ggplot2::ggplot(df, ggplot2::aes(x = .data$group, y = .data$expr,
-                                   fill = .data$group)) +
-    ggplot2::geom_violin(scale = "width", trim = TRUE, linewidth = 0.3) +
-    ggplot2::labs(x = group_by, y = params$feature %||% "expression") +
-    ggplot2::theme_minimal(base_size = 13) +
-    ggplot2::theme(legend.position = "none",
-                   axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
+  cols <- .scroll_group_colors(df$group, state)
+  p <- ggplot2::ggplot(df, ggplot2::aes(x = .data$group, y = .data$expr,
+                                        fill = .data$group)) +
+    ggplot2::geom_violin(scale = "width", trim = TRUE, linewidth = 0.3)
+  if (isTRUE(.scroll_opt(params, state, "jitter", FALSE)))
+    p <- p + ggplot2::geom_jitter(size = 0.2, alpha = 0.3, width = 0.2,
+                                  show.legend = FALSE)
+  p +
+    ggplot2::scale_fill_manual(values = cols) +
+    ggplot2::labs(x = group_by, y = params$feature %||% "expression", fill = group_by) +
+    .scroll_box_theme(.scroll_opt(params, state, "legend", FALSE))
 }
 
 #' Stacked composition of one categorical within another
 #'
 #' @param cells The cells data.frame.
 #' @param params List with `group_by` (x axis) and `fill_by` (composition).
-#' @param state Optional toggle state.
+#' @param state Optional toggle state (`palette`, `normalize`, `legend`).
 #' @return A ggplot.
 #' @export
 view_proportions <- function(cells, params, state = list()) {
@@ -370,15 +390,25 @@ view_proportions <- function(cells, params, state = list()) {
   tab <- as.data.frame(table(x = as.character(cells[[x]]),
                              fill = as.character(cells[[fill]])),
                        stringsAsFactors = FALSE)
-  totals <- stats::aggregate(Freq ~ x, tab, sum)
-  tab <- merge(tab, totals, by = "x", suffixes = c("", ".total"))
-  tab$frac <- ifelse(tab$Freq.total > 0, tab$Freq / tab$Freq.total, 0)
-  ggplot2::ggplot(tab, ggplot2::aes(x = .data$x, y = .data$frac,
-                                    fill = .data$fill)) +
+  normalize <- isTRUE(.scroll_opt(params, state, "normalize", TRUE))
+  if (normalize) {
+    totals <- stats::aggregate(Freq ~ x, tab, sum)
+    tab <- merge(tab, totals, by = "x", suffixes = c("", ".total"))
+    tab$y <- ifelse(tab$Freq.total > 0, tab$Freq / tab$Freq.total, 0)
+    yscale <- ggplot2::scale_y_continuous(labels = scales::percent)
+    ylab <- "composition"
+  } else {
+    tab$y <- tab$Freq
+    yscale <- NULL
+    ylab <- "cells"
+  }
+  cols <- .scroll_group_colors(tab$fill, state)
+  p <- ggplot2::ggplot(tab, ggplot2::aes(x = .data$x, y = .data$y, fill = .data$fill)) +
     ggplot2::geom_col(width = 0.8) +
-    ggplot2::scale_y_continuous(labels = scales::percent) +
-    ggplot2::labs(x = x, y = "composition", fill = fill) +
-    ggplot2::theme_minimal(base_size = 13)
+    ggplot2::scale_fill_manual(values = cols) +
+    ggplot2::labs(x = x, y = ylab, fill = fill)
+  if (!is.null(yscale)) p <- p + yscale
+  p + .scroll_box_theme(.scroll_opt(params, state, "legend", TRUE))
 }
 
 #' Differential-expression table for a contrast

@@ -233,6 +233,84 @@ dotplot_server <- function(id, data) {
   })
 }
 
+# --- Violin panel -------------------------------------------------------------
+
+violin_ui <- function(id, data) {
+  ns <- NS(id)
+  m <- data$manifest
+  assays <- .scroll_assays_of(m); cats <- .scroll_cat_cols(m)
+  bslib::layout_columns(
+    col_widths = c(3, 9), class = "scroll-panel",
+    div(
+      class = "scroll-controls",
+      .scroll_group("Feature",
+        selectizeInput(ns("feature"), "Gene", choices = NULL, multiple = FALSE,
+                       options = list(placeholder = "Search a gene...", maxOptions = 50)),
+        if (length(assays) > 1)
+          selectInput(ns("assay"), "Assay", assays, selected = m$default_assay)),
+      .scroll_group("Grouping",
+        selectInput(ns("group"), "Group by", stats::setNames(cats, cats), selected = cats[[1]])),
+      .scroll_group("Appearance",
+        selectInput(ns("palette"), "Palette", names(.scroll_discrete_palettes)),
+        bslib::input_switch(ns("jitter"), "Show points", FALSE),
+        bslib::input_switch(ns("legend"), "Legend", FALSE))
+    ),
+    div(class = "scroll-plot", plotOutput(ns("plot"), height = "460px"))
+  )
+}
+
+violin_server <- function(id, data) {
+  moduleServer(id, function(input, output, session) {
+    m <- data$manifest
+    assay <- reactive(input$assay %||% m$default_assay)
+    observe(updateSelectizeInput(session, "feature", choices = .scroll_features_of(m, assay()),
+                                 server = TRUE, selected = isolate(input$feature)))
+    output$plot <- renderPlot({
+      req(input$group)
+      feat <- .scroll_nz(input$feature)
+      validate(need(!is.null(feat), "Search for a gene to plot its distribution."))
+      params <- list(feature = feat, group_by = input$group)
+      state <- list(palette = input$palette, jitter = isTRUE(input$jitter),
+                    legend = isTRUE(input$legend))
+      view_violin(data$cells, params, data$query1(assay(), feat), state)
+    })
+  })
+}
+
+# --- Proportions panel --------------------------------------------------------
+
+proportions_ui <- function(id, data) {
+  ns <- NS(id)
+  cats <- .scroll_cat_cols(data$manifest)
+  x_default <- if (length(cats) >= 2) cats[[2]] else cats[[1]]
+  bslib::layout_columns(
+    col_widths = c(3, 9), class = "scroll-panel",
+    div(
+      class = "scroll-controls",
+      .scroll_group("Composition",
+        selectInput(ns("group"), "Group by (x)", stats::setNames(cats, cats), selected = x_default),
+        selectInput(ns("fill"), "Fill by", stats::setNames(cats, cats), selected = cats[[1]])),
+      .scroll_group("Appearance",
+        selectInput(ns("palette"), "Palette", names(.scroll_discrete_palettes)),
+        bslib::input_switch(ns("normalize"), "Normalize to 100%", TRUE),
+        bslib::input_switch(ns("legend"), "Legend", TRUE))
+    ),
+    div(class = "scroll-plot", plotOutput(ns("plot"), height = "460px"))
+  )
+}
+
+proportions_server <- function(id, data) {
+  moduleServer(id, function(input, output, session) {
+    output$plot <- renderPlot({
+      req(input$group, input$fill)
+      params <- list(group_by = input$group, fill_by = input$fill)
+      state <- list(palette = input$palette, normalize = isTRUE(input$normalize),
+                    legend = isTRUE(input$legend))
+      view_proportions(data$cells, params, state)
+    })
+  })
+}
+
 # --- section registry + shell -------------------------------------------------
 
 # Panels available in v1, in scroll order. Each entry: display meta + its
@@ -249,7 +327,15 @@ dotplot_server <- function(id, data) {
   list(id = "dotplot", num = "03", label = "DotPlot",
        title = "Marker panel",
        desc = "Mean expression and fraction expressing across groups.",
-       ui = dotplot_ui, server = dotplot_server)
+       ui = dotplot_ui, server = dotplot_server),
+  list(id = "violin", num = "04", label = "Violin",
+       title = "Expression distribution",
+       desc = "A gene's per-group expression distribution.",
+       ui = violin_ui, server = violin_server),
+  list(id = "proportions", num = "05", label = "Proportions",
+       title = "Composition",
+       desc = "Stacked composition of one annotation within another.",
+       ui = proportions_ui, server = proportions_server)
 )
 
 .scroll_group <- function(title, ...) {

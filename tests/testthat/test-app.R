@@ -20,3 +20,18 @@ test_that("dimplot_server renders a plot from its controls", {
     expect_false(is.null(output$plot))
   })
 })
+
+test_that("violin_server and proportions_server render from controls", {
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  shiny::testServer(scroll:::violin_server, args = list(data = data), {
+    session$setInputs(feature = "CD3D", group = "celltype", palette = "Tableau 10",
+                      jitter = FALSE, legend = FALSE)
+    expect_false(is.null(output$plot))
+  })
+  shiny::testServer(scroll:::proportions_server, args = list(data = data), {
+    session$setInputs(group = "condition", fill = "celltype", palette = "Tableau 10",
+                      normalize = TRUE, legend = TRUE)
+    expect_false(is.null(output$plot))
+  })
+})
