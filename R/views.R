@@ -33,8 +33,11 @@
   "Paired"     = c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99",
                    "#E31A1C", "#FDBF6F", "#FF7F00", "#CAB2D6", "#6A3D9A")
 )
+.scroll_brewer_seq <- c("Blues", "Reds", "Greens", "Purples", "YlOrRd", "YlGnBu", "OrRd")
+.scroll_brewer_div <- c("RdBu", "RdYlBu", "Spectral", "PuOr", "BrBG")
 .scroll_continuous_palettes <- c("viridis", "magma", "plasma", "inferno",
                                  "cividis", "turbo", "rocket", "mako",
+                                 .scroll_brewer_seq, .scroll_brewer_div,
                                  "grey-purple", "grey-red", "grey-blue")
 
 .scroll_discrete_colors <- function(values, palette = "Tableau 10") {
@@ -46,11 +49,20 @@
 # `limits` clip the scale (values beyond are squished to the end color, not
 # dropped) — used by FeaturePlot's quantile caps.
 .scroll_continuous_scale <- function(palette, name = NULL, limits = NULL) {
+  palette <- palette %||% "viridis"
+  # ColorBrewer palettes via scale_color_distiller (sequential low->high dark,
+  # diverging reversed so warm = high).
+  if (palette %in% .scroll_brewer_seq)
+    return(ggplot2::scale_color_distiller(name = name, palette = palette,
+             direction = 1, limits = limits, oob = scales::squish))
+  if (palette %in% .scroll_brewer_div)
+    return(ggplot2::scale_color_distiller(name = name, palette = palette,
+             direction = -1, limits = limits, oob = scales::squish))
   vir <- function(opt) ggplot2::scale_color_viridis_c(
     name = name, option = opt, limits = limits, oob = scales::squish)
   grad <- function(hi) ggplot2::scale_color_gradient(
     low = "grey88", high = hi, name = name, limits = limits, oob = scales::squish)
-  switch(palette %||% "viridis",
+  switch(palette,
     viridis = vir("viridis"), magma = vir("magma"), plasma = vir("plasma"),
     inferno = vir("inferno"), cividis = vir("cividis"), turbo = vir("turbo"),
     rocket = vir("rocket"), mako = vir("mako"),
@@ -264,19 +276,54 @@ view_dotplot <- function(cells, params, expr_long, state = list()) {
       s <- stats::sd(x); if (is.na(s) || s == 0) x * 0 else (x - mean(x)) / s
     })
   }
-  agg$feature <- factor(agg$feature, levels = rev(features))
+  # matrix of the plotted color statistic, for hierarchical clustering
+  M <- matrix(0, length(features), length(groups), dimnames = list(features, groups))
+  M[cbind(match(agg$feature, features), match(agg$group, groups))] <- agg$mean
+
+  cl <- .scroll_opt(params, state, "cluster", "off")
+  hr <- if (cl %in% c("rows", "both") && length(features) > 2) stats::hclust(stats::dist(M))
+  hc <- if (cl %in% c("columns", "both") && length(groups) > 2) stats::hclust(stats::dist(t(M)))
+  feature_order <- if (!is.null(hr)) rownames(M)[hr$order] else features
+  group_order   <- if (!is.null(hc)) colnames(M)[hc$order] else groups
+
+  agg$feature <- factor(agg$feature, levels = rev(feature_order))
+  agg$group   <- factor(agg$group, levels = group_order)
 
   dsize <- .scroll_opt(params, state, "dot_size", c(1, 6))
   pal <- .scroll_opt(params, state, "palette", "magma")
-  ggplot2::ggplot(agg, ggplot2::aes(x = .data$group, y = .data$feature)) +
+  aspect <- .scroll_opt(params, state, "aspect", NULL)
+  p <- ggplot2::ggplot(agg, ggplot2::aes(x = .data$group, y = .data$feature)) +
     ggplot2::geom_point(ggplot2::aes(size = .data$frac, color = .data$mean)) +
     ggplot2::scale_size(range = dsize, limits = c(0, 1), labels = scales::percent,
                         name = "% expressing") +
     .scroll_continuous_scale(pal, if (scaled) "z-score" else "mean expr.") +
     ggplot2::labs(x = group_by, y = NULL) +
-    ggplot2::theme_minimal(base_size = 13) +
-    ggplot2::theme(panel.grid.major = ggplot2::element_line(color = "grey92"),
+    ggplot2::theme_bw(base_size = 13) +
+    ggplot2::theme(panel.grid = ggplot2::element_blank(),
+                   panel.border = ggplot2::element_rect(color = "black", linewidth = 0.7, fill = NA),
                    axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
+  if (!is.null(aspect) && is.numeric(aspect) && aspect > 0)
+    p <- p + ggplot2::theme(aspect.ratio = aspect)
+
+  .scroll_dotplot_trees(p, hr, hc)
+}
+
+# Attach row/column dendrograms (aplot + ggtree) when clustering is on and the
+# packages are available; otherwise return the plain (reordered) dot plot.
+.scroll_dotplot_trees <- function(p, hr, hc) {
+  if (is.null(hr) && is.null(hc)) return(p)
+  if (!requireNamespace("ggtree", quietly = TRUE) ||
+      !requireNamespace("aplot", quietly = TRUE)) return(p)
+  # ggtree emits its own deprecation warnings (aes_(), ...) — suppress that noise.
+  suppressWarnings({
+    pp <- p
+    if (!is.null(hr))
+      pp <- aplot::insert_left(pp, ggtree::ggtree(hr), width = 0.16)
+    if (!is.null(hc))
+      pp <- aplot::insert_top(pp, ggtree::ggtree(hc) + ggtree::layout_dendrogram(),
+                              height = 0.16)
+  })
+  pp
 }
 
 #' Violin: a feature's per-group distribution

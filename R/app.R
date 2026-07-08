@@ -204,7 +204,11 @@ dotplot_ui <- function(id, data) {
       .scroll_group("Appearance",
         bslib::input_switch(ns("scale"), "Scale expression (z-score)", TRUE),
         selectInput(ns("palette"), "Palette", .scroll_continuous_palettes, selected = "magma"),
-        sliderInput(ns("dotrange"), "Dot size", 0, 10, c(1, 6), 0.5))
+        sliderInput(ns("dotrange"), "Dot size", 0, 10, c(1, 6), 0.5)),
+      .scroll_group("Layout",
+        selectInput(ns("cluster"), "Cluster (hclust)",
+                    c("Off" = "off", "Rows" = "rows", "Columns" = "columns", "Both" = "both")),
+        sliderInput(ns("aspect"), "Aspect ratio (h/w)", 0.2, 3, 1, 0.1))
     ),
     div(class = "scroll-plot", plotOutput(ns("plot"), height = "520px"))
   )
@@ -222,7 +226,8 @@ dotplot_server <- function(id, data) {
       feats <- input$markers
       validate(need(length(feats) > 0, "Add one or more marker genes to build the panel."))
       params <- list(group_by = input$group, features = feats)
-      state <- list(scale = isTRUE(input$scale), palette = input$palette, dot_size = input$dotrange)
+      state <- list(scale = isTRUE(input$scale), palette = input$palette,
+                    dot_size = input$dotrange, cluster = input$cluster, aspect = input$aspect)
       view_dotplot(data$cells, params, data$queryN(assay(), feats), state)
     })
   })

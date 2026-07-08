@@ -34,6 +34,8 @@ Imports:
     yaml
 Suggests:
     shinycssloaders,
+    ggtree,
+    aplot,
     testthat (>= 3.0.0),
     SeuratData
 Config/testthat/edition: 3

@@ -20,6 +20,17 @@ test_that("dotplot aggregates fraction and mean per group", {
   expect_equal(nrow(p$data), length(feats) * length(unique(cells$celltype)))
 })
 
+test_that("dotplot accepts brewer palettes and hclust clustering", {
+  cells <- read_cells(test_project())
+  expect_s3_class(scroll:::.scroll_continuous_scale("RdBu"), "Scale")   # ColorBrewer
+  feats <- c("CD3D", "CD8A", "MS4A1", "NKG7", "GNLY")
+  el <- data.frame(feature = rep(feats, each = 4), cell = rep(cells$cell[1:4], 5),
+                   value = runif(20))
+  p <- view_dotplot(cells, list(group_by = "celltype", features = feats), el,
+                    state = list(cluster = "both", palette = "RdBu", aspect = 1.2, scale = TRUE))
+  expect_true(inherits(p, c("ggplot", "aplot", "patchwork")))   # trees -> aplot, else ggplot
+})
+
 test_that("violin and proportions render ggplots", {
   cells <- read_cells(test_project())
   vals <- data.frame(cell = cells$cell[1:20], value = runif(20))
