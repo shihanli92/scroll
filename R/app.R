@@ -68,11 +68,16 @@ dimplot_ui <- function(id, data) {
         selectInput(ns("reduction"), "Reduction", reductions,
                     selected = .scroll_default(data, "default_embedding", reductions[[1]])),
         selectInput(ns("colorby"), "Color by", .scroll_colorby_choices(m), selected = first_cat)),
+      .scroll_group("Groups",
+        selectizeInput(ns("highlight"), "Highlight", choices = NULL, multiple = TRUE,
+                       options = list(placeholder = "All groups"))),
       .scroll_group("Appearance",
         selectInput(ns("palette"), "Palette", names(.scroll_discrete_palettes)),
-        sliderInput(ns("size"), "Point size", 0.1, 2, 0.6, 0.1),
+        uiOutput(ns("manual")),
+        sliderInput(ns("size"), "Point size", 0.1, 5, 0.6, 0.1),
         sliderInput(ns("alpha"), "Opacity", 0.1, 1, 0.85, 0.05),
-        bslib::input_switch(ns("labels"), "Cluster labels", TRUE)),
+        bslib::input_switch(ns("labels"), "Cluster labels", TRUE),
+        bslib::input_switch(ns("legend"), "Legend", TRUE)),
       .scroll_group("Layout",
         selectInput(ns("split"), "Split by",
                     c("None" = "", stats::setNames(cats, cats))))
@@ -85,21 +90,44 @@ dimplot_server <- function(id, data) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     is_cat <- reactive(identical(m$meta[[input$colorby]]$type, "categorical"))
+    levels_of <- reactive(if (is_cat()) unlist(m$meta[[input$colorby]]$levels) else character(0))
 
     observeEvent(input$colorby, {
-      if (is_cat())
+      if (is_cat()) {
         updateSelectInput(session, "palette",
-                          choices = names(.scroll_discrete_palettes), selected = "Tableau 10")
-      else
+                          choices = c(names(.scroll_discrete_palettes), "Manual"), selected = "Tableau 10")
+        updateSelectizeInput(session, "highlight", choices = levels_of(), selected = character(0))
+      } else {
         updateSelectInput(session, "palette",
                           choices = .scroll_continuous_palettes, selected = "viridis")
+        updateSelectizeInput(session, "highlight", choices = character(0), selected = character(0))
+      }
+    })
+
+    # per-group color pickers, shown only when the palette is "Manual"
+    output$manual <- renderUI({
+      if (!is_cat() || !identical(input$palette, "Manual")) return(NULL)
+      lv <- levels_of()
+      defaults <- .scroll_discrete_colors(lv, "Tableau 10")
+      shiny::tagList(lapply(seq_along(lv), function(i)
+        colourpicker::colourInput(session$ns(paste0("col_", i)), lv[i], value = defaults[[lv[i]]])))
+    })
+    manual_colors <- reactive({
+      if (!is_cat() || !identical(input$palette, "Manual")) return(NULL)
+      lv <- levels_of()
+      vals <- lapply(seq_along(lv), function(i) input[[paste0("col_", i)]])
+      names(vals) <- lv
+      vals <- vals[!vapply(vals, is.null, logical(1))]
+      if (length(vals)) unlist(vals) else NULL
     })
 
     output$plot <- renderPlot({
       req(input$reduction, input$colorby)
       params <- list(embedding = input$reduction, color_by = input$colorby)
       state <- list(palette = input$palette, point_size = input$size, alpha = input$alpha,
-                    show_labels = isTRUE(input$labels), split_by = .scroll_nz(input$split))
+                    show_labels = isTRUE(input$labels), legend = isTRUE(input$legend),
+                    split_by = .scroll_nz(input$split),
+                    highlight = input$highlight, manual_colors = manual_colors())
       view_umap_colorby(data$cells, params, state)
     })
   })
@@ -125,8 +153,9 @@ featureplot_ui <- function(id, data) {
                     selected = .scroll_default(data, "default_embedding", .scroll_reductions(m)[[1]]))),
       .scroll_group("Appearance",
         selectInput(ns("palette"), "Palette", .scroll_continuous_palettes, selected = "grey-purple"),
-        sliderInput(ns("size"), "Point size", 0.1, 2, 0.7, 0.1),
-        bslib::input_switch(ns("order"), "Expressing cells on top", TRUE)),
+        sliderInput(ns("size"), "Point size", 0.1, 5, 0.7, 0.1),
+        bslib::input_switch(ns("order"), "Expressing cells on top", TRUE),
+        bslib::input_switch(ns("legend"), "Legend", TRUE)),
       .scroll_group("Layout",
         selectInput(ns("split"), "Split by", c("None" = "", stats::setNames(cats, cats))))
     ),
@@ -146,7 +175,8 @@ featureplot_server <- function(id, data) {
       validate(need(!is.null(feat), "Search for a gene to plot its expression."))
       params <- list(embedding = input$reduction, feature = feat)
       state <- list(palette = input$palette, point_size = input$size,
-                    order = isTRUE(input$order), split_by = .scroll_nz(input$split))
+                    order = isTRUE(input$order), legend = isTRUE(input$legend),
+                    split_by = .scroll_nz(input$split))
       view_feature_plot(data$cells, params, data$query1(assay(), feat), state)
     })
   })

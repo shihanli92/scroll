@@ -69,6 +69,26 @@ test_that("view cores honour palette / size / order / scale controls", {
     "ggplot")
 })
 
+test_that("DimPlot highlight greys unselected groups; manual colors override", {
+  cells <- read_cells(test_project())
+  # highlight one cell type: plot keeps a grey background layer + the fg layer
+  p <- view_umap_colorby(cells, list(embedding = "umap", color_by = "celltype"),
+                         state = list(highlight = "B"))
+  expect_s3_class(p, "ggplot")
+  expect_gte(length(p$layers), 2)                 # background + foreground point layers
+  # manual palette override changes a group's assigned color
+  cols <- scroll:::.scroll_group_colors(c("B", "T", "NK"),
+            list(palette = "Manual", manual_colors = c(B = "#123456")))
+  expect_equal(unname(cols[["B"]]), "#123456")
+})
+
+test_that("legend can be switched off", {
+  cells <- read_cells(test_project())
+  p <- view_umap_colorby(cells, list(embedding = "umap", color_by = "celltype"),
+                         state = list(legend = FALSE))
+  expect_equal(p$theme$legend.position, "none")
+})
+
 test_that("discrete colors are deterministic by level name", {
   a <- scroll:::.scroll_discrete_colors(c("B", "T", "NK"))
   b <- scroll:::.scroll_discrete_colors(c("NK", "B"))   # subset, different order

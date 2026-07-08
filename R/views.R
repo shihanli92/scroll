@@ -25,10 +25,17 @@
   "Okabe-Ito"  = c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2",
                    "#D55E00", "#CC79A7", "#999999"),
   "Set2"       = c("#66C2A5", "#FC8D62", "#8DA0CB", "#E78AC3", "#A6D854",
-                   "#FFD92F", "#E5C494", "#B3B3B3")
+                   "#FFD92F", "#E5C494", "#B3B3B3"),
+  "Set1"       = c("#E41A1C", "#377EB8", "#4DAF4A", "#984EA3", "#FF7F00",
+                   "#FFD92F", "#A65628", "#F781BF", "#999999"),
+  "Dark2"      = c("#1B9E77", "#D95F02", "#7570B3", "#E7298A", "#66A61E",
+                   "#E6AB02", "#A6761D", "#666666"),
+  "Paired"     = c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99",
+                   "#E31A1C", "#FDBF6F", "#FF7F00", "#CAB2D6", "#6A3D9A")
 )
-.scroll_continuous_palettes <- c("viridis", "magma", "plasma", "cividis",
-                                 "inferno", "grey-purple", "grey-red")
+.scroll_continuous_palettes <- c("viridis", "magma", "plasma", "inferno",
+                                 "cividis", "turbo", "rocket", "mako",
+                                 "grey-purple", "grey-red", "grey-blue")
 
 .scroll_discrete_colors <- function(values, palette = "Tableau 10") {
   pal <- .scroll_discrete_palettes[[palette]] %||% .scroll_discrete_palettes[["Tableau 10"]]
@@ -41,10 +48,14 @@
     viridis = ggplot2::scale_color_viridis_c(name = name),
     magma   = ggplot2::scale_color_viridis_c(name = name, option = "magma"),
     plasma  = ggplot2::scale_color_viridis_c(name = name, option = "plasma"),
-    cividis = ggplot2::scale_color_viridis_c(name = name, option = "cividis"),
     inferno = ggplot2::scale_color_viridis_c(name = name, option = "inferno"),
+    cividis = ggplot2::scale_color_viridis_c(name = name, option = "cividis"),
+    turbo   = ggplot2::scale_color_viridis_c(name = name, option = "turbo"),
+    rocket  = ggplot2::scale_color_viridis_c(name = name, option = "rocket"),
+    mako    = ggplot2::scale_color_viridis_c(name = name, option = "mako"),
     `grey-purple` = ggplot2::scale_color_gradient(low = "grey88", high = "#3b0f70", name = name),
     `grey-red`    = ggplot2::scale_color_gradient(low = "grey88", high = "#b2182b", name = name),
+    `grey-blue`   = ggplot2::scale_color_gradient(low = "grey88", high = "#08519c", name = name),
     ggplot2::scale_color_viridis_c(name = name)
   )
 }
@@ -73,14 +84,16 @@
   as.numeric(expr[cells$cell])
 }
 
-.scroll_base_scatter <- function(df, embedding) {
+.scroll_base_scatter <- function(df, embedding, legend = TRUE) {
   ggplot2::ggplot(df, ggplot2::aes(x = .data$.x, y = .data$.y)) +
     ggplot2::labs(x = sprintf("%s 1", embedding), y = sprintf("%s 2", embedding)) +
-    ggplot2::theme_minimal(base_size = 13) +
+    ggplot2::theme_bw(base_size = 13) +
     ggplot2::theme(
-      panel.grid.minor = ggplot2::element_blank(),
+      panel.grid = ggplot2::element_blank(),
+      panel.border = ggplot2::element_rect(color = "black", linewidth = 0.7, fill = NA),
       axis.text = ggplot2::element_blank(),
-      legend.position = "right"
+      axis.ticks = ggplot2::element_blank(),
+      legend.position = if (isTRUE(legend)) "right" else "none"
     )
 }
 
@@ -111,6 +124,19 @@
 #' @param state Optional toggle state (`embedding`, `split_by`, `show_labels`).
 #' @return A ggplot.
 #' @export
+# Named colors for a categorical column: the chosen palette, with any manual
+# per-group overrides layered on top (both keyed by level name).
+.scroll_group_colors <- function(values, state) {
+  cols <- .scroll_discrete_colors(values, .scroll_opt(list(), state, "palette", "Tableau 10"))
+  manual <- state$manual_colors
+  if (!is.null(manual) && length(manual)) {
+    manual <- unlist(manual)
+    keep <- names(manual) %in% names(cols) & nzchar(manual)
+    cols[names(manual)[keep]] <- manual[keep]
+  }
+  cols
+}
+
 view_umap_colorby <- function(cells, params, state = list()) {
   embedding <- .scroll_eff_embedding(params, state)
   df <- .scroll_embedding_xy(cells, embedding)
@@ -120,18 +146,40 @@ view_umap_colorby <- function(cells, params, state = list()) {
   df$.col <- df[[color_by]]
   size <- .scroll_opt(params, state, "point_size", 0.6)
   alpha <- .scroll_opt(params, state, "alpha", 0.85)
-  p <- .scroll_base_scatter(df, embedding) +
-    ggplot2::geom_point(ggplot2::aes(color = .data$.col), size = size, alpha = alpha) +
-    ggplot2::labs(color = color_by)
+  base <- .scroll_base_scatter(df, embedding, .scroll_opt(params, state, "legend", TRUE))
+
+  # numeric color-by: a continuous gradient
   if (is.numeric(df$.col)) {
-    p <- p + .scroll_continuous_scale(.scroll_opt(params, state, "palette", "viridis"),
-                                      color_by)
-  } else {
-    p <- p + ggplot2::scale_color_manual(
-      values = .scroll_discrete_colors(df$.col, .scroll_opt(params, state, "palette", "Tableau 10")))
-    if (isTRUE(.scroll_opt(params, state, "show_labels", FALSE)))
-      p <- p + .scroll_group_labels(df, ".col") + ggplot2::guides(color = "none")
+    p <- base +
+      ggplot2::geom_point(ggplot2::aes(color = .data$.col), size = size, alpha = alpha) +
+      .scroll_continuous_scale(.scroll_opt(params, state, "palette", "viridis"), color_by) +
+      ggplot2::labs(color = color_by)
+    return(.scroll_maybe_facet(p, df, state))
   }
+
+  # categorical: discrete colors, with optional group highlight + manual colors
+  df$.col <- as.character(df$.col)
+  cols <- .scroll_group_colors(df$.col, state)
+  highlight <- intersect(state$highlight %||% character(0), df$.col)
+
+  if (length(highlight)) {                       # selected groups keep color, rest grey
+    bg <- df[!(df$.col %in% highlight), , drop = FALSE]
+    fg <- df[df$.col %in% highlight, , drop = FALSE]
+    p <- base +
+      ggplot2::geom_point(data = bg, color = "grey85", size = size, alpha = alpha) +
+      ggplot2::geom_point(data = fg, ggplot2::aes(color = .data$.col), size = size, alpha = alpha) +
+      ggplot2::scale_color_manual(values = cols, limits = highlight) +
+      ggplot2::labs(color = color_by)
+    label_df <- fg
+  } else {
+    p <- base +
+      ggplot2::geom_point(ggplot2::aes(color = .data$.col), size = size, alpha = alpha) +
+      ggplot2::scale_color_manual(values = cols) +
+      ggplot2::labs(color = color_by)
+    label_df <- df
+  }
+  if (isTRUE(.scroll_opt(params, state, "show_labels", FALSE)) && nrow(label_df))
+    p <- p + .scroll_group_labels(label_df, ".col") + ggplot2::guides(color = "none")
   .scroll_maybe_facet(p, df, state)
 }
 
@@ -150,7 +198,7 @@ view_feature_plot <- function(cells, params, values = NULL, state = list()) {
   if (isTRUE(.scroll_opt(params, state, "order", TRUE)))
     df <- df[order(df$.expr), , drop = FALSE]   # expressing cells drawn on top
   size <- .scroll_opt(params, state, "point_size", 0.7)
-  p <- .scroll_base_scatter(df, embedding) +
+  p <- .scroll_base_scatter(df, embedding, .scroll_opt(params, state, "legend", TRUE)) +
     ggplot2::geom_point(ggplot2::aes(color = .data$.expr), size = size) +
     .scroll_continuous_scale(.scroll_opt(params, state, "palette", "grey-purple"),
                              params$feature %||% "expression")
