@@ -114,27 +114,30 @@ references it by name:
 `scroll` reads the table as-is (e.g. a `FindMarkers()` result written to
 `de/B_vs_rest.parquet`); it does not compute DE.
 
-## How the coupling works
+## How scroll × reactivity works
 
-The sticky visual answers to two drivers: **scroll position** (closeread) and
-**the feature search box** (Shiny). `scroll` models it as one persistent Shiny
-output redrawn by one reactive over `(active_section, feature)`. A small JS
-bridge (`inst/app/cr-bridge.js`) reports the active closeread trigger to Shiny
-as the global input `active_section`; the two drivers meet only inside
-`.scroll_resolve()` and never contend for the DOM. The pure resolve logic and
-the views are unit-tested without Quarto (`tests/testthat/`).
+Each `config.yaml` section owns **its own closeread sticky** — one Shiny output
+rendering that section's view (`scroll_sticky_ui()`). closeread pins whichever
+section is on screen, so **scroll position is closeread's job and reactivity is
+Shiny's, with no bridge between them**: there's no `active_section` input and no
+custom scroll JS. A section renders once; scrolling only toggles which sticky is
+visible (no re-render).
 
-Each scaffolded trigger carries a `data-section` span (which the bridge reads)
-and focuses the single sticky via `@cr-sticky`. Because a `server: shiny`
-deployment serves `story_files/` but not `_extensions/`, closeread's stylesheet
-would 404 and the sticky layout collapse — so `scroll_app_ui()` inlines
-closeread's CSS into the page, keeping the layout identical under `quarto
-preview` and on a Shiny Server.
+The **persistent header** (`scroll_app_ui()`) holds the feature search + toggles
+as global Shiny inputs. Every section's sticky reactive reads them, so the
+search recolors whatever section is in focus and toggles apply everywhere. The
+per-section context logic (`.scroll_section_ctx()`) and the views are unit-tested
+without Quarto (`tests/testthat/`).
 
-**Validated end-to-end** against pbmc3k under `quarto preview`: the two-column
-sticky pins, section scrolling switches `umap_colorby → dotplot → violin`, the
-feature search recolors the pinned view (`MS4A1` lights up the B-cell cluster),
-and the subset toggle restricts to a cell type.
+Because a `server: shiny` deployment serves `story_files/` but not
+`_extensions/`, closeread's stylesheet would 404 and the sticky layout collapse
+— so `scroll_app_ui()` inlines closeread's CSS into the page, keeping the layout
+identical under `quarto preview` and on a Shiny Server.
+
+**Validated end-to-end** against pbmc3k under `quarto preview`: each section pins
+its own view (`umap_colorby`, `dotplot`, `violin`, …), the global feature search
+recolors the focused section (`MS4A1` lights up the B-cell cluster), and the
+subset toggle restricts to a cell type.
 
 ## Layout
 
@@ -144,6 +147,5 @@ and the subset toggle restricts to a cell type.
 | `R/manifest.R` / `R/scaffold.R` | manifest + `config.yaml`/`story.qmd` scaffolding |
 | `R/query.R` | duckdb connection + `scroll_query_feature()` |
 | `R/views.R` | `umap_colorby`, `feature_plot`, `render_view()` dispatch |
-| `R/coupling.R` | the scroll × reactive coupling + Shiny app UI/server |
+| `R/coupling.R` | per-section stickies: header + `scroll_sticky_ui()` + server |
 | `R/serve.R` | `scroll_serve()` / `scroll_render()` (Quarto wrappers) |
-| `inst/app/cr-bridge.js` | closeread → Shiny active-section bridge |

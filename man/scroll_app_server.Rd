@@ -2,16 +2,14 @@
 % Please edit documentation in R/coupling.R
 \name{scroll_app_server}
 \alias{scroll_app_server}
-\title{Server for the shared scroll visual}
+\title{Server: render every section's sticky from the global inputs}
 \usage{
-scroll_app_server(id = "main", dir = ".")
+scroll_app_server(dir = ".")
 }
 \arguments{
-\item{id}{The id prefix matching \code{\link[=scroll_app_ui]{scroll_app_ui()}}.}
-
 \item{dir}{The scroll project directory.}
 }
 \description{
-Wires the single \verb{(active_section, feature, toggles)} reactive to the single
-sticky output.
+Registers one renderer per config section. Each reads the shared feature +
+toggle inputs and its own params; closeread decides which is on screen.
 }

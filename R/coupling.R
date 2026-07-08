@@ -1,14 +1,15 @@
-# The scroll x reactive coupling, centralized once so every view inherits it.
+# The scroll app: per-section stickies driven by closeread's native scroll model.
 #
-# The sticky visual is modelled as a SINGLE persistent output redrawn by a
-# SINGLE reactive whose dependencies are (active_section, feature, toggles).
-# closeread owns scroll position; Shiny owns the search box + toggles; they never
-# fight over the DOM because there is one sticky, and a JS bridge
-# (inst/app/cr-bridge.js) reports the active closeread trigger to Shiny as the
-# global input `active_section`.
+# Each config section owns one closeread sticky (a Shiny output rendering that
+# section's view). closeread pins the right sticky as the reader scrolls, so
+# there is no scroll->Shiny bridge and no `active_section` input: scroll position
+# is closeread's job, reactivity is Shiny's, and they never contend for a DOM
+# element because each section has its own.
 #
-# scroll_app_ui()/scroll_app_server() are the one place the app calls; custom
-# views added later plug into render_view() and inherit this coupling for free.
+# A persistent header holds the feature search + toggles as global inputs; every
+# section's sticky reactive reads them, so the search recolours whatever view is
+# in focus. A section renders once and re-renders only when a global input
+# changes -- scrolling itself triggers no recompute.
 
 # Per-directory cache of the globally-loaded, session-shared artifacts.
 .scroll_cache <- new.env(parent = emptyenv())
@@ -26,7 +27,14 @@
   .scroll_cache[[key]]
 }
 
-# Index config sections by id for O(1) lookup of the active section.
+# Global input ids (persistent header) and the per-section output id.
+.scroll_inputs <- list(
+  feature = "scroll_feature", embedding = "scroll_embedding",
+  split = "scroll_split", subset_col = "scroll_subset_col",
+  subset_val = "scroll_subset_val", labels = "scroll_labels"
+)
+.scroll_out <- function(section_id) paste0("scroll_sticky_", section_id)
+
 .scroll_sections_by_id <- function(config) {
   stats::setNames(config$sections, vapply(config$sections, `[[`, "", "id"))
 }
@@ -46,20 +54,14 @@
   NULL
 }
 
-# The coupling, as a pure function: given the active closeread section, the
-# feature-search value, and the toggle state, assemble the context the single
-# sticky should render. Kept free of Shiny so it is unit-testable; the Shiny
-# wrapper only feeds it inputs.
-.scroll_resolve <- function(active_section, feature, state, data) {
+# Assemble the context one section's sticky should render, given the current
+# global feature search and toggle state. Pure (no Shiny) -> unit-testable.
+.scroll_section_ctx <- function(section, feature, state, data) {
   state <- state %||% list()
-  sections <- .scroll_sections_by_id(data$config)
-  sec <- if (!is.null(active_section) && !is.null(sections[[active_section]]))
-    sections[[active_section]] else data$config$sections[[1]]
-  view <- sec$view
-  params <- sec$params
+  view <- section$view
+  params <- section$params
   assay <- state$assay %||% params$assay %||% data$config$default_assay
 
-  # subset toggle: restrict the cells all views see
   cells <- data$cells
   if (!is.null(state$subset_col) && !is.null(state$subset_val) &&
       nzchar(state$subset_val) && state$subset_col %in% names(cells)) {
@@ -99,124 +101,120 @@
   ctx
 }
 
-# Toggle choices for the UI, derived from the manifest.
+# Toggle choices for the header, derived from the manifest.
 .scroll_toggle_choices <- function(manifest) {
   cats <- names(Filter(function(m) identical(m$type, "categorical"), manifest$meta))
-  list(
-    embeddings = names(manifest$embeddings),
-    assays = names(manifest$assays),
-    categoricals = cats
-  )
+  list(embeddings = names(manifest$embeddings),
+       assays = names(manifest$assays),
+       categoricals = cats)
 }
 
-#' UI for the shared scroll visual, search box, and toggles
+#' Persistent header: feature search + toggles
 #'
-#' Emitted inside the closeread sticky in `story.qmd`. Returns the feature search
-#' box, the toggle bar (embedding / split / subset / labels), and the single
-#' sticky output (a plot, or a table for `de_table`), plus the JS bridge that
-#' reports the active closeread trigger to Shiny.
+#' Placed once at the top of `story.qmd`. Holds the global inputs every section
+#' reads (search box, embedding / split / subset / labels), and inlines
+#' closeread's CSS so the sticky layout survives a `server: shiny` deployment
+#' (which doesn't serve `_extensions/`).
 #'
-#' @param id An id prefix (namespaces this app's inputs/outputs).
 #' @param dir The project directory (read for toggle choices).
 #' @return A Shiny UI tag list.
 #' @export
-scroll_app_ui <- function(id = "main", dir = ".") {
+scroll_app_ui <- function(dir = ".") {
   .scroll_require_shiny()
-  ids <- .scroll_ids(id)
   manifest <- scroll_manifest(dir)
   ch <- .scroll_toggle_choices(manifest)
-  subset_choices <- c("(all)" = "")
-  if (length(ch$categoricals))
-    subset_choices <- c(subset_choices,
-                        stats::setNames(ch$categoricals, ch$categoricals))
+  ii <- .scroll_inputs
+  cat_choices <- stats::setNames(ch$categoricals, ch$categoricals)
 
   shiny::tagList(
-    shiny::tags$style(shiny::HTML(.scroll_closeread_css(dir))),
-    shiny::tags$script(shiny::HTML(.scroll_bridge_script())),
+    shiny::tags$style(shiny::HTML(paste(.scroll_closeread_css(dir),
+                                        .scroll_header_css(), sep = "\n"))),
     shiny::div(
-      class = "scroll-searchbox",
-      shiny::textInput(ids$feature, label = NULL, placeholder = "Search a feature...")
-    ),
-    shiny::div(
-      class = "scroll-toggles",
-      shiny::selectInput(ids$embedding, "Embedding", choices = ch$embeddings,
+      class = "scroll-header",
+      shiny::textInput(ii$feature, NULL, placeholder = "Search a feature..."),
+      shiny::selectInput(ii$embedding, "Embedding", ch$embeddings,
                          selected = manifest$default_embedding),
-      shiny::selectInput(ids$split, "Split by",
-                         choices = c("(none)" = "", stats::setNames(ch$categoricals, ch$categoricals))),
-      shiny::selectInput(ids$subset_col, "Subset column", choices = subset_choices),
-      shiny::textInput(ids$subset_val, "Subset value", value = ""),
-      shiny::checkboxInput(ids$labels, "Labels", value = FALSE)
-    ),
-    shiny::conditionalPanel(
-      condition = sprintf("output['%s'] == 'plot'", ids$kind),
-      shiny::plotOutput(ids$plot, height = "78vh")),
-    shiny::conditionalPanel(
-      condition = sprintf("output['%s'] == 'table'", ids$kind),
-      shiny::div(class = "scroll-table", shiny::tableOutput(ids$table)))
+      shiny::selectInput(ii$split, "Split by", c("(none)" = "", cat_choices)),
+      shiny::selectInput(ii$subset_col, "Subset", c("(all)" = "", cat_choices)),
+      shiny::textInput(ii$subset_val, "= value", ""),
+      shiny::checkboxInput(ii$labels, "Labels", FALSE)
+    )
   )
 }
 
-#' Server for the shared scroll visual
+#' A single section's sticky output
 #'
-#' Wires the single `(active_section, feature, toggles)` reactive to the single
-#' sticky output.
+#' Placed inside each `.cr-section`'s `.sticky` in `story.qmd`. Emits the right
+#' output kind (plot, or table for `de_table`) for that section's view.
 #'
-#' @param id The id prefix matching [scroll_app_ui()].
+#' @param id The section id (must exist in `config.yaml`).
+#' @param dir The project directory.
+#' @return A Shiny output tag.
+#' @export
+scroll_sticky_ui <- function(id, dir = ".") {
+  .scroll_require_shiny()
+  sec <- .scroll_sections_by_id(scroll_config(dir))[[id]]
+  if (is.null(sec)) stop("No section '", id, "' in config.yaml.", call. = FALSE)
+  out <- .scroll_out(id)
+  if (identical(scroll_view_kind(sec$view), "table"))
+    shiny::div(class = "scroll-table", shiny::tableOutput(out))
+  else
+    shiny::plotOutput(out, height = "80vh")
+}
+
+#' Server: render every section's sticky from the global inputs
+#'
+#' Registers one renderer per config section. Each reads the shared feature +
+#' toggle inputs and its own params; closeread decides which is on screen.
+#'
 #' @param dir The scroll project directory.
 #' @export
-scroll_app_server <- function(id = "main", dir = ".") {
+scroll_app_server <- function(dir = ".") {
   .scroll_require_shiny()
-  # A `server: shiny` deployment serves story_files/ but not _extensions/, so
-  # closeread's linked CSS 404s and the sticky layout collapses. Serve the
-  # extension assets ourselves so the story lays out the same on a Shiny Server
-  # as under `quarto preview`.
+  # A `server: shiny` deployment serves story_files/ but not _extensions/; serve
+  # the extension assets ourselves so url()-referenced assets resolve too.
   ext <- file.path(dir, "_extensions")
   if (dir.exists(ext)) shiny::addResourcePath("_extensions", normalizePath(ext))
-  ids <- .scroll_ids(id)
+
   data <- .scroll_data(dir)
+  ii <- .scroll_inputs
   domain <- shiny::getDefaultReactiveDomain()
-  output <- domain$output
   input <- domain$input
+  output <- domain$output
 
-  toggles <- shiny::reactive({
-    list(
-      embedding  = .scroll_blank_null(input[[ids$embedding]]),
-      split_by   = .scroll_blank_null(input[[ids$split]]),
-      subset_col = .scroll_blank_null(input[[ids$subset_col]]),
-      subset_val = input[[ids$subset_val]],
-      show_labels = isTRUE(input[[ids$labels]])
-    )
-  })
+  toggles <- shiny::reactive(list(
+    embedding   = .scroll_blank_null(input[[ii$embedding]]),
+    split_by    = .scroll_blank_null(input[[ii$split]]),
+    subset_col  = .scroll_blank_null(input[[ii$subset_col]]),
+    subset_val  = input[[ii$subset_val]],
+    show_labels = isTRUE(input[[ii$labels]])
+  ))
+  feature <- shiny::reactive(input[[ii$feature]])
 
-  view_ctx <- shiny::reactive({
-    .scroll_resolve(input[["active_section"]], input[[ids$feature]], toggles(), data)
-  })
-
-  output[[ids$kind]] <- shiny::renderText(view_ctx()$kind)
-  shiny::outputOptions(output, ids$kind, suspendWhenHidden = FALSE)
-
-  output[[ids$plot]] <- shiny::renderPlot({
-    v <- view_ctx()
-    if (identical(v$kind, "plot")) render_view(v$view, v) else NULL
-  })
-  output[[ids$table]] <- shiny::renderTable({
-    v <- view_ctx()
-    if (identical(v$kind, "table")) render_view(v$view, v) else NULL
-  })
+  for (section in data$config$sections) {
+    local({
+      s <- section
+      draw <- function() {
+        ctx <- .scroll_section_ctx(s, feature(), toggles(), data)
+        render_view(ctx$view, ctx)
+      }
+      output[[.scroll_out(s$id)]] <- if (identical(scroll_view_kind(s$view), "table"))
+        shiny::renderTable(draw()) else shiny::renderPlot(draw())
+    })
+  }
   invisible(NULL)
 }
 
-.scroll_ids <- function(id) list(
-  feature = paste0(id, "_feature"),
-  embedding = paste0(id, "_embedding"),
-  split = paste0(id, "_split"),
-  subset_col = paste0(id, "_subset_col"),
-  subset_val = paste0(id, "_subset_val"),
-  labels = paste0(id, "_labels"),
-  plot = paste0(id, "_plot"),
-  table = paste0(id, "_table"),
-  kind = paste0(id, "_kind")
-)
+.scroll_header_css <- function() {
+  paste(
+    ".scroll-header{position:sticky;top:0;z-index:1000;display:flex;gap:14px;",
+    "align-items:flex-end;flex-wrap:wrap;padding:10px 14px;margin-bottom:8px;",
+    "background:rgba(255,255,255,0.96);border-bottom:1px solid #e5e5e5;}",
+    ".scroll-header .form-group{margin-bottom:0;}",
+    ".scroll-header .shiny-input-container{width:auto;min-width:150px;}",
+    ".scroll-table{max-height:80vh;overflow:auto;font-size:0.85em;}",
+    sep = "")
+}
 
 .scroll_blank_null <- function(x) if (is.null(x) || !nzchar(x)) NULL else x
 
@@ -225,21 +223,12 @@ scroll_app_server <- function(id = "main", dir = ".") {
     stop("The scroll app requires the 'shiny' package.", call. = FALSE)
 }
 
-# Inline closeread's stylesheet into the rendered HTML. A `server: shiny`
-# deployment doesn't serve `_extensions/`, so closeread's linked CSS 404s and the
-# sticky layout collapses; baking it into the page makes the layout robust in
-# preview and on a Shiny Server alike.
+# Inline closeread's stylesheet into the page. A `server: shiny` deployment
+# doesn't serve `_extensions/`, so closeread's linked CSS 404s and the sticky
+# layout collapses; baking it in makes the layout robust everywhere.
 .scroll_closeread_css <- function(dir) {
   hits <- Sys.glob(file.path(dir, "_extensions", "*", "closeread", "closeread.css"))
   if (!length(hits)) hits <- Sys.glob(file.path(dir, "_extensions", "closeread", "closeread.css"))
   if (!length(hits)) return("")
   paste(readLines(hits[[1]], warn = FALSE), collapse = "\n")
-}
-
-.scroll_bridge_script <- function() {
-  path <- system.file("app", "cr-bridge.js", package = "scroll")
-  if (nzchar(path) && file.exists(path)) return(paste(readLines(path), collapse = "\n"))
-  local <- file.path("inst", "app", "cr-bridge.js")
-  if (file.exists(local)) return(paste(readLines(local), collapse = "\n"))
-  ""
 }

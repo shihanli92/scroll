@@ -91,10 +91,11 @@ scroll_scaffold <- function(outdir, assay_info, embeddings, meta_cols, md) {
   "This section of the story."
 )
 
-# A closeread + Shiny narrative built from the config sections. One persistent
-# sticky (`#cr-sticky`) holds scroll_app_ui(); every trigger focuses it via
-# `@cr-sticky` and carries a `data-section` span that cr-bridge.js reports to
-# Shiny as `active_section`. The section ids here match config.yaml.
+# A closeread + Shiny narrative built from the config sections. Each section is
+# its own `.cr-section` with its own `.sticky` (a scroll_sticky_ui output);
+# closeread pins whichever is on screen. The persistent header (search +
+# toggles) sits above them via scroll_app_ui(). No JS bridge: scroll position is
+# closeread's, reactivity is Shiny's, and each section owns its own DOM element.
 .scroll_story_template <- function(sections) {
   head <- c(
     "---",
@@ -112,29 +113,32 @@ scroll_scaffold <- function(outdir, assay_info, embeddings, meta_cols, md) {
     "project_dir <- \".\"",
     "```",
     "",
-    "::: {.cr-section}",
-    "",
-    "::: {#cr-sticky .sticky}",
     "```{r}",
-    "scroll_app_ui(\"main\", dir = project_dir)",
+    "scroll_app_ui(dir = project_dir)",
     "```",
-    ":::",
     ""
   )
-  triggers <- unlist(lapply(sections, function(s) c(
-    sprintf("%s <span data-section=\"%s\"></span> @cr-sticky",
-            .scroll_trigger_prose(s$view), s$id),
+  body <- unlist(lapply(sections, function(s) c(
+    "::: {.cr-section}",
+    "",
+    "::: {.sticky}",
+    "```{r}",
+    sprintf("scroll_sticky_ui(\"%s\", dir = project_dir)", s$id),
+    "```",
+    ":::",
+    "",
+    .scroll_trigger_prose(s$view),
+    "",
+    ":::",
     ""
   )))
   tail <- c(
-    ":::",
-    "",
     "```{r}",
     "#| context: server",
-    "scroll_app_server(\"main\", dir = project_dir)",
+    "scroll_app_server(dir = project_dir)",
     "```"
   )
-  c(head, triggers, tail)
+  c(head, body, tail)
 }
 
 #' Read a scroll project config

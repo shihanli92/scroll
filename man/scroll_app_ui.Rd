@@ -2,21 +2,19 @@
 % Please edit documentation in R/coupling.R
 \name{scroll_app_ui}
 \alias{scroll_app_ui}
-\title{UI for the shared scroll visual, search box, and toggles}
+\title{Persistent header: feature search + toggles}
 \usage{
-scroll_app_ui(id = "main", dir = ".")
+scroll_app_ui(dir = ".")
 }
 \arguments{
-\item{id}{An id prefix (namespaces this app's inputs/outputs).}
-
 \item{dir}{The project directory (read for toggle choices).}
 }
 \value{
 A Shiny UI tag list.
 }
 \description{
-Emitted inside the closeread sticky in \code{story.qmd}. Returns the feature search
-box, the toggle bar (embedding / split / subset / labels), and the single
-sticky output (a plot, or a table for \code{de_table}), plus the JS bridge that
-reports the active closeread trigger to Shiny.
+Placed once at the top of \code{story.qmd}. Holds the global inputs every section
+reads (search box, embedding / split / subset / labels), and inlines
+closeread's CSS so the sticky layout survives a \code{server: shiny} deployment
+(which doesn't serve \verb{_extensions/}).
 }
