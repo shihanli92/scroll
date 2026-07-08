@@ -1,0 +1,36 @@
+Package: scroll
+Type: Package
+Title: Scroll-Driven Single-Cell Stories from Seurat Objects
+Version: 0.0.0.9000
+Authors@R:
+    person("Shihan", "Li", email = "shihanli1992@gmail.com", role = c("aut", "cre"))
+Description: Turns a processed Seurat object into an interactive, scroll-driven
+    web story for presenting single-cell analyses. A heavy offline build phase
+    extracts lightweight on-disk artifacts (metadata and embeddings as a small
+    Parquet table, expression as a feature-partitioned Parquet store) that a
+    memory-light Quarto closeread + Shiny runtime reads one feature at a time,
+    so runtime memory stays flat regardless of matrix size.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Depends:
+    R (>= 4.1)
+Imports:
+    SeuratObject,
+    Matrix,
+    arrow,
+    duckdb,
+    DBI,
+    ggplot2,
+    methods,
+    stats,
+    utils,
+    yaml
+Suggests:
+    shiny,
+    plotly,
+    scales,
+    testthat (>= 3.0.0),
+    SeuratData
+Config/testthat/edition: 3

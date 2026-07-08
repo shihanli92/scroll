@@ -1,0 +1,58 @@
+# Runtime query layer. A single feature lookup reads only that feature's
+# partition off disk via duckdb predicate pushdown, so runtime RAM stays flat
+# regardless of matrix size.
+
+#' Open a duckdb connection for a scroll project
+#'
+#' @param dir A scroll project directory (must contain `expr/`).
+#' @return A DBIConnection. Close it with [scroll_disconnect()].
+#' @export
+scroll_connect <- function(dir) {
+  if (!dir.exists(file.path(dir, "expr")))
+    stop("No expr/ store in '", dir, "'; is this a scroll project?", call. = FALSE)
+  con <- DBI::dbConnect(duckdb::duckdb())
+  attr(con, "scroll_dir") <- normalizePath(dir)
+  con
+}
+
+#' Close a scroll duckdb connection
+#' @param con A connection from [scroll_connect()].
+#' @export
+scroll_disconnect <- function(con) {
+  DBI::dbDisconnect(con, shutdown = TRUE)
+}
+
+#' Query one feature's expression from the Parquet store
+#'
+#' Reads only the `feature=<feature>` partition of the assay subtree. Values are
+#' returned as stored (quantized `uint8` when the project was built with
+#' `quantize = TRUE`); use [scroll_dequantize()] to map back to normalized units.
+#'
+#' @param con A connection from [scroll_connect()].
+#' @param assay Assay name (subtree under `expr/`).
+#' @param feature Feature name to look up.
+#' @return A data.frame with columns `cell` and `value`. Zero-valued cells are
+#'   absent (the matrix is sparse); callers treat missing cells as 0.
+#' @export
+scroll_query_feature <- function(con, assay, feature) {
+  dir <- attr(con, "scroll_dir")
+  glob <- file.path(dir, "expr", assay, "**", "*.parquet")
+  sql <- paste0(
+    "SELECT cell, value FROM read_parquet(?, hive_partitioning = true) ",
+    "WHERE feature = ?"
+  )
+  DBI::dbGetQuery(con, sql, params = list(glob, feature))
+}
+
+#' Map stored (possibly quantized) values back to normalized expression
+#'
+#' @param values Numeric/integer vector of stored values.
+#' @param manifest A manifest list (from [scroll_manifest()]).
+#' @param assay Assay the values came from.
+#' @return Numeric vector in normalized units.
+#' @export
+scroll_dequantize <- function(values, manifest, assay) {
+  if (!isTRUE(manifest$quantize)) return(as.numeric(values))
+  max_a <- manifest$assays[[assay]]$max
+  as.numeric(values) / 255 * max_a
+}
