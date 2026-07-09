@@ -70,6 +70,31 @@ scroll_query_features <- function(con, assay, features) {
   DBI::dbGetQuery(con, sql, params = c(list(glob), as.list(features)))
 }
 
+#' Query all features for a set of cells
+#'
+#' Returns the long (feature, cell, value) records for the given cells across
+#' every feature — used to reconstruct a contrast's expression matrix for live
+#' DE. Unlike a feature lookup this scans all partitions (the cell filter does
+#' not prune the feature-partitioned store), so it is the one query that touches
+#' the whole assay; call it on demand, not per interaction.
+#'
+#' @param con A connection from [scroll_connect()].
+#' @param assay Assay name.
+#' @param cells Character vector of cell ids.
+#' @return A data.frame with columns `feature`, `cell`, `value`.
+#' @export
+scroll_query_cells <- function(con, assay, cells) {
+  if (length(cells) == 0)
+    return(data.frame(feature = character(), cell = character(), value = numeric()))
+  dir <- attr(con, "scroll_dir")
+  glob <- file.path(dir, "expr", assay, "**", "*.parquet")
+  duckdb::duckdb_register(con, "scroll_cellsel", data.frame(cell = cells, stringsAsFactors = FALSE))
+  on.exit(duckdb::duckdb_unregister(con, "scroll_cellsel"), add = TRUE)
+  DBI::dbGetQuery(con, paste0(
+    "SELECT feature, cell, value FROM read_parquet(?, hive_partitioning = true) ",
+    "WHERE cell IN (SELECT cell FROM scroll_cellsel)"), params = list(glob))
+}
+
 #' Map stored (possibly quantized) values back to normalized expression
 #'
 #' @param values Numeric/integer vector of stored values.

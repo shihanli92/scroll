@@ -11,7 +11,7 @@ view_proportions(cells, params, state = list())
 
 \item{params}{List with \code{group_by} (x axis) and \code{fill_by} (composition).}
 
-\item{state}{Optional toggle state.}
+\item{state}{Optional toggle state (\code{palette}, \code{normalize}, \code{legend}).}
 }
 \value{
 A ggplot.

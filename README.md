@@ -3,16 +3,15 @@
 *Interactive single-cell explorers, served from your own infrastructure.*
 
 `scroll` turns a processed Seurat object into a polished, interactive web
-explorer — a scrolling page of analysis panels (DimPlot, FeaturePlot, DotPlot),
-each with its own fine-grained controls. A heavy offline **build phase** extracts
-lightweight on-disk artifacts; the **runtime** (a bslib Shiny app) reads only
-those, querying expression one feature at a time via duckdb — so runtime memory
-stays flat regardless of dataset size. It deploys as a plain `app.R` on an
-open-source Shiny Server, with no render step.
+explorer — a scrolling page of analysis panels (DimPlot, FeaturePlot, DotPlot,
+Violin, Proportions, DE), each with its own fine-grained controls. A heavy
+offline **build phase** extracts lightweight on-disk artifacts; the **runtime**
+(a bslib Shiny app) reads only those, querying expression one feature at a time
+via duckdb — so runtime memory stays flat regardless of dataset size. It deploys
+as a plain `app.R` on an open-source Shiny Server, with no render step.
 
-> **Status:** build phase + DimPlot / FeaturePlot / DotPlot panels, wired
-> end-to-end and validated live on pbmc3k. Violin / Proportions / DE panels,
-> `register_panel()`, multi-assay selectors, and WebGL scatter are next.
+> **Status:** build phase + all six panels, wired end-to-end and validated live
+> on pbmc3k. `register_panel()`, multi-assay selectors, and WebGL scatter are next.
 
 ## The two phases
 
@@ -75,10 +74,19 @@ markers: [CD3D, CD8A, MS4A1, CD14, NKG7]   # DotPlot's starting panel
 |-------|----------|
 | **DimPlot** | reduction · color-by (metadata, categorical or numeric) · palette · point size · opacity · cluster labels · split-by |
 | **FeaturePlot** | gene (server-side search over ~all genes) · assay · reduction · palette · point size · expressing-on-top · split-by |
-| **DotPlot** | marker genes (ordered multi-select) · group-by · assay · z-score scaling · palette · dot-size range |
+| **DotPlot** | marker genes (ordered multi-select) · group-by · assay · z-score scaling · palette · dot-size range · hclust rows/cols with dendrograms |
+| **Violin** | gene · group-by · palette · jitter points |
+| **Proportions** | group-by (x) · fill-by · palette · normalize-to-100% |
+| **DE** | contrast (group vs group / vs rest) · min % · live Wilcoxon via `presto`, sortable table |
 
-Categorical colors are assigned **deterministically by level name**, so a cell
-type keeps its color across every panel.
+Every plot has an **aspect-ratio** control (reshapes within a fixed canvas) and a
+clean black-box theme. Categorical colors are assigned **deterministically by
+level name**, so a cell type keeps its color across every panel.
+
+Live DE is the one memory-heavy operation: `presto::wilcoxauc` needs an in-memory
+matrix, so a run reconstructs the contrast's expression matrix from the store
+(on-demand, behind a Compute button). Precomputed `de/<contrast>` tables remain
+supported via `view_de_table()` for full rigor / any test.
 
 ## Query features directly (no app needed)
 

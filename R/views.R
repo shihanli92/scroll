@@ -153,13 +153,6 @@
 
 # --- scatter views ------------------------------------------------------------
 
-#' Embedding colored by a metadata column
-#'
-#' @param cells The globally-loaded cells data.frame.
-#' @param params List with `embedding` and `color_by`.
-#' @param state Optional toggle state (`embedding`, `split_by`, `show_labels`).
-#' @return A ggplot.
-#' @export
 # Named colors for a categorical column: the chosen palette, with any manual
 # per-group overrides layered on top (both keyed by level name).
 .scroll_group_colors <- function(values, state) {
@@ -173,6 +166,13 @@
   cols
 }
 
+#' Embedding colored by a metadata column
+#'
+#' @param cells The globally-loaded cells data.frame.
+#' @param params List with `embedding` and `color_by`.
+#' @param state Optional toggle state (`embedding`, `split_by`, `show_labels`).
+#' @return A ggplot.
+#' @export
 view_umap_colorby <- function(cells, params, state = list()) {
   embedding <- .scroll_eff_embedding(params, state)
   df <- .scroll_embedding_xy(cells, embedding)

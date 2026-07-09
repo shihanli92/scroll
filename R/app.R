@@ -317,6 +317,65 @@ proportions_server <- function(id, data) {
   })
 }
 
+# --- DE panel -----------------------------------------------------------------
+
+de_ui <- function(id, data) {
+  ns <- NS(id)
+  m <- data$manifest
+  cats <- .scroll_cat_cols(m); assays <- .scroll_assays_of(m)
+  bslib::layout_columns(
+    col_widths = c(3, 9), class = "scroll-panel",
+    div(
+      class = "scroll-controls",
+      .scroll_group("Contrast",
+        selectInput(ns("group"), "Group by", stats::setNames(cats, cats), selected = cats[[1]]),
+        selectInput(ns("ident1"), "Group 1", choices = NULL),
+        selectInput(ns("ident2"), "vs.", choices = NULL),
+        if (length(assays) > 1) selectInput(ns("assay"), "Assay", assays, selected = m$default_assay)),
+      .scroll_group("Filters",
+        sliderInput(ns("minpct"), "Min % expressing", 0, 50, 10, 1),
+        sliderInput(ns("topn"), "Show top", 10, 300, 50, 10)),
+      actionButton(ns("compute"), "Compute DE", class = "btn-primary", width = "100%")
+    ),
+    div(class = "scroll-plot scroll-table",
+        if (.scroll_has_dt()) DT::dataTableOutput(ns("table")) else tableOutput(ns("table")))
+  )
+}
+
+.scroll_has_dt <- function() requireNamespace("DT", quietly = TRUE)
+
+de_server <- function(id, data) {
+  moduleServer(id, function(input, output, session) {
+    m <- data$manifest
+    assay <- reactive(input$assay %||% m$default_assay)
+
+    observeEvent(input$group, {
+      lv <- unlist(m$meta[[input$group]]$levels)
+      updateSelectInput(session, "ident1", choices = lv, selected = lv[[1]])
+      updateSelectInput(session, "ident2", choices = c("rest", lv), selected = "rest")
+    })
+
+    result <- eventReactive(input$compute, {
+      req(input$ident1)
+      scroll_de(data, assay(), input$group, input$ident1,
+                if (identical(input$ident2, "rest")) NULL else input$ident2,
+                min_pct = input$minpct / 100)
+    })
+
+    draw <- function() {
+      validate(need(input$compute > 0, "Pick a contrast and click Compute DE."))
+      utils::head(result(), input$topn)
+    }
+    if (.scroll_has_dt())
+      output$table <- DT::renderDataTable(
+        DT::formatSignif(
+          DT::datatable(draw(), rownames = FALSE, options = list(pageLength = 15, dom = "tip")),
+          columns = c("p_val", "p_val_adj"), digits = 3))
+    else
+      output$table <- renderTable(draw())
+  })
+}
+
 # --- section registry + shell -------------------------------------------------
 
 # Panels available in v1, in scroll order. Each entry: display meta + its
@@ -341,7 +400,11 @@ proportions_server <- function(id, data) {
   list(id = "proportions", num = "05", label = "Proportions",
        title = "Composition",
        desc = "Stacked composition of one annotation within another.",
-       ui = proportions_ui, server = proportions_server)
+       ui = proportions_ui, server = proportions_server),
+  list(id = "de", num = "06", label = "DE",
+       title = "Differential expression",
+       desc = "Wilcoxon markers for a contrast, computed live via presto.",
+       ui = de_ui, server = de_server)
 )
 
 .scroll_group <- function(title, ...) {

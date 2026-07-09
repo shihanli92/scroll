@@ -13,7 +13,8 @@ view_violin(cells, params, values = NULL, state = list())
 
 \item{values}{A data.frame(cell, value) for the feature, or \code{NULL}.}
 
-\item{state}{Optional toggle state (\code{split_by} overrides \code{group_by}).}
+\item{state}{Optional toggle state (\code{palette}, \code{jitter}, \code{legend};
+\code{split_by} overrides \code{group_by}).}
 }
 \value{
 A ggplot.
