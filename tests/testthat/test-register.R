@@ -44,6 +44,15 @@ test_that("register_panel appends a custom panel, and it renders in the page", {
   })
 })
 
+test_that("register_panel positions with `before` (top of the app)", {
+  on.exit(scroll_reset_panels())
+  scroll_reset_panels()
+  register_panel("qc", count_ui, count_server, before = "dimplot")
+  ids <- vapply(scroll:::.scroll_assemble_panels(), `[[`, "", "id")
+  expect_equal(ids[1:2], c("qc", "dimplot"))    # inserted before the first built-in
+  expect_equal(ids[[1]], "qc")                  # ...i.e. at the very top
+})
+
 test_that("register_panel positions with `after` and replaces by id in place", {
   on.exit(scroll_reset_panels())
   scroll_reset_panels()

@@ -513,6 +513,9 @@ de_server <- function(id, data, cells_r = reactive(data$cells)) {
 #' @param title,desc Section heading and one-line description.
 #' @param after Id of the panel to insert this one after; `NULL` (default)
 #'   appends at the end. Ignored when replacing an existing id.
+#' @param before Id of the panel to insert this one before (e.g. `"dimplot"` to
+#'   put it at the top). Takes precedence over `after`. Ignored when replacing an
+#'   existing id.
 #' @return Invisibly, `id`.
 #' @examples
 #' # A minimal custom panel: a cells-per-group bar chart.
@@ -536,12 +539,12 @@ de_server <- function(id, data, cells_r = reactive(data$cells)) {
 #' scroll_reset_panels()   # (undo, so the example leaves no state)
 #' @export
 register_panel <- function(id, ui, server, label = id, title = label,
-                           desc = NULL, after = NULL) {
+                           desc = NULL, after = NULL, before = NULL) {
   .scroll_check_panel_id(id)
   if (!is.function(ui) || !is.function(server))
     stop("`ui` and `server` must be functions.", call. = FALSE)
   spec <- list(id = id, label = label, title = title, desc = desc %||% "",
-               ui = ui, server = server, after = after)
+               ui = ui, server = server, after = after, before = before)
   reg <- .scroll_registry$panels
   ids <- vapply(reg, `[[`, "", "id")
   reg[[if (id %in% ids) which(ids == id) else length(reg) + 1L]] <- spec
@@ -567,14 +570,17 @@ scroll_reset_panels <- function() {
 }
 
 # Built-ins + registered panels, in final scroll order, each stamped with a
-# display number by position. A registered id matching an existing panel
-# replaces it in place; otherwise it is inserted after `after` (or appended).
+# display number by position. A registered id matching an existing panel replaces
+# it in place; otherwise it is inserted before `before`, else after `after`, else
+# appended.
 .scroll_assemble_panels <- function() {
   panels <- .scroll_builtin_panels()
   for (spec in .scroll_registry$panels) {
     ids <- vapply(panels, `[[`, "", "id")
     if (spec$id %in% ids) {
       panels[[which(ids == spec$id)]] <- spec
+    } else if (!is.null(spec$before) && spec$before %in% ids) {
+      panels <- append(panels, list(spec), after = which(ids == spec$before) - 1L)
     } else if (!is.null(spec$after) && spec$after %in% ids) {
       panels <- append(panels, list(spec), after = which(ids == spec$after))
     } else {

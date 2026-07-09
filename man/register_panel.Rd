@@ -11,7 +11,8 @@ register_panel(
   label = id,
   title = label,
   desc = NULL,
-  after = NULL
+  after = NULL,
+  before = NULL
 )
 }
 \arguments{
@@ -26,6 +27,10 @@ underscores. Used as the section anchor and the Shiny module namespace.}
 
 \item{after}{Id of the panel to insert this one after; \code{NULL} (default)
 appends at the end. Ignored when replacing an existing id.}
+
+\item{before}{Id of the panel to insert this one before (e.g. \code{"dimplot"} to
+put it at the top). Takes precedence over \code{after}. Ignored when replacing an
+existing id.}
 }
 \value{
 Invisibly, \code{id}.
