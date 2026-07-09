@@ -118,6 +118,20 @@ test_that("FeaturePlot quantile caps clip the color scale", {
   expect_s3_class(p, "ggplot")
 })
 
+test_that("aspect ratio sets theme(aspect.ratio); default 1 leaves it unset", {
+  cells <- read_cells(test_project())
+  p <- view_umap_colorby(cells, list(embedding = "umap", color_by = "celltype"),
+                         state = list(aspect = 2.5))
+  expect_equal(p$theme$aspect.ratio, 2.5)
+  p1 <- view_umap_colorby(cells, list(embedding = "umap", color_by = "celltype"),
+                          state = list(aspect = 1))
+  expect_null(p1$theme$aspect.ratio)
+  # violin honours it too
+  v <- view_violin(cells, list(feature = "CD3D", group_by = "celltype"), NULL,
+                   state = list(aspect = 0.5))
+  expect_equal(v$theme$aspect.ratio, 0.5)
+})
+
 test_that("legend can be switched off", {
   cells <- read_cells(test_project())
   p <- view_umap_colorby(cells, list(embedding = "umap", color_by = "celltype"),

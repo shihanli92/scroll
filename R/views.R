@@ -126,6 +126,21 @@
   p
 }
 
+# Aspect ratio (panel height / width). Set via theme(aspect.ratio) so the panel
+# reshapes WITHIN the fixed-size plot canvas (letterboxing) rather than growing
+# it — a tall aspect never forces the page to scroll. Left off at 1 so the
+# default fills the canvas as before.
+.scroll_apply_aspect <- function(p, aspect = 1) {
+  if (is.numeric(aspect) && length(aspect) == 1 && abs(aspect - 1) > 1e-6)
+    p <- p + ggplot2::theme(aspect.ratio = aspect)
+  p
+}
+
+# Scatter finish: facet, then aspect.
+.scroll_finish_scatter <- function(p, df, state) {
+  .scroll_apply_aspect(.scroll_maybe_facet(p, df, state), state$aspect %||% 1)
+}
+
 # Per-group centroid labels for a categorical scatter.
 .scroll_group_labels <- function(df, col) {
   agg <- stats::aggregate(cbind(.x, .y) ~ .g, data = transform(df, .g = df[[col]]),
@@ -175,7 +190,7 @@ view_umap_colorby <- function(cells, params, state = list()) {
       ggplot2::geom_point(ggplot2::aes(color = .data$.col), size = size, alpha = alpha) +
       .scroll_continuous_scale(.scroll_opt(params, state, "palette", "viridis"), color_by) +
       ggplot2::labs(color = color_by)
-    return(.scroll_maybe_facet(p, df, state))
+    return(.scroll_finish_scatter(p, df, state))
   }
 
   # categorical: discrete colors, with optional group highlight + manual colors
@@ -203,7 +218,7 @@ view_umap_colorby <- function(cells, params, state = list()) {
   p <- p + ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(size = 4)))
   if (isTRUE(.scroll_opt(params, state, "show_labels", FALSE)) && nrow(label_df))
     p <- p + .scroll_group_labels(label_df, ".col") + ggplot2::guides(color = "none")
-  .scroll_maybe_facet(p, df, state)
+  .scroll_finish_scatter(p, df, state)
 }
 
 #' Embedding colored by a feature's expression
@@ -226,7 +241,7 @@ view_feature_plot <- function(cells, params, values = NULL, state = list()) {
     ggplot2::geom_point(ggplot2::aes(color = .data$.expr), size = size) +
     .scroll_continuous_scale(.scroll_opt(params, state, "palette", "grey-purple"),
                              params$feature %||% "expression", lims)
-  .scroll_maybe_facet(p, df, state)
+  .scroll_finish_scatter(p, df, state)
 }
 
 # --- aggregate views ----------------------------------------------------------
@@ -305,6 +320,10 @@ view_dotplot <- function(cells, params, expr_long, state = list()) {
                    panel.border = ggplot2::element_rect(color = "black", linewidth = 0.7, fill = NA),
                    axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
 
+  # aspect.ratio letterboxes the panel, which would detach the aplot trees, so
+  # apply it only to the plain (untreed) dot plot; with dendrograms the composite
+  # fills the fixed canvas.
+  if (is.null(hr) && is.null(hc)) p <- .scroll_apply_aspect(p, state$aspect %||% 1)
   .scroll_dotplot_trees(p, hr, hc)
 }
 
@@ -366,10 +385,11 @@ view_violin <- function(cells, params, values = NULL, state = list()) {
   if (isTRUE(.scroll_opt(params, state, "jitter", FALSE)))
     p <- p + ggplot2::geom_jitter(size = 0.2, alpha = 0.3, width = 0.2,
                                   show.legend = FALSE)
-  p +
+  p <- p +
     ggplot2::scale_fill_manual(values = cols) +
     ggplot2::labs(x = group_by, y = params$feature %||% "expression", fill = group_by) +
     .scroll_box_theme(.scroll_opt(params, state, "legend", FALSE))
+  .scroll_apply_aspect(p, state$aspect %||% 1)
 }
 
 #' Stacked composition of one categorical within another
@@ -406,7 +426,8 @@ view_proportions <- function(cells, params, state = list()) {
     ggplot2::scale_fill_manual(values = cols) +
     ggplot2::labs(x = x, y = ylab, fill = fill)
   if (!is.null(yscale)) p <- p + yscale
-  p + .scroll_box_theme(.scroll_opt(params, state, "legend", TRUE))
+  p <- p + .scroll_box_theme(.scroll_opt(params, state, "legend", TRUE))
+  .scroll_apply_aspect(p, state$aspect %||% 1)
 }
 
 #' Differential-expression table for a contrast

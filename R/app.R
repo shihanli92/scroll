@@ -83,7 +83,7 @@ dimplot_ui <- function(id, data) {
                     c("None" = "", stats::setNames(cats, cats))),
         .scroll_aspect_input(ns))
     ),
-    div(class = "scroll-plot", plotOutput(ns("plot"), height = "auto"))
+    div(class = "scroll-plot", plotOutput(ns("plot"), height = "460px"))
   )
 }
 
@@ -127,10 +127,10 @@ dimplot_server <- function(id, data) {
       params <- list(embedding = input$reduction, color_by = input$colorby)
       state <- list(palette = input$palette, point_size = input$size, alpha = input$alpha,
                     show_labels = isTRUE(input$labels), legend = isTRUE(input$legend),
-                    split_by = .scroll_nz(input$split),
+                    split_by = .scroll_nz(input$split), aspect = input$aspect,
                     highlight = input$highlight, manual_colors = manual_colors())
       view_umap_colorby(data$cells, params, state)
-    }, height = function() .scroll_plot_height(input$aspect))
+    })
   })
 }
 
@@ -162,7 +162,7 @@ featureplot_ui <- function(id, data) {
         selectInput(ns("split"), "Split by", c("None" = "", stats::setNames(cats, cats))),
         .scroll_aspect_input(ns))
     ),
-    div(class = "scroll-plot", plotOutput(ns("plot"), height = "auto"))
+    div(class = "scroll-plot", plotOutput(ns("plot"), height = "460px"))
   )
 }
 
@@ -179,9 +179,10 @@ featureplot_server <- function(id, data) {
       params <- list(embedding = input$reduction, feature = feat)
       state <- list(palette = input$palette, point_size = input$size,
                     order = isTRUE(input$order), legend = isTRUE(input$legend),
-                    clip = input$clip / 100, split_by = .scroll_nz(input$split))
+                    clip = input$clip / 100, split_by = .scroll_nz(input$split),
+                    aspect = input$aspect)
       view_feature_plot(data$cells, params, data$query1(assay(), feat), state)
-    }, height = function() .scroll_plot_height(input$aspect))
+    })
   })
 }
 
@@ -212,7 +213,7 @@ dotplot_ui <- function(id, data) {
                     c("Off" = "off", "Rows" = "rows", "Columns" = "columns", "Both" = "both")),
         .scroll_aspect_input(ns))
     ),
-    div(class = "scroll-plot", plotOutput(ns("plot"), height = "auto"))
+    div(class = "scroll-plot", plotOutput(ns("plot"), height = "520px"))
   )
 }
 
@@ -229,9 +230,10 @@ dotplot_server <- function(id, data) {
       validate(need(length(feats) > 0, "Add one or more marker genes to build the panel."))
       params <- list(group_by = input$group, features = feats)
       state <- list(scale = isTRUE(input$scale), palette = input$palette,
-                    dot_size = input$dotrange, cluster = input$cluster)
+                    dot_size = input$dotrange, cluster = input$cluster,
+                    aspect = input$aspect)
       view_dotplot(data$cells, params, data$queryN(assay(), feats), state)
-    }, height = function() .scroll_plot_height(input$aspect, 520))
+    })
   })
 }
 
@@ -258,7 +260,7 @@ violin_ui <- function(id, data) {
         bslib::input_switch(ns("legend"), "Legend", FALSE)),
       .scroll_group("Layout", .scroll_aspect_input(ns))
     ),
-    div(class = "scroll-plot", plotOutput(ns("plot"), height = "auto"))
+    div(class = "scroll-plot", plotOutput(ns("plot"), height = "460px"))
   )
 }
 
@@ -274,9 +276,9 @@ violin_server <- function(id, data) {
       validate(need(!is.null(feat), "Search for a gene to plot its distribution."))
       params <- list(feature = feat, group_by = input$group)
       state <- list(palette = input$palette, jitter = isTRUE(input$jitter),
-                    legend = isTRUE(input$legend))
+                    legend = isTRUE(input$legend), aspect = input$aspect)
       view_violin(data$cells, params, data$query1(assay(), feat), state)
-    }, height = function() .scroll_plot_height(input$aspect))
+    })
   })
 }
 
@@ -299,7 +301,7 @@ proportions_ui <- function(id, data) {
         bslib::input_switch(ns("legend"), "Legend", TRUE)),
       .scroll_group("Layout", .scroll_aspect_input(ns))
     ),
-    div(class = "scroll-plot", plotOutput(ns("plot"), height = "auto"))
+    div(class = "scroll-plot", plotOutput(ns("plot"), height = "460px"))
   )
 }
 
@@ -309,9 +311,9 @@ proportions_server <- function(id, data) {
       req(input$group, input$fill)
       params <- list(group_by = input$group, fill_by = input$fill)
       state <- list(palette = input$palette, normalize = isTRUE(input$normalize),
-                    legend = isTRUE(input$legend))
+                    legend = isTRUE(input$legend), aspect = input$aspect)
       view_proportions(data$cells, params, state)
-    }, height = function() .scroll_plot_height(input$aspect))
+    })
   })
 }
 
@@ -352,7 +354,6 @@ proportions_server <- function(id, data) {
 # sets its renderPlot height via .scroll_plot_height(); future panels get it for
 # free by doing the same.
 .scroll_aspect_input <- function(ns) sliderInput(ns("aspect"), "Aspect ratio", 0.4, 3, 1, 0.1)
-.scroll_plot_height <- function(aspect, base = 460) as.integer(base * (aspect %||% 1))
 
 .scroll_stat <- function(value, label)
   div(class = "scroll-stat", span(class = "scroll-stat-v", value),
