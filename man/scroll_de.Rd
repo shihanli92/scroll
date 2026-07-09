@@ -27,3 +27,10 @@ Compares \code{ident1} against \code{ident2} (another level) or against the rest
 cells when \code{ident2} is \code{NULL}/\code{"rest"}. Reconstructs the contrast's expression
 matrix from the store and runs \code{\link[presto:wilcoxauc]{presto::wilcoxauc()}}.
 }
+\details{
+With the default quantized build (\code{quantize = TRUE} in
+\code{\link[=scroll_build]{scroll_build()}}), expression values below ~\code{max/510} round to zero, so the
+fraction-expressing columns (\code{pct.1}/\code{pct.2}) slightly under-count cells with
+very low expression and p-values are approximate. Build with
+\code{quantize = FALSE} for exact statistics.
+}

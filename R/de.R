@@ -16,6 +16,11 @@
 #' @param ident2 The comparison group, or `NULL`/`"rest"` for one-vs-rest.
 #' @param min_pct Keep genes expressed in at least this fraction of either side.
 #' @return A data.frame of results, ranked by adjusted p-value.
+#' @details With the default quantized build (`quantize = TRUE` in
+#'   [scroll_build()]), expression values below ~`max/510` round to zero, so the
+#'   fraction-expressing columns (`pct.1`/`pct.2`) slightly under-count cells with
+#'   very low expression and p-values are approximate. Build with
+#'   `quantize = FALSE` for exact statistics.
 #' @export
 scroll_de <- function(data, assay, group_col, ident1, ident2 = NULL, min_pct = 0.1) {
   if (!requireNamespace("presto", quietly = TRUE))
@@ -25,10 +30,10 @@ scroll_de <- function(data, assay, group_col, ident1, ident2 = NULL, min_pct = 0
 
   one_vs_rest <- is.null(ident2) || !nzchar(ident2) || identical(ident2, "rest")
   if (one_vs_rest) {
-    keep <- rep(TRUE, length(g))
-    labels <- ifelse(g == ident1, ident1, "rest")
+    keep <- !is.na(g)                       # drop un-annotated cells (else NA labels)
+    labels <- ifelse(!is.na(g) & g == ident1, ident1, "rest")
   } else {
-    keep <- g %in% c(ident1, ident2)
+    keep <- !is.na(g) & g %in% c(ident1, ident2)
     labels <- g
   }
   ccells <- cells$cell[keep]

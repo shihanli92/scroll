@@ -192,6 +192,7 @@ dotplot_ui <- function(id, data) {
   ns <- NS(id)
   m <- data$manifest
   assays <- .scroll_assays_of(m); cats <- .scroll_cat_cols(m)
+  if (!length(cats)) return(.scroll_empty_panel("Needs a categorical metadata column (none found)."))
   bslib::layout_columns(
     col_widths = c(3, 9), class = "scroll-panel",
     div(
@@ -243,6 +244,7 @@ violin_ui <- function(id, data) {
   ns <- NS(id)
   m <- data$manifest
   assays <- .scroll_assays_of(m); cats <- .scroll_cat_cols(m)
+  if (!length(cats)) return(.scroll_empty_panel("Needs a categorical metadata column (none found)."))
   bslib::layout_columns(
     col_widths = c(3, 9), class = "scroll-panel",
     div(
@@ -287,6 +289,7 @@ violin_server <- function(id, data) {
 proportions_ui <- function(id, data) {
   ns <- NS(id)
   cats <- .scroll_cat_cols(data$manifest)
+  if (!length(cats)) return(.scroll_empty_panel("Needs categorical metadata columns (none found)."))
   x_default <- if (length(cats) >= 2) cats[[2]] else cats[[1]]
   bslib::layout_columns(
     col_widths = c(3, 9), class = "scroll-panel",
@@ -323,6 +326,7 @@ de_ui <- function(id, data) {
   ns <- NS(id)
   m <- data$manifest
   cats <- .scroll_cat_cols(m); assays <- .scroll_assays_of(m)
+  if (!length(cats)) return(.scroll_empty_panel("Needs a categorical metadata column (none found)."))
   bslib::layout_columns(
     col_widths = c(3, 9), class = "scroll-panel",
     div(
@@ -382,6 +386,7 @@ volcano_ui <- function(id, data) {
   ns <- NS(id)
   m <- data$manifest
   cats <- .scroll_cat_cols(m); assays <- .scroll_assays_of(m)
+  if (!length(cats)) return(.scroll_empty_panel("Needs a categorical metadata column (none found)."))
   bslib::layout_columns(
     col_widths = c(3, 9), class = "scroll-panel",
     div(
@@ -471,6 +476,11 @@ volcano_server <- function(id, data) {
 # free by doing the same.
 .scroll_aspect_input <- function(ns) sliderInput(ns("aspect"), "Aspect ratio", 0.4, 3, 1, 0.1)
 
+# Placeholder body for a panel that can't run on this dataset (e.g. no
+# categorical grouping column) — avoids a hard `cats[[1]]` crash at UI build.
+.scroll_empty_panel <- function(msg)
+  div(class = "scroll-panel", tags$p(class = "scroll-desc", msg))
+
 .scroll_stat <- function(value, label)
   div(class = "scroll-stat", span(class = "scroll-stat-v", value),
       span(class = "scroll-stat-l", label))
@@ -555,7 +565,10 @@ scroll_app <- function(dir = ".") {
   server <- function(input, output, session) {
     for (sec in panels) sec$server(sec$id, data)
   }
-  shiny::shinyApp(ui, server)
+  # close the (process-global) duckdb connection when the app stops
+  shiny::shinyApp(ui, server, onStart = function() {
+    shiny::onStop(function() try(scroll_disconnect(data$con), silent = TRUE))
+  })
 }
 
 #' Run the scroll explorer locally

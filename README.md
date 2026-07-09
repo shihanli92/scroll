@@ -51,6 +51,9 @@ scroll_build(obj, "pbmc3k")            # object -> project directory
 `scroll_build()` writes `cells.parquet`, the feature-partitioned `expr/` store,
 `manifest.yaml`, a starter `config.yaml`, and a deployable `app.R`. Expression is
 quantized to `uint8` by default (`quantize = FALSE` to keep full precision).
+Quantization floors values below ~`max/510` to zero, so fraction-expressing
+stats (dotplot dot size, DE `pct.1`/`pct.2`) slightly under-count very low
+expression — use `quantize = FALSE` when exact fractions matter.
 
 ## Explore
 

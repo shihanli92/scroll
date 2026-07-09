@@ -26,7 +26,10 @@ scroll_build(
 \item{meta_cols}{Metadata columns to export. \code{NULL} infers a sensible set.}
 
 \item{quantize}{If \code{TRUE}, expression is quantized to \code{uint8} (256 levels),
-with a per-assay \code{max} recorded in the manifest for dequantization.}
+with a per-assay \code{max} recorded in the manifest for dequantization. Values
+below ~\code{max/510} round to zero, so fraction-expressing statistics (dotplot
+dot size, DE \code{pct.1}/\code{pct.2}) slightly under-count low-expression cells; use
+\code{quantize = FALSE} for exact values.}
 
 \item{overwrite}{If \code{TRUE}, an existing \code{outdir} is removed first.}
 }

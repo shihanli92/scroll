@@ -15,7 +15,10 @@
 #' @param embeddings Reductions to export. `NULL` exports all reductions.
 #' @param meta_cols Metadata columns to export. `NULL` infers a sensible set.
 #' @param quantize If `TRUE`, expression is quantized to `uint8` (256 levels),
-#'   with a per-assay `max` recorded in the manifest for dequantization.
+#'   with a per-assay `max` recorded in the manifest for dequantization. Values
+#'   below ~`max/510` round to zero, so fraction-expressing statistics (dotplot
+#'   dot size, DE `pct.1`/`pct.2`) slightly under-count low-expression cells; use
+#'   `quantize = FALSE` for exact values.
 #' @param overwrite If `TRUE`, an existing `outdir` is removed first.
 #'
 #' @return `outdir`, invisibly.

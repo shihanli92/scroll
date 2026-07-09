@@ -21,6 +21,20 @@ test_that("dimplot_server renders a plot from its controls", {
   })
 })
 
+test_that("grouping panels degrade gracefully with no categorical metadata", {
+  fake <- list(manifest = list(
+    meta = list(nCount = list(type = "numeric", range = list(min = 0, max = 1))),
+    assays = list(RNA = list(features = list("A", "B"), max = 1, n_features = 2)),
+    embeddings = list(umap = list(dims = 2)),
+    default_assay = "RNA", default_embedding = "umap"))
+  for (ui in list(scroll:::dotplot_ui, scroll:::violin_ui, scroll:::proportions_ui,
+                  scroll:::de_ui, scroll:::volcano_ui)) {
+    tag <- ui("p", fake)
+    expect_s3_class(tag, "shiny.tag")
+    expect_true(grepl("categorical metadata", as.character(tag)))
+  }
+})
+
 test_that("violin_server and proportions_server render from controls", {
   data <- scroll:::.scroll_load(test_project())
   on.exit(scroll_disconnect(data$con))

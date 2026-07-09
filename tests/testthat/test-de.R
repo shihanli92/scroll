@@ -18,6 +18,16 @@ test_that("scroll_de runs presto and returns ranked marker results", {
   expect_false(is.unsorted(res$p_val_adj))                       # ranked by adjusted p
 })
 
+test_that("scroll_de one-vs-rest drops NA-group cells (no NA labels to presto)", {
+  skip_if_not_installed("presto")
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  data$cells$celltype[1:10] <- NA                       # un-annotated cells
+  ident1 <- sort(unique(stats::na.omit(as.character(data$cells$celltype))))[[1]]
+  res <- scroll_de(data, "RNA", "celltype", ident1 = ident1)   # would error on NA labels
+  expect_gt(nrow(res), 0)
+})
+
 test_that("view_volcano renders from a DE result (and empty input)", {
   set.seed(1)
   de <- data.frame(gene = paste0("G", 1:50), logFC = stats::rnorm(50, 0, 1.5),
