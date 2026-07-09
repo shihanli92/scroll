@@ -444,6 +444,54 @@ view_de_table <- function(de_data, params) {
   utils::head(de_data, n)
 }
 
+#' Volcano plot of a differential-expression result
+#'
+#' @param de A data.frame from [scroll_de()] (needs `gene`, `logFC`,
+#'   `p_val_adj`).
+#' @param params List with `lfc` (fold-change cutoff), `padj` (adjusted-p
+#'   cutoff), and `label_n` (number of genes to label).
+#' @param state Optional toggle state (`aspect`).
+#' @return A ggplot.
+#' @export
+view_volcano <- function(de, params = list(), state = list()) {
+  if (is.null(de) || nrow(de) == 0)
+    return(ggplot2::ggplot() +
+             ggplot2::annotate("text", 0, 0, label = "No DE results.") +
+             ggplot2::theme_void())
+  lfc <- params$lfc %||% 1
+  pcut <- params$padj %||% 0.05
+  d <- de
+  d$neglog <- -log10(pmax(d$p_val_adj, 1e-300))     # avoid Inf when padj underflows to 0
+  d$sig <- factor("ns", levels = c("down", "ns", "up"))
+  d$sig[d$p_val_adj < pcut & d$logFC >= lfc] <- "up"
+  d$sig[d$p_val_adj < pcut & d$logFC <= -lfc] <- "down"
+  cols <- c(down = "#2563A8", ns = "grey78", up = "#C4453B")
+
+  p <- ggplot2::ggplot(d, ggplot2::aes(.data$logFC, .data$neglog, color = .data$sig)) +
+    ggplot2::geom_point(size = 1, alpha = 0.75) +
+    ggplot2::scale_color_manual(values = cols, guide = "none") +
+    ggplot2::geom_vline(xintercept = c(-lfc, lfc), linetype = "dashed", color = "grey60") +
+    ggplot2::geom_hline(yintercept = -log10(pcut), linetype = "dashed", color = "grey60") +
+    ggplot2::labs(x = "logFC", y = "-log10 adjusted p") +
+    ggplot2::theme_bw(base_size = 13) +
+    ggplot2::theme(panel.grid = ggplot2::element_blank(),
+                   panel.border = ggplot2::element_rect(color = "black", linewidth = 0.7, fill = NA))
+
+  n <- params$label_n %||% 15
+  lab <- d[d$sig != "ns", , drop = FALSE]
+  lab <- utils::head(lab[order(-lab$neglog), , drop = FALSE], n)
+  if (n > 0 && nrow(lab)) {
+    aes_lab <- ggplot2::aes(x = .data$logFC, y = .data$neglog, label = .data$gene)
+    p <- p + if (requireNamespace("ggrepel", quietly = TRUE))
+      ggrepel::geom_text_repel(data = lab, mapping = aes_lab, inherit.aes = FALSE,
+                               size = 3, color = "black", max.overlaps = 20)
+    else
+      ggplot2::geom_text(data = lab, mapping = aes_lab, inherit.aes = FALSE,
+                         size = 3, color = "black", vjust = -0.6)
+  }
+  .scroll_apply_aspect(p, state$aspect %||% 1)
+}
+
 # --- dispatch -----------------------------------------------------------------
 
 #' Which output kind a view produces

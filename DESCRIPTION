@@ -39,6 +39,7 @@ Suggests:
     ape,
     presto,
     DT,
+    ggrepel,
     testthat (>= 3.0.0),
     SeuratData
 Config/testthat/edition: 3

@@ -376,6 +376,55 @@ de_server <- function(id, data) {
   })
 }
 
+# --- Volcano panel ------------------------------------------------------------
+
+volcano_ui <- function(id, data) {
+  ns <- NS(id)
+  m <- data$manifest
+  cats <- .scroll_cat_cols(m); assays <- .scroll_assays_of(m)
+  bslib::layout_columns(
+    col_widths = c(3, 9), class = "scroll-panel",
+    div(
+      class = "scroll-controls",
+      .scroll_group("Contrast",
+        selectInput(ns("group"), "Group by", stats::setNames(cats, cats), selected = cats[[1]]),
+        selectInput(ns("ident1"), "Group 1", choices = NULL),
+        selectInput(ns("ident2"), "vs.", choices = NULL),
+        if (length(assays) > 1) selectInput(ns("assay"), "Assay", assays, selected = m$default_assay)),
+      .scroll_group("Thresholds",
+        sliderInput(ns("lfc"), "logFC cutoff", 0, 3, 1, 0.1),
+        numericInput(ns("padj"), "Adj. p cutoff", 0.05, min = 0, max = 1, step = 0.01),
+        sliderInput(ns("labeln"), "Label top", 0, 40, 15, 1)),
+      .scroll_group("Layout", .scroll_aspect_input(ns)),
+      actionButton(ns("compute"), "Compute", class = "btn-primary", width = "100%")
+    ),
+    div(class = "scroll-plot", plotOutput(ns("plot"), height = "520px"))
+  )
+}
+
+volcano_server <- function(id, data) {
+  moduleServer(id, function(input, output, session) {
+    m <- data$manifest
+    assay <- reactive(input$assay %||% m$default_assay)
+    observeEvent(input$group, {
+      lv <- unlist(m$meta[[input$group]]$levels)
+      updateSelectInput(session, "ident1", choices = lv, selected = lv[[1]])
+      updateSelectInput(session, "ident2", choices = c("rest", lv), selected = "rest")
+    })
+    result <- eventReactive(input$compute, {
+      req(input$ident1)
+      scroll_de(data, assay(), input$group, input$ident1,
+                if (identical(input$ident2, "rest")) NULL else input$ident2, min_pct = 0)
+    })
+    output$plot <- renderPlot({
+      validate(need(input$compute > 0, "Pick a contrast and click Compute."))
+      view_volcano(result(),
+                   params = list(lfc = input$lfc, padj = input$padj, label_n = input$labeln),
+                   state = list(aspect = input$aspect))
+    })
+  })
+}
+
 # --- section registry + shell -------------------------------------------------
 
 # Panels available in v1, in scroll order. Each entry: display meta + its
@@ -404,7 +453,11 @@ de_server <- function(id, data) {
   list(id = "de", num = "06", label = "DE",
        title = "Differential expression",
        desc = "Wilcoxon markers for a contrast, computed live via presto.",
-       ui = de_ui, server = de_server)
+       ui = de_ui, server = de_server),
+  list(id = "volcano", num = "07", label = "Volcano",
+       title = "Volcano plot",
+       desc = "logFC vs significance for a contrast (live Wilcoxon).",
+       ui = volcano_ui, server = volcano_server)
 )
 
 .scroll_group <- function(title, ...) {
