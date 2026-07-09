@@ -21,9 +21,10 @@ scroll_de(
 
 \item{group_col}{Metadata column defining the groups.}
 
-\item{ident1}{The group of interest.}
+\item{ident1}{One or more levels of \code{group_col} forming the group of interest.}
 
-\item{ident2}{The comparison group, or \code{NULL}/\code{"rest"} for one-vs-rest.}
+\item{ident2}{One or more comparison levels, or \code{NULL}/\code{"rest"} for
+one-vs-rest (every cell not in \code{ident1}).}
 
 \item{min_pct}{Keep genes expressed in at least this fraction of either side.}
 
@@ -34,9 +35,10 @@ DE within an active cell-subset filter.}
 A data.frame of results, ranked by adjusted p-value.
 }
 \description{
-Compares \code{ident1} against \code{ident2} (another level) or against the rest of the
-cells when \code{ident2} is \code{NULL}/\code{"rest"}. Reconstructs the contrast's expression
-matrix from the store and runs \code{\link[presto:wilcoxauc]{presto::wilcoxauc()}}.
+Compares \code{ident1} against \code{ident2} or against the rest of the cells when
+\code{ident2} is \code{NULL}/\code{"rest"}. Either side may name \strong{several} levels of
+\code{group_col} (they are pooled into one group). Reconstructs the contrast's
+expression matrix from the store and runs \code{\link[presto:wilcoxauc]{presto::wilcoxauc()}}.
 }
 \details{
 With the default quantized build (\code{quantize = TRUE} in

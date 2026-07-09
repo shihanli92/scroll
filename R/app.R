@@ -364,8 +364,11 @@ de_ui <- function(id, data) {
       class = "scroll-controls",
       .scroll_group("Contrast",
         selectInput(ns("group"), "Group by", stats::setNames(cats, cats), selected = cats[[1]]),
-        selectInput(ns("ident1"), "Group 1", choices = NULL),
-        selectInput(ns("ident2"), "vs.", choices = NULL),
+        selectizeInput(ns("ident1"), "Group 1", choices = NULL, multiple = TRUE,
+                       options = list(plugins = list("remove_button"))),
+        selectizeInput(ns("ident2"), "vs.", choices = NULL, multiple = TRUE,
+                       options = list(plugins = list("remove_button"),
+                                      placeholder = "rest (all other cells)")),
         if (length(assays) > 1) selectInput(ns("assay"), "Assay", assays, selected = m$default_assay)),
       .scroll_group("Table",
         sliderInput(ns("minpct"), "Min % expressing", 0, 50, 10, 1),
@@ -401,8 +404,8 @@ de_server <- function(id, data, cells_r = reactive(data$cells)) {
 
     observeEvent(input$group, {
       lv <- unlist(m$meta[[input$group]]$levels)
-      updateSelectInput(session, "ident1", choices = lv, selected = lv[[1]])
-      updateSelectInput(session, "ident2", choices = c("rest", lv), selected = "rest")
+      updateSelectizeInput(session, "ident1", choices = lv, selected = lv[[1]])
+      updateSelectizeInput(session, "ident2", choices = lv, selected = character(0))
     })
 
     # min_pct = 0 so the volcano keeps every gene; the table applies its own
@@ -413,7 +416,7 @@ de_server <- function(id, data, cells_r = reactive(data$cells)) {
       req(input$ident1)
       tryCatch(
         list(ok = scroll_de(data, assay(), input$group, input$ident1,
-                            if (identical(input$ident2, "rest")) NULL else input$ident2,
+                            if (length(input$ident2)) input$ident2 else NULL,
                             min_pct = 0, cells = cells_r())),
         error = function(e) list(err = conditionMessage(e)))
     })

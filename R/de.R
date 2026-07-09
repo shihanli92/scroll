@@ -5,15 +5,17 @@
 
 #' Live differential expression for a contrast (presto / Wilcoxon)
 #'
-#' Compares `ident1` against `ident2` (another level) or against the rest of the
-#' cells when `ident2` is `NULL`/`"rest"`. Reconstructs the contrast's expression
-#' matrix from the store and runs [presto::wilcoxauc()].
+#' Compares `ident1` against `ident2` or against the rest of the cells when
+#' `ident2` is `NULL`/`"rest"`. Either side may name **several** levels of
+#' `group_col` (they are pooled into one group). Reconstructs the contrast's
+#' expression matrix from the store and runs [presto::wilcoxauc()].
 #'
 #' @param data A scroll data handle (`con`, `cells`, `manifest`).
 #' @param assay Assay to test.
 #' @param group_col Metadata column defining the groups.
-#' @param ident1 The group of interest.
-#' @param ident2 The comparison group, or `NULL`/`"rest"` for one-vs-rest.
+#' @param ident1 One or more levels of `group_col` forming the group of interest.
+#' @param ident2 One or more comparison levels, or `NULL`/`"rest"` for
+#'   one-vs-rest (every cell not in `ident1`).
 #' @param min_pct Keep genes expressed in at least this fraction of either side.
 #' @param cells Cells to test over (default `data$cells`); pass a subset to run
 #'   DE within an active cell-subset filter.
@@ -30,18 +32,23 @@ scroll_de <- function(data, assay, group_col, ident1, ident2 = NULL, min_pct = 0
     stop("Live DE needs the 'presto' package.", call. = FALSE)
   cells <- cells %||% data$cells
   g <- as.character(cells[[group_col]])
+  ident1 <- as.character(ident1); ident1 <- ident1[nzchar(ident1)]
+  ident2 <- as.character(ident2); ident2 <- ident2[nzchar(ident2)]
+  if (!length(ident1)) stop("Pick at least one level for group 1.", call. = FALSE)
 
-  one_vs_rest <- is.null(ident2) || !nzchar(ident2) || identical(ident2, "rest")
+  in1 <- !is.na(g) & g %in% ident1
+  one_vs_rest <- !length(ident2) || "rest" %in% ident2
   if (one_vs_rest) {
     keep <- !is.na(g)                       # drop un-annotated cells (else NA labels)
-    labels <- ifelse(!is.na(g) & g == ident1, ident1, "rest")
+    labels <- ifelse(in1, "group1", "rest")
   } else {
-    keep <- !is.na(g) & g %in% c(ident1, ident2)
-    labels <- g
+    in2 <- !is.na(g) & g %in% ident2
+    keep <- in1 | in2                       # in1 wins if a level is in both
+    labels <- ifelse(in1, "group1", "group2")
   }
   ccells <- cells$cell[keep]
   labels <- labels[keep]
-  if (sum(labels == ident1) < 3 || sum(labels != ident1) < 3)
+  if (sum(labels == "group1") < 3 || sum(labels != "group1") < 3)
     stop("Each side of the contrast needs at least 3 cells.", call. = FALSE)
 
   long <- scroll_query_cells(data$con, assay, ccells)
@@ -52,7 +59,7 @@ scroll_de <- function(data, assay, group_col, ident1, ident2 = NULL, min_pct = 0
     dims = c(length(feats), length(ccells)), dimnames = list(feats, ccells))
 
   res <- presto::wilcoxauc(X, labels)
-  res <- res[res$group == ident1, , drop = FALSE]
+  res <- res[res$group == "group1", , drop = FALSE]
   res <- res[pmax(res$pct_in, res$pct_out) >= min_pct * 100, , drop = FALSE]
   res <- res[order(res$padj, -abs(res$logFC)), , drop = FALSE]
   data.frame(
