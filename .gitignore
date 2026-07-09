@@ -3,6 +3,10 @@
 .RData
 .Ruserdata
 *.Rproj
+.DS_Store
+data/
 demo/
+examples/*/project/
+examples/**/.processed.rds
 inst/doc
 docs/
