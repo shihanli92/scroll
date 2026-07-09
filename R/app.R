@@ -172,8 +172,14 @@ featureplot_server <- function(id, data, cells_r = reactive(data$cells)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     assay <- reactive(input$assay %||% m$default_assay)
-    observe(updateSelectizeInput(session, "feature", choices = .scroll_features_of(m, assay()),
-                                 server = TRUE, selected = isolate(input$feature)))
+    # repopulate the gene list for the active assay; drop a selection that does
+    # not exist in the newly chosen assay (else it silently queries empty)
+    observeEvent(assay(), {
+      feats <- .scroll_features_of(m, assay())
+      cur <- isolate(input$feature)
+      keep <- if (!is.null(cur) && cur %in% feats) cur else character(0)
+      updateSelectizeInput(session, "feature", choices = feats, server = TRUE, selected = keep)
+    })
     plot_r <- reactive({
       req(input$reduction)
       feat <- .scroll_nz(input$feature)
@@ -227,8 +233,13 @@ dotplot_server <- function(id, data, cells_r = reactive(data$cells)) {
     m <- data$manifest
     assay <- reactive(input$assay %||% m$default_assay)
     defaults <- intersect(unlist(data$config$markers), .scroll_features_of(m, m$default_assay))
-    observe(updateSelectizeInput(session, "markers", choices = .scroll_features_of(m, assay()),
-                                 server = TRUE, selected = isolate(input$markers) %||% defaults))
+    # repopulate markers for the active assay, keeping only those present in it
+    observeEvent(assay(), {
+      feats <- .scroll_features_of(m, assay())
+      cur <- isolate(input$markers) %||% defaults
+      updateSelectizeInput(session, "markers", choices = feats, server = TRUE,
+                           selected = intersect(cur, feats))
+    })
     plot_r <- reactive({
       req(input$group)
       feats <- input$markers
@@ -276,8 +287,14 @@ violin_server <- function(id, data, cells_r = reactive(data$cells)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     assay <- reactive(input$assay %||% m$default_assay)
-    observe(updateSelectizeInput(session, "feature", choices = .scroll_features_of(m, assay()),
-                                 server = TRUE, selected = isolate(input$feature)))
+    # repopulate the gene list for the active assay; drop a selection that does
+    # not exist in the newly chosen assay (else it silently queries empty)
+    observeEvent(assay(), {
+      feats <- .scroll_features_of(m, assay())
+      cur <- isolate(input$feature)
+      keep <- if (!is.null(cur) && cur %in% feats) cur else character(0)
+      updateSelectizeInput(session, "feature", choices = feats, server = TRUE, selected = keep)
+    })
     plot_r <- reactive({
       req(input$group)
       feat <- .scroll_nz(input$feature)

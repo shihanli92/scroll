@@ -22,6 +22,17 @@ scroll_disconnect <- function(con) {
   DBI::dbDisconnect(con, shutdown = TRUE)
 }
 
+# Build the read_parquet glob for an assay subtree, rejecting any assay name
+# that is not a plain path segment. `assay` comes from the manifest (not runtime
+# user input), so this is defense-in-depth that keeps path construction
+# injection-proof regardless of how the manifest was produced.
+.scroll_assay_glob <- function(dir, assay) {
+  if (length(assay) != 1L || is.na(assay) || !nzchar(assay) ||
+      basename(assay) != assay || grepl("[/\\\\]", assay))
+    stop("Invalid assay name: ", assay, call. = FALSE)
+  file.path(dir, "expr", assay, "**", "*.parquet")
+}
+
 #' Query one feature's expression from the Parquet store
 #'
 #' Reads only the `feature=<feature>` partition of the assay subtree. Values are
@@ -36,7 +47,7 @@ scroll_disconnect <- function(con) {
 #' @export
 scroll_query_feature <- function(con, assay, feature) {
   dir <- attr(con, "scroll_dir")
-  glob <- file.path(dir, "expr", assay, "**", "*.parquet")
+  glob <- .scroll_assay_glob(dir, assay)
   sql <- paste0(
     "SELECT cell, value FROM read_parquet(?, hive_partitioning = true) ",
     "WHERE feature = ?"
@@ -61,7 +72,7 @@ scroll_query_features <- function(con, assay, features) {
   if (length(features) == 0)
     return(data.frame(feature = character(), cell = character(), value = numeric()))
   dir <- attr(con, "scroll_dir")
-  glob <- file.path(dir, "expr", assay, "**", "*.parquet")
+  glob <- .scroll_assay_glob(dir, assay)
   placeholders <- paste(rep("?", length(features)), collapse = ", ")
   sql <- paste0(
     "SELECT feature, cell, value FROM read_parquet(?, hive_partitioning = true) ",
@@ -87,7 +98,7 @@ scroll_query_cells <- function(con, assay, cells) {
   if (length(cells) == 0)
     return(data.frame(feature = character(), cell = character(), value = numeric()))
   dir <- attr(con, "scroll_dir")
-  glob <- file.path(dir, "expr", assay, "**", "*.parquet")
+  glob <- .scroll_assay_glob(dir, assay)
   duckdb::duckdb_register(con, "scroll_cellsel", data.frame(cell = cells, stringsAsFactors = FALSE))
   on.exit(duckdb::duckdb_unregister(con, "scroll_cellsel"), add = TRUE)
   DBI::dbGetQuery(con, paste0(

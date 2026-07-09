@@ -11,8 +11,9 @@ via duckdb — so runtime memory stays flat regardless of dataset size. It deplo
 as a plain `app.R` on an open-source Shiny Server, with no render step.
 
 > **Status:** build phase + all six panels (incl. a live DE section — ranked
-> table + volcano from one `presto` compute), wired end-to-end and validated live
-> on pbmc3k. `register_panel()`, multi-assay selectors, and WebGL scatter are next.
+> table + volcano from one `presto` compute) + multimodal (multi-assay) support,
+> wired end-to-end and validated live on pbmc3k. `register_panel()` and WebGL
+> scatter for very large datasets are next.
 
 ## The two phases
 
@@ -54,6 +55,18 @@ quantized to `uint8` by default (`quantize = FALSE` to keep full precision).
 Quantization floors values below ~`max/510` to zero, so fraction-expressing
 stats (dotplot dot size, DE `pct.1`/`pct.2`) slightly under-count very low
 expression — use `quantize = FALSE` when exact fractions matter.
+
+**Multimodal (CITE-seq / multiome).** By default only the object's default assay
+is exported. Pass `assays =` to include more — each becomes its own `expr/<assay>/`
+subtree with an independent dequantization scale:
+
+```r
+scroll_build(obj, "cite", assays = c("RNA", "ADT"))
+```
+
+Every expression panel (FeaturePlot, DotPlot, Violin, DE) then shows an **Assay**
+selector; its gene search and DE run against the chosen assay. (Derived assays
+like `SCT` or `integrated` are not exported unless you name them explicitly.)
 
 ## Explore
 

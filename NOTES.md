@@ -39,14 +39,10 @@ top-3 blockers + documented the quantization caveat). Items below were
   `avg_log2FC`; document the cutoff units.
 - **Priority:** low.
 
-### 4. Assay name interpolated into the glob path (defense-in-depth)
-- **Where:** `scroll_query_feature/features/cells` build
-  `file.path(dir, "expr", assay, "**", "*.parquet")`. `feature`/`cell` are bound
-  params / registered temp tables (injection-safe); `assay` comes from the
-  manifest (not runtime user input), so practical risk is low.
-- **Fix:** allowlist `assay` against `names(manifest$assays)` (or `basename()`)
-  before building the path.
-- **Priority:** low.
+### 4. Assay name interpolated into the glob path — RESOLVED
+- `scroll_query_feature/features/cells` now build the glob via
+  `.scroll_assay_glob()`, which rejects any `assay` that is not a plain path
+  segment (no separators, no `..`, non-empty). Covered by test-multiassay.R.
 
 ### 5. Feature names with path separators are warned, not rejected
 - **Where:** `.scroll_warn_unsafe_features()` (`build.R`) warns on `/`/`\` in
@@ -63,10 +59,11 @@ top-3 blockers + documented the quantization caveat). Items below were
 
 ## Test gaps to close later
 
-- **Multi-assay** build/query/UI: every test uses a single `RNA` assay; the
-  `if (length(assays) > 1)` UI branches and per-assay `max` dequantize are
-  untested with ≥2 assays.
-- **Two-group DE** end-to-end (only one-vs-rest is covered).
+- ~~**Multi-assay** build/query/UI~~ — DONE. The shared fixture is now RNA + a
+  synthetic ADT; test-multiassay.R covers two `expr/` subtrees, per-assay `max`
+  dequantize, the `length(assays) > 1` selector branches, an ADT FeaturePlot,
+  and a two-group ADT DE.
+- ~~**Two-group DE** end-to-end~~ — DONE (ADT `T` vs `B` in test-multiassay.R).
 - **Quantization floor on `pct`**: a test pinning the near-zero drop behavior so
   the tradeoff is captured in tests.
 - **`.scroll_warn_unsafe_features`** and the `overwrite = FALSE` non-empty-dir
