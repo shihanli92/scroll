@@ -48,3 +48,34 @@ test_project <- local({
     cached
   }
 })
+
+# A parent object carrying a reprocessed "T cell" subset: a partial embedding
+# `umap_tcell` (covers only T cells) + a subset-scoped metadata column `tsub`,
+# attached via scroll_add_subset(). Exercises the subset-view build path.
+make_subset_object <- function(n = 120, seed = 1) {
+  obj <- make_test_object(n, seed)
+  tcells <- colnames(obj)[obj$celltype == "T"]
+  sub <- subset(obj, cells = tcells)
+  te <- matrix(rnorm(length(tcells) * 2), ncol = 2,
+               dimnames = list(tcells, c("UMAP_1", "UMAP_2")))
+  sub[["umap"]] <- SeuratObject::CreateDimReducObject(embeddings = te, key = "UMAP_", assay = "RNA")
+  set.seed(seed + 7)
+  sub$tsub <- factor(sample(c("Tfh", "Tcm", "Tem"), length(tcells), replace = TRUE))
+  scroll_add_subset(obj, sub, "tcell", embeddings = c(umap_tcell = "umap"),
+                    label = "T cells", meta = "tsub")
+}
+
+subset_test_project <- local({
+  cached <- NULL
+  function() {
+    if (is.null(cached)) {
+      dir <- file.path(tempdir(), "scroll-subset-proj")
+      if (!dir.exists(file.path(dir, "expr")))
+        suppressMessages(scroll_build(make_subset_object(), dir, assays = "RNA",
+                                      meta_cols = c("condition", "celltype", "tsub"),
+                                      overwrite = TRUE))
+      cached <<- dir
+    }
+    cached
+  }
+})

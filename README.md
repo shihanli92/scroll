@@ -95,7 +95,7 @@ markers: [CD3D, CD8A, MS4A1, CD14, NKG7]   # DotPlot's starting panel
 | **Violin** | gene · group-by · palette · jitter points |
 | **Proportions** | group-by (x) · fill-by · palette · normalize-to-100% |
 | **DE** | contrast (group vs group / vs rest) · live Wilcoxon via `presto`, computed once and shown as a **Table** (sortable, min-% / top-N filters) and a **Volcano** (logFC &amp; adj-p cutoffs · top-N labels via ggrepel) |
-| **Pseudobulk DE** | aggregate cells into sample-level counts (combined-interaction groups × replicate) and test with **edgeR/limma-voom**; pseudo-replicate fallback + min-cell cutoffs. Needs a counts store (see below). Same Table + Volcano output |
+| **Pseudobulk DE** | aggregate cells into sample-level counts (combined-interaction groups × replicate) and test with **edgeR/limma-voom**; pseudo-replicate modes (`no_replicate` pools each group) + min-cell cutoffs; optional **stability** re-runs (report each gene's selection frequency across random draws). Needs a counts store (see below). Table + Volcano/stability output |
 
 Every plot has an **aspect-ratio** control (reshapes within a fixed canvas) and a
 clean black-box theme. Categorical colors are assigned **deterministically by
@@ -116,6 +116,31 @@ pseudobulk sample **in duckdb** (RAM stays flat) and runs limma-voom:
 ```r
 scroll_build(obj, "proj", counts = TRUE)   # ~doubles expression storage
 ```
+
+### Subset views (reprocessed sub-embeddings)
+
+A slice of a dataset re-embedded in isolation (e.g. the T cells re-normalized,
+re-PCA'd, and given their own UMAP, often with new subclusters) produces a
+**partial embedding** — coordinates for the subset's cells only — and metadata
+that is meaningful only within it. Declare these as **subset views**: assemble the
+reprocessed child onto the parent by barcode with `scroll_add_subset()`, then
+build.
+
+```r
+obj <- scroll_add_subset(obj, tcell_obj, name = "tcell", label = "T cells",
+                         embeddings = c(umap_tcell = "umap"),  # child reduction -> new name
+                         meta = "tcell_subcluster")            # subset-only metadata
+scroll_build(obj, "proj")                                      # picks up the subset spec
+```
+
+The app bar then shows a **View** selector. Picking *T cells* switches to a single
+coherent lens: every panel (DE, DotPlot, Proportions, FeaturePlot) restricts to
+the subset's cells, the scatter panels default to the sub-UMAP, and the subset's
+own columns (e.g. `tcell_subcluster`) become color-by / group-by options — they
+stay hidden in the whole-dataset view. Membership is the set of cells with
+coordinates in the sub-embedding; the manifest records each embedding's coverage
+and each subset's cell count. (`scroll_add_subset()` is pure assembly — the
+reprocessing itself happens in your own Seurat pipeline, outside `scroll`.)
 
 ## Add your own panel
 

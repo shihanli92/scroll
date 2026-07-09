@@ -12,6 +12,7 @@ scroll_build(
   meta_cols = NULL,
   quantize = TRUE,
   counts = FALSE,
+  subsets = NULL,
   overwrite = FALSE
 )
 }
@@ -36,6 +37,15 @@ dot size, DE \code{pct.1}/\code{pct.2}) slightly under-count low-expression cell
 \verb{counts/<assay>.parquet} store (integer, unquantized). This roughly doubles
 expression storage but enables pseudobulk differential expression
 (\code{\link[=scroll_pseudobulk_de]{scroll_pseudobulk_de()}}, which needs counts for edgeR/limma-voom).}
+
+\item{subsets}{Optional named list declaring reprocessed \strong{subset views} — a
+slice of the data re-embedded in isolation (e.g. a T-cell-only UMAP) plus any
+subset-only metadata (subclusters). Each element is \code{list(label =, embeddings =, meta =)}: \code{embeddings} names one or more exported reductions that cover only
+the subset's cells (the first is the view's primary embedding; membership =
+cells with non-\code{NA} coordinates in it); \code{meta} names metadata columns that are
+meaningful only within the subset. In the app a subset becomes a \strong{View} that
+restricts every panel to those cells and exposes its embedding + metadata.
+Defaults to any spec attached by \code{\link[=scroll_add_subset]{scroll_add_subset()}}.}
 
 \item{overwrite}{If \code{TRUE}, an existing \code{outdir} is removed first.}
 }

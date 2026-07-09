@@ -95,6 +95,32 @@ test_that("scroll_pseudobulk_de errors clearly on too-few samples / no counts", 
     "pseudobulk samples")
 })
 
+test_that(".scroll_stability_aggregate scores selection frequency + sign agreement", {
+  # gene A: strong, always significant; gene B: null, never significant
+  runs <- lapply(1:4, function(i) data.frame(
+    gene = c("A", "B"), logFC = c(2 + i * 0.1, 0.05 * (-1)^i),
+    avg_expr = 1, p_val = c(1e-5, 0.5), p_val_adj = c(1e-4, 0.6)))
+  agg <- scroll:::.scroll_stability_aggregate(runs, lfc = 1, padj = 0.05)
+  expect_equal(attr(agg, "runs"), 4)
+  expect_equal(agg$sel_freq[agg$gene == "A"], 1)      # A passes every run
+  expect_equal(agg$sel_freq[agg$gene == "B"], 0)      # B never passes
+  expect_equal(agg$sign_agree[agg$gene == "A"], 1)    # A always positive
+  expect_true(agg$median_logFC[agg$gene == "A"] > 1)
+})
+
+test_that("scroll_pseudobulk_stability returns per-gene stability over runs", {
+  skip_if_not_installed("edgeR"); skip_if_not_installed("limma")
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  set.seed(1)
+  st <- scroll_pseudobulk_stability(data, "RNA", aggregate_cols = "celltype",
+                                    ident1 = "T", ident2 = "B", replicate_col = "no_replicate",
+                                    runs = 6, n_pseudo = 3, cells_per_pseudo = 15, min_cells = 5)
+  expect_true(all(c("gene", "sel_freq", "median_logFC", "sign_agree", "n_tested") %in% names(st)))
+  expect_equal(attr(st, "runs"), 6)
+  expect_true(all(st$sel_freq >= 0 & st$sel_freq <= 1))
+})
+
 test_that("pseudobulk panel gates off without a counts store", {
   fake <- list(manifest = list(
     has_counts = FALSE,
@@ -113,9 +139,25 @@ test_that("pseudobulk_de_server populates combined levels and computes", {
   shiny::testServer(scroll:::pseudobulk_de_server, args = list(data = data), {
     session$setInputs(aggregate_by = "celltype", ident1 = "T", ident2 = "B",
                       replicate = "condition", mincells = 5, npseudo = 3, cellsper = 12,
+                      runs = 1, stabcut = 0.8,
                       topn = 20, lfc = 1, padj = 0.05, labeln = 10, aspect = 1, compute = 1)
     expect_false(is.null(result()$ok))
     expect_false(is.null(output$table))
+    expect_false(is.null(output$plot))
+  })
+})
+
+test_that("pseudobulk_de_server runs stability mode (runs > 1, no_replicate)", {
+  skip_if_not_installed("edgeR"); skip_if_not_installed("limma")
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  shiny::testServer(scroll:::pseudobulk_de_server, args = list(data = data), {
+    session$setInputs(aggregate_by = "celltype", ident1 = "T", ident2 = "B",
+                      replicate = "no_replicate", mincells = 5, npseudo = 3, cellsper = 15,
+                      runs = 5, stabcut = 0.8,
+                      topn = 20, lfc = 1, padj = 0.05, labeln = 10, aspect = 1, compute = 1)
+    expect_length(result()$runs, 5)               # 5 per-run results stored
+    expect_true("sel_freq" %in% names(de_df()))   # aggregated to stability stats
     expect_false(is.null(output$plot))
   })
 })

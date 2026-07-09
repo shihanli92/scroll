@@ -34,18 +34,79 @@
 
 # --- manifest-derived control choices -----------------------------------------
 
-.scroll_cat_cols <- function(m) names(Filter(function(x) identical(x$type, "categorical"), m$meta))
-.scroll_num_cols <- function(m) names(Filter(function(x) identical(x$type, "numeric"), m$meta))
+# Metadata columns split by whether they belong to a subset view. A column's
+# `$scope` (set at build time) names its owning subset; unscoped columns are
+# global. The plain `.scroll_cat_cols`/`.scroll_num_cols` return global columns
+# only, so subset-scoped columns never leak into whole-dataset selectors; the
+# `_view_` variants add back the active subset's scoped columns.
+.scroll_scope_of <- function(m, col) m$meta[[col]]$scope
+.scroll_col_in_view <- function(m, col, view) {
+  sc <- .scroll_scope_of(m, col)
+  is.null(sc) || identical(sc, view)
+}
+.scroll_cat_cols <- function(m, view = NULL) {
+  cols <- names(Filter(function(x) identical(x$type, "categorical"), m$meta))
+  cols[vapply(cols, function(c) .scroll_col_in_view(m, c, view), logical(1))]
+}
+.scroll_num_cols <- function(m, view = NULL) {
+  cols <- names(Filter(function(x) identical(x$type, "numeric"), m$meta))
+  cols[vapply(cols, function(c) .scroll_col_in_view(m, c, view), logical(1))]
+}
 .scroll_reductions <- function(m) names(m$embeddings)
 .scroll_assays_of <- function(m) names(m$assays)
 .scroll_features_of <- function(m, assay) unlist(m$assays[[assay]]$features)
+.scroll_subset_names <- function(m) names(m$subsets)
 
-.scroll_colorby_choices <- function(m) {
+# Embeddings usable in a view: whole-dataset shows only full-coverage reductions;
+# a subset view shows that subset's (partial) embeddings. Old manifests without
+# `n_covered` treat every embedding as full (back-compatible).
+.scroll_global_embeddings <- function(m) {
+  rn <- names(m$embeddings)
+  rn[vapply(rn, function(r) {
+    nc <- m$embeddings[[r]]$n_covered
+    is.null(nc) || nc >= m$n_cells
+  }, logical(1))]
+}
+.scroll_view_embeddings <- function(m, view = NULL) {
+  if (is.null(view) || is.null(m$subsets[[view]])) return(.scroll_global_embeddings(m))
+  as.character(unlist(m$subsets[[view]]$embeddings))
+}
+
+# Restrict cells to a subset view (members = non-NA primary-embedding coords).
+.scroll_view_cells <- function(cells, m, view) {
+  if (is.null(view) || is.null(m$subsets[[view]])) return(cells)
+  col <- sprintf("%s_1", m$subsets[[view]]$primary_embedding)
+  if (!col %in% names(cells)) return(cells)
+  cells[!is.na(cells[[col]]), , drop = FALSE]
+}
+
+.scroll_colorby_choices <- function(m, view = NULL) {
   ch <- list()
-  cats <- .scroll_cat_cols(m); nums <- .scroll_num_cols(m)
+  cats <- .scroll_cat_cols(m, view); nums <- .scroll_num_cols(m, view)
   if (length(cats)) ch[["Cell annotations"]] <- as.list(stats::setNames(cats, cats))
   if (length(nums)) ch[["Numeric / QC"]] <- as.list(stats::setNames(nums, nums))
   ch
+}
+
+# Refresh a panel's categorical `selectInput`s when the active view changes so
+# subset-scoped columns appear only inside their subset view. `prepend` is a
+# leading choice map (e.g. c("None" = "")); the current selection is preserved
+# when still valid, else falls back to `default` (or the prepend value).
+.scroll_bind_view_cats <- function(input, session, view_r, m, ids,
+                                    prepend = NULL, default = NULL) {
+  observeEvent(view_r(), {
+    cats <- .scroll_cat_cols(m, view_r())
+    for (id in ids) {
+      cur <- input[[id]]
+      sel <- if (!is.null(cur) && cur %in% cats) cur
+             else if (!is.null(default) && default %in% cats) default
+             else if (!is.null(prepend)) unname(prepend)[[1]]
+             else if (length(cats)) cats[[1]] else NULL
+      updateSelectInput(session, id,
+                        choices = c(prepend, stats::setNames(cats, cats)),
+                        selected = sel)
+    }
+  }, ignoreNULL = FALSE)
 }
 
 .scroll_default <- function(data, key, fallback) {
@@ -57,7 +118,7 @@
 dimplot_ui <- function(id, data) {
   ns <- NS(id)
   m <- data$manifest
-  reductions <- .scroll_reductions(m)
+  reductions <- .scroll_view_embeddings(m, NULL)   # whole-dataset (full) embeddings
   cats <- .scroll_cat_cols(m)
   first_cat <- if (length(cats)) cats[[1]] else .scroll_num_cols(m)[[1]]
   bslib::layout_columns(
@@ -87,11 +148,29 @@ dimplot_ui <- function(id, data) {
   )
 }
 
-dimplot_server <- function(id, data, cells_r = reactive(data$cells)) {
+dimplot_server <- function(id, data, cells_r = reactive(data$cells),
+                           view_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     is_cat <- reactive(identical(m$meta[[input$colorby]]$type, "categorical"))
     levels_of <- reactive(if (is_cat()) unlist(m$meta[[input$colorby]]$levels) else character(0))
+
+    # When the active view changes: restrict reductions to that view's embeddings
+    # (subset views default to the primary sub-embedding) and add the subset's
+    # scoped columns to Color-by. Split-by follows the same scoped-column rule.
+    observeEvent(view_r(), {
+      reds <- .scroll_view_embeddings(m, view_r())
+      sel_red <- if (is.null(view_r()))
+        .scroll_default(data, "default_embedding", reds[[1]]) else reds[[1]]
+      if (!sel_red %in% reds) sel_red <- reds[[1]]
+      updateSelectInput(session, "reduction", choices = reds, selected = sel_red)
+      cb <- .scroll_colorby_choices(m, view_r())
+      flat <- unlist(cb, use.names = FALSE)
+      cur <- input$colorby
+      updateSelectInput(session, "colorby", choices = cb,
+                        selected = if (!is.null(cur) && cur %in% flat) cur else flat[[1]])
+    }, ignoreNULL = FALSE)
+    .scroll_bind_view_cats(input, session, view_r, m, "split", prepend = c("None" = ""))
 
     observeEvent(input$colorby, {
       if (is_cat()) {
@@ -152,8 +231,8 @@ featureplot_ui <- function(id, data) {
         if (length(assays) > 1)
           selectInput(ns("assay"), "Assay", assays, selected = m$default_assay)),
       .scroll_group("Embedding",
-        selectInput(ns("reduction"), "Reduction", .scroll_reductions(m),
-                    selected = .scroll_default(data, "default_embedding", .scroll_reductions(m)[[1]]))),
+        selectInput(ns("reduction"), "Reduction", .scroll_view_embeddings(m, NULL),
+                    selected = .scroll_default(data, "default_embedding", .scroll_view_embeddings(m, NULL)[[1]]))),
       .scroll_group("Appearance",
         selectInput(ns("palette"), "Palette", .scroll_continuous_palettes, selected = "grey-purple"),
         sliderInput(ns("size"), "Point size", 0.1, 5, 0.7, 0.1),
@@ -168,10 +247,19 @@ featureplot_ui <- function(id, data) {
   )
 }
 
-featureplot_server <- function(id, data, cells_r = reactive(data$cells)) {
+featureplot_server <- function(id, data, cells_r = reactive(data$cells),
+                               view_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     assay <- reactive(input$assay %||% m$default_assay)
+    observeEvent(view_r(), {
+      reds <- .scroll_view_embeddings(m, view_r())
+      sel_red <- if (is.null(view_r()))
+        .scroll_default(data, "default_embedding", reds[[1]]) else reds[[1]]
+      if (!sel_red %in% reds) sel_red <- reds[[1]]
+      updateSelectInput(session, "reduction", choices = reds, selected = sel_red)
+    }, ignoreNULL = FALSE)
+    .scroll_bind_view_cats(input, session, view_r, m, "split", prepend = c("None" = ""))
     # repopulate the gene list for the active assay; drop a selection that does
     # not exist in the newly chosen assay (else it silently queries empty)
     observeEvent(assay(), {
@@ -228,9 +316,11 @@ dotplot_ui <- function(id, data) {
   )
 }
 
-dotplot_server <- function(id, data, cells_r = reactive(data$cells)) {
+dotplot_server <- function(id, data, cells_r = reactive(data$cells),
+                           view_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
+    .scroll_bind_view_cats(input, session, view_r, m, "group")
     assay <- reactive(input$assay %||% m$default_assay)
     defaults <- intersect(unlist(data$config$markers), .scroll_features_of(m, m$default_assay))
     # repopulate markers for the active assay, keeping only those present in it
@@ -283,9 +373,11 @@ violin_ui <- function(id, data) {
   )
 }
 
-violin_server <- function(id, data, cells_r = reactive(data$cells)) {
+violin_server <- function(id, data, cells_r = reactive(data$cells),
+                          view_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
+    .scroll_bind_view_cats(input, session, view_r, m, "group")
     assay <- reactive(input$assay %||% m$default_assay)
     # repopulate the gene list for the active assay; drop a selection that does
     # not exist in the newly chosen assay (else it silently queries empty)
@@ -333,8 +425,10 @@ proportions_ui <- function(id, data) {
   )
 }
 
-proportions_server <- function(id, data, cells_r = reactive(data$cells)) {
+proportions_server <- function(id, data, cells_r = reactive(data$cells),
+                               view_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
+    .scroll_bind_view_cats(input, session, view_r, data$manifest, c("group", "fill"))
     plot_r <- reactive({
       req(input$group, input$fill)
       params <- list(group_by = input$group, fill_by = input$fill)
@@ -397,10 +491,12 @@ de_ui <- function(id, data) {
 
 .scroll_has_dt <- function() requireNamespace("DT", quietly = TRUE)
 
-de_server <- function(id, data, cells_r = reactive(data$cells)) {
+de_server <- function(id, data, cells_r = reactive(data$cells),
+                      view_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     assay <- reactive(input$assay %||% m$default_assay)
+    .scroll_bind_view_cats(input, session, view_r, m, "group")
 
     observeEvent(input$group, {
       lv <- unlist(m$meta[[input$group]]$levels)
@@ -490,8 +586,11 @@ pseudobulk_de_ui <- function(id, data) {
         sliderInput(ns("mincells"), "Min cells / sample", 3, 200, 10, 1),
         numericInput(ns("npseudo"), "Pseudo-reps (if no replicate)", 3, min = 2, max = 10),
         numericInput(ns("cellsper"), "Cells / pseudo-rep", 50, min = 5, max = 2000)),
+      .scroll_group("Stability",
+        numericInput(ns("runs"), "Runs (re-sample; pseudo only)", 1, min = 1, max = 100),
+        sliderInput(ns("stabcut"), "Consistency cutoff", 0, 1, 0.8, 0.05)),
       .scroll_group("Table", sliderInput(ns("topn"), "Show top", 10, 300, 50, 10)),
-      .scroll_group("Volcano",
+      .scroll_group("Volcano / stability",
         sliderInput(ns("lfc"), "logFC cutoff", 0, 3, 1, 0.1),
         numericInput(ns("padj"), "Adj. p cutoff", 0.05, min = 0, max = 1, step = 0.01),
         sliderInput(ns("labeln"), "Label top", 0, 40, 15, 1),
@@ -506,7 +605,7 @@ pseudobulk_de_ui <- function(id, data) {
             div(class = "scroll-table",
                 .scroll_spin(if (.scroll_has_dt()) DT::dataTableOutput(ns("table"))
                              else tableOutput(ns("table"))))),
-          bslib::nav_panel("Volcano",
+          bslib::nav_panel("Plot",
             div(class = "scroll-plot-bar",
                 .scroll_dl_button(ns("png"), "PNG"), .scroll_dl_button(ns("pdf"), "PDF")),
             .scroll_spin(plotOutput(ns("plot"), height = "520px")))))
@@ -527,16 +626,21 @@ pseudobulk_de_server <- function(id, data, cells_r = reactive(data$cells)) {
                            selected = intersect(isolate(input$ident2), combos))
     })
 
+    # stability = re-run the pseudo-replication K times (pseudo mode only). The
+    # K runs are computed once here; de_df() aggregates them cheaply when the
+    # lfc/padj cutoffs change.
     result <- eventReactive(input$compute, {
       req(input$aggregate_by, input$ident1)
+      args <- list(
+        data, assay(), aggregate_cols = input$aggregate_by, ident1 = input$ident1,
+        ident2 = if (length(input$ident2)) input$ident2 else NULL,
+        replicate_col = input$replicate, min_cells = input$mincells,
+        n_pseudo = input$npseudo, cells_per_pseudo = input$cellsper, cells = cells_r())
+      stability <- isTRUE(input$runs > 1) && identical(input$replicate, "no_replicate")
       tryCatch(
-        list(ok = scroll_pseudobulk_de(
-          data, assay(), aggregate_cols = input$aggregate_by,
-          ident1 = input$ident1,
-          ident2 = if (length(input$ident2)) input$ident2 else NULL,
-          replicate_col = input$replicate,
-          min_cells = input$mincells, n_pseudo = input$npseudo,
-          cells_per_pseudo = input$cellsper, cells = cells_r())),
+        if (stability)
+          list(runs = do.call(.scroll_pseudobulk_runs, c(args, list(runs = input$runs))))
+        else list(ok = do.call(scroll_pseudobulk_de, args)),
         error = function(e) list(err = conditionMessage(e)))
     })
 
@@ -544,34 +648,52 @@ pseudobulk_de_server <- function(id, data, cells_r = reactive(data$cells)) {
       validate(need(input$compute > 0, "Pick a contrast and click Compute pseudobulk DE."))
       r <- result()
       validate(need(is.null(r$err), r$err))
-      r$ok
+      if (!is.null(r$runs)) .scroll_stability_aggregate(r$runs, input$lfc, input$padj)
+      else r$ok
     })
 
     output$note <- renderUI({
-      req(input$compute > 0); r <- result()
-      if (!is.null(r$err) || !isTRUE(attr(r$ok, "pseudo"))) return(NULL)
-      n <- attr(r$ok, "n_samples")
-      div(class = "scroll-desc", style = "margin:0 0 8px; color:#B45309",
-          sprintf("Pseudo-replicates used (no biological replicates): %d vs %d samples - treat p-values with caution.",
-                  n[["group1"]], n[["group2"]]))
+      req(input$compute > 0); r <- result(); if (!is.null(r$err)) return(NULL)
+      mk <- function(txt) div(class = "scroll-desc", style = "margin:0 0 8px; color:#B45309", txt)
+      if (!is.null(r$runs))
+        mk(sprintf(paste("Stability across %d pseudo-replicate runs - sel_freq is a",
+                         "robustness heuristic, not a p-value; prefer real replicates."),
+                   length(r$runs)))
+      else if (isTRUE(attr(r$ok, "pseudo"))) {
+        n <- attr(r$ok, "n_samples")
+        mk(sprintf(paste("Pseudo-replicates used (no biological replicates): %d vs %d",
+                         "samples - treat p-values with caution."), n[["group1"]], n[["group2"]]))
+      } else NULL
     })
 
-    table_rows <- function() utils::head(de_df(), input$topn)
+    # display columns differ between single-run and stability results
+    table_rows <- function() {
+      d <- de_df()
+      if ("sel_freq" %in% names(d))
+        d <- d[, c("gene", "sel_freq", "median_logFC", "sign_agree", "median_padj", "n_tested")]
+      utils::head(d, input$topn)
+    }
     if (.scroll_has_dt())
-      output$table <- DT::renderDataTable(
+      output$table <- DT::renderDataTable({
+        d <- table_rows()
         DT::formatSignif(
-          DT::datatable(table_rows(), rownames = FALSE, options = list(pageLength = 15, dom = "tip")),
-          columns = c("p_val", "p_val_adj"), digits = 3))
+          DT::datatable(d, rownames = FALSE, options = list(pageLength = 15, dom = "tip")),
+          columns = intersect(c("p_val", "p_val_adj", "median_padj"), names(d)), digits = 3)
+      })
     else
       output$table <- renderTable(table_rows())
 
-    volcano_r <- reactive({
-      view_volcano(de_df(),
-                   params = list(lfc = input$lfc, padj = input$padj, label_n = input$labeln),
-                   state = list(aspect = input$aspect))
+    plot_r <- reactive({
+      d <- de_df()
+      if ("sel_freq" %in% names(d))
+        view_stability(d, params = list(lfc = input$lfc, cut = input$stabcut,
+                                        label_n = input$labeln), state = list(aspect = input$aspect))
+      else
+        view_volcano(d, params = list(lfc = input$lfc, padj = input$padj,
+                                      label_n = input$labeln), state = list(aspect = input$aspect))
     })
-    output$plot <- renderPlot(volcano_r())
-    .scroll_plot_downloads(output, volcano_r, id)
+    output$plot <- renderPlot(plot_r())
+    .scroll_plot_downloads(output, plot_r, id)
     output$csv <- .scroll_csv_handler(reactive(table_rows()), paste0("scroll_", id, ".csv"))
   })
 }
@@ -810,6 +932,16 @@ scroll_reset_panels <- function() {
   if (!is.null(title))
     brand <- c(brand, list(span(class = "scroll-slash", "/"),
                            span(class = "scroll-dataset", title)))
+  # Reprocessed subset views: pick a linked view (restricts every panel + swaps
+  # to the subset's embedding). Shown only when the build declared `subsets`.
+  subs <- .scroll_subset_names(m)
+  view_ui <- if (length(subs)) div(
+    class = "scroll-subset",
+    span(class = "scroll-subset-label", "View"),
+    selectInput("scroll_view", NULL,
+                c("Whole dataset" = "",
+                  stats::setNames(subs, vapply(subs, function(s) m$subsets[[s]]$label, ""))),
+                width = "160px"))
   subset_ui <- if (length(cats)) div(
     class = "scroll-subset",
     span(class = "scroll-subset-label", "Subset"),
@@ -820,6 +952,7 @@ scroll_reset_panels <- function() {
   div(
     class = "scroll-appbar",
     div(class = "scroll-brand", brand),
+    view_ui,
     subset_ui,
     div(class = "scroll-stats",
         .scroll_stat(textOutput("scroll_ncells", inline = TRUE), "cells"),
@@ -889,22 +1022,35 @@ scroll_app <- function(dir = ".") {
 
   ui <- .scroll_page(data, title, panels)
   server <- function(input, output, session) {
-    # global cell-subset filter (app bar) -> the cells every panel operates on
-    active_cells <- reactive(
-      .scroll_subset_cells(data$cells, .scroll_nz(input$scroll_subset_col),
-                           input$scroll_subset_val))
+    m <- data$manifest
+    # Active subset view (app bar) and the cells every panel operates on: start
+    # from the view's membership, then apply the ad-hoc subset pill on top.
+    active_view <- reactive(.scroll_nz(input$scroll_view))
+    active_cells <- reactive({
+      base <- .scroll_view_cells(data$cells, m, active_view())
+      .scroll_subset_cells(base, .scroll_nz(input$scroll_subset_col),
+                           input$scroll_subset_val)
+    })
     observeEvent(input$scroll_subset_col, {
       col <- .scroll_nz(input$scroll_subset_col)
-      lv <- if (is.null(col)) character(0) else unlist(data$manifest$meta[[col]]$levels)
+      lv <- if (is.null(col)) character(0) else unlist(m$meta[[col]]$levels)
       updateSelectizeInput(session, "scroll_subset_val", choices = lv,
                            selected = character(0), server = TRUE)
     })
     output$scroll_ncells <- renderText({
-      n <- nrow(active_cells()); tot <- data$manifest$n_cells
-      if (n < tot) sprintf("%s of %s", format(n, big.mark = ","), format(tot, big.mark = ","))
-      else format(tot, big.mark = ",")
+      n <- nrow(active_cells()); tot <- m$n_cells
+      lab <- if (!is.null(active_view())) m$subsets[[active_view()]]$label
+      base <- if (n < tot) sprintf("%s of %s", format(n, big.mark = ","),
+                                   format(tot, big.mark = ",")) else format(tot, big.mark = ",")
+      if (!is.null(lab)) paste0(base, " \u00b7 ", lab) else base
     })
-    for (sec in panels) sec$server(sec$id, data, active_cells)
+    # Pass `active_view` only to panels that opt in (declare a `view_r` formal),
+    # keeping register_panel()'s 3-arg server contract backward compatible.
+    for (sec in panels) {
+      args <- list(sec$id, data, active_cells)
+      if ("view_r" %in% names(formals(sec$server))) args <- c(args, list(active_view))
+      do.call(sec$server, args)
+    }
   }
   # close the (process-global) duckdb connection when the app stops
   shiny::shinyApp(ui, server, onStart = function() {

@@ -3,7 +3,8 @@
 # levels, and the defaults a fresh dataset needs to render itself.
 
 .scroll_write_manifest <- function(outdir, object, assay_info, embeddings, md,
-                                   meta_cols, n_cells, quantize, has_counts = FALSE) {
+                                   meta_cols, n_cells, quantize, has_counts = FALSE,
+                                   cells = NULL, subsets = NULL) {
   assays <- lapply(names(assay_info), function(a) {
     info <- assay_info[[a]]
     list(max = info$max, n_features = info$n_features,
@@ -11,19 +12,36 @@
   })
   names(assays) <- names(assay_info)
 
+  # Per-embedding coverage: how many cells carry non-NA coordinates. A full
+  # embedding covers every cell; a reprocessed-subset embedding covers fewer.
   emb <- lapply(embeddings, function(r) {
-    list(dims = ncol(SeuratObject::Embeddings(object, reduction = r)))
+    cov <- if (!is.null(cells)) sum(!is.na(cells[[sprintf("%s_1", r)]])) else n_cells
+    list(dims = ncol(SeuratObject::Embeddings(object, reduction = r)),
+         n_covered = as.integer(cov))
   })
   names(emb) <- embeddings
 
+  # meta col -> owning subset, and per-subset membership (non-NA primary coords),
+  # so subset-scoped columns get their levels/ranges over subset cells only.
+  scope_map <- if (!is.null(subsets)) attr(subsets, "scope_map") else character(0)
+  member <- list()
+  if (!is.null(subsets) && !is.null(cells))
+    for (nm in names(subsets))
+      member[[nm]] <- !is.na(cells[[sprintf("%s_1", subsets[[nm]]$primary_embedding)]])
+
   meta <- lapply(meta_cols, function(col) {
     v <- md[[col]]
+    sc <- if (col %in% names(scope_map)) scope_map[[col]] else NULL
+    if (!is.null(sc) && !is.null(member[[sc]])) v <- v[member[[sc]]]
     if (is.factor(v) || is.character(v) || is.logical(v)) {
-      list(type = "categorical", levels = as.list(sort(unique(as.character(v)))))
+      entry <- list(type = "categorical",
+                    levels = as.list(sort(unique(as.character(v)))))
     } else {
-      list(type = "numeric",
-           range = list(min = min(v, na.rm = TRUE), max = max(v, na.rm = TRUE)))
+      entry <- list(type = "numeric",
+                    range = list(min = min(v, na.rm = TRUE), max = max(v, na.rm = TRUE)))
     }
+    if (!is.null(sc)) entry$scope <- sc
+    entry
   })
   names(meta) <- meta_cols
 
@@ -38,6 +56,16 @@
     embeddings = emb,
     meta = meta
   )
+  if (!is.null(subsets)) {
+    sm <- lapply(names(subsets), function(nm) {
+      s <- subsets[[nm]]
+      list(label = s$label, embeddings = as.list(s$embeddings),
+           primary_embedding = s$primary_embedding, meta = as.list(s$meta),
+           n_cells = if (!is.null(member[[nm]])) as.integer(sum(member[[nm]])) else NA_integer_)
+    })
+    names(sm) <- names(subsets)
+    manifest$subsets <- sm
+  }
   yaml::write_yaml(manifest, file.path(outdir, "manifest.yaml"))
   invisible(manifest)
 }

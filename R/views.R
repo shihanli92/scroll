@@ -87,7 +87,9 @@
 .scroll_eff_embedding <- function(params, state) state$embedding %||% params$embedding
 .scroll_group_col <- function(params, state) state$split_by %||% params$group_by
 
-# Attach an embedding's first two dims as .x / .y.
+# Attach an embedding's first two dims as .x / .y. Rows with no coordinates
+# (NA) are dropped: a reprocessed-subset embedding only covers its own cells, so
+# this cleanly plots just the subset instead of emitting ggplot NA warnings.
 .scroll_embedding_xy <- function(cells, embedding) {
   xcol <- sprintf("%s_1", embedding)
   ycol <- sprintf("%s_2", embedding)
@@ -95,7 +97,7 @@
     stop("Embedding '", embedding, "' not found in cells table.", call. = FALSE)
   cells$.x <- cells[[xcol]]
   cells$.y <- cells[[ycol]]
-  cells
+  cells[!is.na(cells$.x) & !is.na(cells$.y), , drop = FALSE]
 }
 
 # Expression vector aligned to a cells table, zero-filled for absent cells.
@@ -482,6 +484,51 @@ view_volcano <- function(de, params = list(), state = list()) {
   lab <- utils::head(lab[order(-lab$neglog), , drop = FALSE], n)
   if (n > 0 && nrow(lab)) {
     aes_lab <- ggplot2::aes(x = .data$logFC, y = .data$neglog, label = .data$gene)
+    p <- p + if (requireNamespace("ggrepel", quietly = TRUE))
+      ggrepel::geom_text_repel(data = lab, mapping = aes_lab, inherit.aes = FALSE,
+                               size = 3, color = "black", max.overlaps = 20)
+    else
+      ggplot2::geom_text(data = lab, mapping = aes_lab, inherit.aes = FALSE,
+                         size = 3, color = "black", vjust = -0.6)
+  }
+  .scroll_apply_aspect(p, state$aspect %||% 1)
+}
+
+#' Stability plot for pseudobulk DE across random pseudo-replicate draws
+#'
+#' Median logFC vs selection frequency (how often a gene is a hit across runs);
+#' genes above the consistency cutoff and the logFC threshold are highlighted.
+#'
+#' @param df A data.frame from [scroll_pseudobulk_stability()] (`gene`,
+#'   `median_logFC`, `sel_freq`).
+#' @param params List: `lfc` (effect threshold), `cut` (selection-frequency
+#'   cutoff), `label_n` (genes to label).
+#' @param state List: `aspect`.
+#' @return A ggplot.
+#' @export
+view_stability <- function(df, params = list(), state = list()) {
+  if (is.null(df) || !nrow(df))
+    return(ggplot2::ggplot() +
+             ggplot2::annotate("text", 0, 0, label = "No stability results.") +
+             ggplot2::theme_void())
+  lfc <- params$lfc %||% 1; cut <- params$cut %||% 0.8; n <- params$label_n %||% 15
+  df$consistent <- df$sel_freq >= cut & abs(df$median_logFC) >= lfc
+  p <- ggplot2::ggplot(df, ggplot2::aes(.data$median_logFC, .data$sel_freq,
+                                        color = .data$consistent)) +
+    ggplot2::geom_point(size = 1, alpha = 0.75) +
+    ggplot2::scale_color_manual(values = c(`FALSE` = "grey78", `TRUE` = "#C4453B"),
+                                guide = "none") +
+    ggplot2::geom_vline(xintercept = c(-lfc, lfc), linetype = "dashed", color = "grey60") +
+    ggplot2::geom_hline(yintercept = cut, linetype = "dashed", color = "grey60") +
+    ggplot2::labs(x = "median logFC", y = "selection frequency") +
+    ggplot2::coord_cartesian(ylim = c(0, 1)) +
+    ggplot2::theme_bw(base_size = 13) +
+    ggplot2::theme(panel.grid = ggplot2::element_blank(),
+                   panel.border = ggplot2::element_rect(color = "black", linewidth = 0.7, fill = NA))
+  lab <- df[df$consistent, , drop = FALSE]
+  lab <- utils::head(lab[order(-lab$sel_freq, -abs(lab$median_logFC)), , drop = FALSE], n)
+  if (n > 0 && nrow(lab)) {
+    aes_lab <- ggplot2::aes(x = .data$median_logFC, y = .data$sel_freq, label = .data$gene)
     p <- p + if (requireNamespace("ggrepel", quietly = TRUE))
       ggrepel::geom_text_repel(data = lab, mapping = aes_lab, inherit.aes = FALSE,
                                size = 3, color = "black", max.overlaps = 20)

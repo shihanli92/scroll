@@ -23,21 +23,34 @@
 #'   `counts/<assay>.parquet` store (integer, unquantized). This roughly doubles
 #'   expression storage but enables pseudobulk differential expression
 #'   ([scroll_pseudobulk_de()], which needs counts for edgeR/limma-voom).
+#' @param subsets Optional named list declaring reprocessed **subset views** — a
+#'   slice of the data re-embedded in isolation (e.g. a T-cell-only UMAP) plus any
+#'   subset-only metadata (subclusters). Each element is `list(label =, embeddings
+#'   =, meta =)`: `embeddings` names one or more exported reductions that cover only
+#'   the subset's cells (the first is the view's primary embedding; membership =
+#'   cells with non-`NA` coordinates in it); `meta` names metadata columns that are
+#'   meaningful only within the subset. In the app a subset becomes a **View** that
+#'   restricts every panel to those cells and exposes its embedding + metadata.
+#'   Defaults to any spec attached by [scroll_add_subset()].
 #' @param overwrite If `TRUE`, an existing `outdir` is removed first.
 #'
 #' @return `outdir`, invisibly.
 #' @export
 scroll_build <- function(object, outdir,
                          assays = NULL, embeddings = NULL, meta_cols = NULL,
-                         quantize = TRUE, counts = FALSE, overwrite = FALSE) {
+                         quantize = TRUE, counts = FALSE, subsets = NULL,
+                         overwrite = FALSE) {
   object <- .scroll_load_object(object)
 
   if (is.null(assays)) assays <- SeuratObject::DefaultAssay(object)
   if (is.null(embeddings)) embeddings <- SeuratObject::Reductions(object)
   md <- object[[]]
   if (is.null(meta_cols)) meta_cols <- .scroll_infer_meta_cols(md)
+  # a spec attached by scroll_add_subset() lives in @misc (survives Seurat ops)
+  if (is.null(subsets)) subsets <- SeuratObject::Misc(object, "scroll_subsets")
 
   .scroll_check_inputs(object, assays, embeddings, meta_cols)
+  subsets <- .scroll_normalize_subsets(subsets, embeddings, meta_cols)
 
   if (dir.exists(outdir)) {
     if (overwrite) unlink(outdir, recursive = TRUE)
@@ -51,6 +64,7 @@ scroll_build <- function(object, outdir,
 
   # --- cells.parquet: metadata + all embeddings, the only globally-loaded file
   cells <- .scroll_extract_cells(object, md, meta_cols, embeddings)
+  .scroll_check_subset_coverage(subsets, cells)
   arrow::write_parquet(cells, file.path(outdir, "cells.parquet"))
 
   # --- expr/<assay>/: long, feature-partitioned expression (+ optional counts)
@@ -63,7 +77,7 @@ scroll_build <- function(object, outdir,
   # --- manifest + authored scaffolding
   .scroll_write_manifest(outdir, object, assay_info, embeddings, md, meta_cols,
                          n_cells = nrow(cells), quantize = quantize,
-                         has_counts = counts)
+                         has_counts = counts, cells = cells, subsets = subsets)
   scroll_scaffold_app(outdir)
 
   message("scroll project built at: ", normalizePath(outdir))
@@ -199,6 +213,130 @@ scroll_build <- function(object, outdir,
   prefer <- c("wnn.umap", "umap", "tsne", "wnnUMAP", "UMAP", "TSNE")
   hit <- intersect(prefer, embeddings)
   if (length(hit)) hit[[1]] else embeddings[[1]]
+}
+
+# --- subset views ------------------------------------------------------------
+
+# Validate + normalize the `subsets` spec into a named list of
+# list(label, embeddings, primary_embedding, meta). Attaches a `scope_map`
+# attribute (meta column -> owning subset). Errors on unknown/duplicate refs.
+.scroll_normalize_subsets <- function(subsets, embeddings, meta_cols) {
+  if (is.null(subsets) || !length(subsets)) return(NULL)
+  if (is.null(names(subsets)) || any(!nzchar(names(subsets))))
+    stop("`subsets` must be a named list (subset name -> spec).", call. = FALSE)
+  if (anyDuplicated(names(subsets)))
+    stop("`subsets` has duplicate names.", call. = FALSE)
+  scope_map <- character(0)                    # meta col -> subset name
+  out <- lapply(names(subsets), function(nm) {
+    s <- subsets[[nm]]
+    emb <- as.character(s$embeddings %||% character(0))
+    if (!length(emb))
+      stop("subset '", nm, "' must name at least one embedding.", call. = FALSE)
+    bad <- setdiff(emb, embeddings)
+    if (length(bad))
+      stop("subset '", nm, "' names unexported embedding(s): ",
+           paste(bad, collapse = ", "), "; add them to `embeddings=`.",
+           call. = FALSE)
+    meta <- as.character(s$meta %||% character(0))
+    badm <- setdiff(meta, meta_cols)
+    if (length(badm))
+      stop("subset '", nm, "' names unexported meta column(s): ",
+           paste(badm, collapse = ", "), "; add them to `meta_cols=`.",
+           call. = FALSE)
+    for (mc in meta) {
+      if (mc %in% names(scope_map))
+        stop("meta column '", mc, "' is claimed by more than one subset ('",
+             scope_map[[mc]], "' and '", nm, "').", call. = FALSE)
+      scope_map[[mc]] <<- nm
+    }
+    list(label = as.character(s$label %||% nm), embeddings = emb,
+         primary_embedding = emb[[1]], meta = meta)
+  })
+  names(out) <- names(subsets)
+  attr(out, "scope_map") <- scope_map
+  out
+}
+
+# A declared subset embedding should be partial (a reprocessed slice). Error on
+# zero coverage (barcodes almost certainly don't align); warn on full coverage.
+.scroll_check_subset_coverage <- function(subsets, cells) {
+  if (is.null(subsets)) return(invisible())
+  n <- nrow(cells)
+  for (nm in names(subsets)) {
+    pe <- subsets[[nm]]$primary_embedding
+    cov <- sum(!is.na(cells[[sprintf("%s_1", pe)]]))
+    if (cov == 0)
+      stop("subset '", nm, "' embedding '", pe, "' covers no cells; check that ",
+           "its barcodes match the parent object.", call. = FALSE)
+    if (cov == n)
+      warning("subset '", nm, "' embedding '", pe, "' covers all ", n,
+              " cells; a subset view expects a partial (reprocessed) embedding.",
+              call. = FALSE)
+  }
+  invisible()
+}
+
+#' Attach a reprocessed subset onto a parent object
+#'
+#' Convenience assembly for [scroll_build()]'s `subsets`: copies one or more
+#' dimensional reductions (and optional metadata columns) from a separately
+#' reprocessed child object onto `object`, aligned **by cell barcode**, and
+#' records the subset spec so a later `scroll_build(object, ...)` exposes it as a
+#' linked **View**. This is plumbing only — it performs no normalization,
+#' clustering, or embedding; the child object must already be reprocessed.
+#'
+#' @param object The parent Seurat object (all cells).
+#' @param sub_object A reprocessed child object (a subset of `object`'s cells,
+#'   re-embedded in isolation). Its cell barcodes must match `object`'s.
+#' @param name Short id for the subset (e.g. `"tcell"`).
+#' @param embeddings Named character vector `new_name = source_reduction` naming
+#'   reduction(s) in `sub_object` to copy (e.g. `c(umap_tcell = "umap")`). An
+#'   unnamed value reuses the source name. Only the child's cells get coordinates;
+#'   parent cells outside the subset are left uncovered (`NA`).
+#' @param label Human-readable view label (defaults to `name`).
+#' @param meta Metadata columns in `sub_object` to copy onto `object` as
+#'   subset-scoped columns (`NA` for non-members).
+#' @return `object` with the reduction(s)/metadata added and a `scroll_subsets`
+#'   attribute recording the spec.
+#' @export
+scroll_add_subset <- function(object, sub_object, name, embeddings,
+                              label = name, meta = NULL) {
+  if (!inherits(object, "Seurat") || !inherits(sub_object, "Seurat"))
+    stop("`object` and `sub_object` must be Seurat objects.", call. = FALSE)
+  new_names <- names(embeddings) %||% as.character(embeddings)
+  new_names[!nzchar(new_names)] <- as.character(embeddings)[!nzchar(new_names)]
+  parent_cells <- colnames(object)
+  for (i in seq_along(embeddings)) {
+    src <- as.character(embeddings)[[i]]; newn <- new_names[[i]]
+    if (!src %in% SeuratObject::Reductions(sub_object))
+      stop("sub_object has no reduction '", src, "'.", call. = FALSE)
+    em <- SeuratObject::Embeddings(sub_object, reduction = src)
+    keep <- rownames(em) %in% parent_cells
+    if (!any(keep))
+      stop("no barcodes of sub_object reduction '", src,
+           "' match the parent object.", call. = FALSE)
+    em <- em[keep, , drop = FALSE]
+    colnames(em) <- sprintf("%s_%d", newn, seq_len(ncol(em)))
+    object[[newn]] <- SeuratObject::CreateDimReducObject(
+      embeddings = em, key = sprintf("%s_", gsub("[^A-Za-z0-9]", "", newn)),
+      assay = SeuratObject::DefaultAssay(object))
+  }
+  for (mc in meta) {
+    src_vals <- sub_object[[mc]][[1]]
+    col <- rep(NA_character_, length(parent_cells)); names(col) <- parent_cells
+    idx <- match(colnames(sub_object), parent_cells)
+    ok <- !is.na(idx)
+    col[idx[ok]] <- as.character(src_vals)[ok]
+    object[[mc]] <- unname(col)
+  }
+  spec <- list(label = label, embeddings = unname(new_names),
+               meta = as.character(meta %||% character(0)))
+  # Store in @misc (not a bare attribute): downstream Seurat operations
+  # (SetAssayData, subset, ...) preserve @misc but drop object attributes.
+  prev <- SeuratObject::Misc(object, "scroll_subsets") %||% list()
+  prev[[name]] <- spec
+  SeuratObject::Misc(object, "scroll_subsets") <- prev
+  object
 }
 
 .scroll_warn_unsafe_features <- function(feats) {

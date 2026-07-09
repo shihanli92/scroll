@@ -153,3 +153,69 @@ scroll_pseudobulk_de <- function(data, assay, aggregate_cols, ident1, ident2 = N
                               group2 = sum(samp$group == "group2"))
   res
 }
+
+# Run scroll_pseudobulk_de `runs` times (fresh random pseudo-replicates each) and
+# return the successful per-run result data.frames.
+.scroll_pseudobulk_runs <- function(..., runs) {
+  out <- lapply(seq_len(runs),
+                function(i) tryCatch(scroll_pseudobulk_de(...), error = function(e) NULL))
+  out <- Filter(Negate(is.null), out)
+  if (length(out) < 2)
+    stop("Stability needs >= 2 successful runs (", length(out), " succeeded); ",
+         "check the contrast and min-cell settings.", call. = FALSE)
+  out
+}
+
+# Summarise a list of per-run DE results into per-gene stability statistics: how
+# often each gene clears the lfc + padj cutoffs (selection frequency), its median
+# effect, and how consistently the effect points the same way.
+.scroll_stability_aggregate <- function(runs, lfc = 1, padj = 0.05) {
+  k <- length(runs)
+  all <- do.call(rbind, runs)
+  sig <- abs(all$logFC) >= lfc & all$p_val_adj <= padj
+  ix <- split(seq_len(nrow(all)), all$gene)
+  lf <- all$logFC; pj <- all$p_val_adj
+  res <- data.frame(
+    gene = names(ix),
+    sel_freq = round(vapply(ix, function(j) sum(sig[j]) / k, numeric(1)), 3),
+    median_logFC = round(vapply(ix, function(j) stats::median(lf[j]), numeric(1)), 3),
+    sign_agree = round(vapply(ix, function(j) {
+      s <- sign(lf[j]); max(mean(s > 0), mean(s < 0)) }, numeric(1)), 2),
+    median_padj = signif(vapply(ix, function(j) stats::median(pj[j]), numeric(1)), 3),
+    n_tested = vapply(ix, length, integer(1)),
+    row.names = NULL, stringsAsFactors = FALSE)
+  res <- res[order(-res$sel_freq, res$median_padj), , drop = FALSE]
+  attr(res, "runs") <- k
+  # aliases so view_volcano / the shared table still work
+  res$logFC <- res$median_logFC; res$p_val_adj <- res$median_padj
+  res
+}
+
+#' Stability of pseudobulk DE across random pseudo-replicate draws
+#'
+#' Runs [scroll_pseudobulk_de()] `runs` times with fresh random pseudo-replicates
+#' and reports, per gene, how often it clears the `lfc` + `padj` cutoffs
+#' (`sel_freq`), its `median_logFC`, sign agreement, and median adjusted p. Use it
+#' to see which genes come up **consistently** rather than by a lucky draw.
+#'
+#' Note: this checks robustness to the random sampling only; it does **not** fix
+#' the anti-conservative bias of pseudo-replication (fabricated replicates
+#' understate biological variance). Treat `sel_freq` as a ranking heuristic, not a
+#' p-value, and prefer real replicates when available.
+#'
+#' @inheritParams scroll_pseudobulk_de
+#' @param runs Number of random re-runs.
+#' @param lfc,padj logFC and adjusted-p cutoffs defining a "hit" in each run.
+#' @return A data.frame with `gene`, `sel_freq`, `median_logFC`, `sign_agree`,
+#'   `median_padj`, `n_tested`, ranked by selection frequency.
+#' @export
+scroll_pseudobulk_stability <- function(data, assay, aggregate_cols, ident1, ident2 = NULL,
+                                        replicate_col = "no_replicate", min_cells = 10,
+                                        n_pseudo = 3, cells_per_pseudo = 50, cells = NULL,
+                                        runs = 25, lfc = 1, padj = 0.05) {
+  runs_list <- .scroll_pseudobulk_runs(
+    data, assay, aggregate_cols, ident1, ident2, replicate_col = replicate_col,
+    min_cells = min_cells, n_pseudo = n_pseudo, cells_per_pseudo = cells_per_pseudo,
+    cells = cells, runs = runs)
+  .scroll_stability_aggregate(runs_list, lfc, padj)
+}
