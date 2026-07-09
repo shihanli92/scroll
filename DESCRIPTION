@@ -24,6 +24,7 @@ Imports:
     duckdb,
     DBI,
     ggplot2,
+    grDevices,
     scales,
     shiny,
     bslib,

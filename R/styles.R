@@ -28,6 +28,17 @@ body{background:var(--sc-ground); color:var(--sc-ink);
 .scroll-stat-v{font-weight:700; font-variant-numeric:tabular-nums; line-height:1.1;}
 .scroll-stat-l{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--sc-faint);}
 
+/* global cell-subset filter (app bar pill) */
+.scroll-subset{display:flex; align-items:center; gap:8px; padding:5px 6px 5px 12px;
+  background:var(--sc-card); border:1px solid var(--sc-line); border-radius:999px;
+  box-shadow:0 1px 2px rgba(17,24,38,.04);}
+.scroll-subset-label{text-transform:uppercase; letter-spacing:.08em; font-size:11px;
+  font-weight:700; color:var(--sc-faint);}
+.scroll-subset .shiny-input-container{margin-bottom:0 !important; width:auto !important;}
+.scroll-subset .form-select,.scroll-subset .selectize-input{min-height:32px; padding-top:3px;
+  padding-bottom:3px; border-radius:8px; font-size:13px;}
+.scroll-subset .selectize-control{margin-bottom:0;}
+
 /* layout */
 .scroll-layout{display:grid; grid-template-columns:200px minmax(0,1fr); gap:32px;
   max-width:1320px; margin:0 auto; padding:28px;}
@@ -62,6 +73,12 @@ body{background:var(--sc-ground); color:var(--sc-ink);
 .scroll-controls .form-label{font-size:13px; font-weight:600; margin-bottom:3px;}
 .scroll-controls .form-group,.scroll-controls .shiny-input-container{margin-bottom:12px;}
 .scroll-plot{border-radius:10px; background:var(--sc-card); overflow-x:auto;}
+.scroll-plot-bar{display:flex; justify-content:flex-end; padding:0 2px 8px;}
+.scroll-dl.btn{padding:3px 10px; font-size:12px; font-weight:600; color:var(--sc-muted);
+  background:var(--sc-card); border:1px solid var(--sc-line); border-radius:8px;}
+.scroll-dl.btn:hover{color:var(--sc-accent-deep); border-color:var(--sc-accent);
+  background:var(--sc-wash);}
+.scroll-dl.btn .fa,.scroll-dl.btn svg{margin-right:5px; opacity:.7;}
 
 @media (max-width:900px){
   .scroll-layout{grid-template-columns:1fr; gap:16px;}

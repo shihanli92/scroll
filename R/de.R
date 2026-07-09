@@ -15,6 +15,8 @@
 #' @param ident1 The group of interest.
 #' @param ident2 The comparison group, or `NULL`/`"rest"` for one-vs-rest.
 #' @param min_pct Keep genes expressed in at least this fraction of either side.
+#' @param cells Cells to test over (default `data$cells`); pass a subset to run
+#'   DE within an active cell-subset filter.
 #' @return A data.frame of results, ranked by adjusted p-value.
 #' @details With the default quantized build (`quantize = TRUE` in
 #'   [scroll_build()]), expression values below ~`max/510` round to zero, so the
@@ -22,10 +24,11 @@
 #'   very low expression and p-values are approximate. Build with
 #'   `quantize = FALSE` for exact statistics.
 #' @export
-scroll_de <- function(data, assay, group_col, ident1, ident2 = NULL, min_pct = 0.1) {
+scroll_de <- function(data, assay, group_col, ident1, ident2 = NULL, min_pct = 0.1,
+                      cells = NULL) {
   if (!requireNamespace("presto", quietly = TRUE))
     stop("Live DE needs the 'presto' package.", call. = FALSE)
-  cells <- data$cells
+  cells <- cells %||% data$cells
   g <- as.character(cells[[group_col]])
 
   one_vs_rest <- is.null(ident2) || !nzchar(ident2) || identical(ident2, "rest")

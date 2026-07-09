@@ -10,9 +10,9 @@ offline **build phase** extracts lightweight on-disk artifacts; the **runtime**
 via duckdb — so runtime memory stays flat regardless of dataset size. It deploys
 as a plain `app.R` on an open-source Shiny Server, with no render step.
 
-> **Status:** build phase + all seven panels (incl. live DE + volcano via
-> `presto`), wired end-to-end and validated live on pbmc3k. `register_panel()`,
-> multi-assay selectors, and WebGL scatter are next.
+> **Status:** build phase + all six panels (incl. a live DE section — ranked
+> table + volcano from one `presto` compute), wired end-to-end and validated live
+> on pbmc3k. `register_panel()`, multi-assay selectors, and WebGL scatter are next.
 
 ## The two phases
 
@@ -81,8 +81,7 @@ markers: [CD3D, CD8A, MS4A1, CD14, NKG7]   # DotPlot's starting panel
 | **DotPlot** | marker genes (ordered multi-select) · group-by · assay · z-score scaling · palette · dot-size range · hclust rows/cols with dendrograms |
 | **Violin** | gene · group-by · palette · jitter points |
 | **Proportions** | group-by (x) · fill-by · palette · normalize-to-100% |
-| **DE** | contrast (group vs group / vs rest) · min % · live Wilcoxon via `presto`, sortable table |
-| **Volcano** | contrast · logFC &amp; adj-p cutoffs · top-N labels (ggrepel) |
+| **DE** | contrast (group vs group / vs rest) · live Wilcoxon via `presto`, computed once and shown as a **Table** (sortable, min-% / top-N filters) and a **Volcano** (logFC &amp; adj-p cutoffs · top-N labels via ggrepel) |
 
 Every plot has an **aspect-ratio** control (reshapes within a fixed canvas) and a
 clean black-box theme. Categorical colors are assigned **deterministically by

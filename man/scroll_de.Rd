@@ -4,7 +4,15 @@
 \alias{scroll_de}
 \title{Live differential expression for a contrast (presto / Wilcoxon)}
 \usage{
-scroll_de(data, assay, group_col, ident1, ident2 = NULL, min_pct = 0.1)
+scroll_de(
+  data,
+  assay,
+  group_col,
+  ident1,
+  ident2 = NULL,
+  min_pct = 0.1,
+  cells = NULL
+)
 }
 \arguments{
 \item{data}{A scroll data handle (\code{con}, \code{cells}, \code{manifest}).}
@@ -18,6 +26,9 @@ scroll_de(data, assay, group_col, ident1, ident2 = NULL, min_pct = 0.1)
 \item{ident2}{The comparison group, or \code{NULL}/\code{"rest"} for one-vs-rest.}
 
 \item{min_pct}{Keep genes expressed in at least this fraction of either side.}
+
+\item{cells}{Cells to test over (default \code{data$cells}); pass a subset to run
+DE within an active cell-subset filter.}
 }
 \value{
 A data.frame of results, ranked by adjusted p-value.

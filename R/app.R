@@ -83,11 +83,11 @@ dimplot_ui <- function(id, data) {
                     c("None" = "", stats::setNames(cats, cats))),
         .scroll_aspect_input(ns))
     ),
-    div(class = "scroll-plot", plotOutput(ns("plot"), height = "460px"))
+    .scroll_plot_area(ns, "460px")
   )
 }
 
-dimplot_server <- function(id, data) {
+dimplot_server <- function(id, data, cells_r = reactive(data$cells)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     is_cat <- reactive(identical(m$meta[[input$colorby]]$type, "categorical"))
@@ -122,15 +122,17 @@ dimplot_server <- function(id, data) {
       if (length(vals)) unlist(vals) else NULL
     })
 
-    output$plot <- renderPlot({
+    plot_r <- reactive({
       req(input$reduction, input$colorby)
       params <- list(embedding = input$reduction, color_by = input$colorby)
       state <- list(palette = input$palette, point_size = input$size, alpha = input$alpha,
                     show_labels = isTRUE(input$labels), legend = isTRUE(input$legend),
                     split_by = .scroll_nz(input$split), aspect = input$aspect,
                     highlight = input$highlight, manual_colors = manual_colors())
-      view_umap_colorby(data$cells, params, state)
+      view_umap_colorby(cells_r(), params, state)
     })
+    output$plot <- renderPlot(plot_r())
+    output$png <- .scroll_png_handler(plot_r, paste0("scroll_", id, ".png"))
   })
 }
 
@@ -162,17 +164,17 @@ featureplot_ui <- function(id, data) {
         selectInput(ns("split"), "Split by", c("None" = "", stats::setNames(cats, cats))),
         .scroll_aspect_input(ns))
     ),
-    div(class = "scroll-plot", plotOutput(ns("plot"), height = "460px"))
+    .scroll_plot_area(ns, "460px")
   )
 }
 
-featureplot_server <- function(id, data) {
+featureplot_server <- function(id, data, cells_r = reactive(data$cells)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     assay <- reactive(input$assay %||% m$default_assay)
     observe(updateSelectizeInput(session, "feature", choices = .scroll_features_of(m, assay()),
                                  server = TRUE, selected = isolate(input$feature)))
-    output$plot <- renderPlot({
+    plot_r <- reactive({
       req(input$reduction)
       feat <- .scroll_nz(input$feature)
       validate(need(!is.null(feat), "Search for a gene to plot its expression."))
@@ -181,8 +183,10 @@ featureplot_server <- function(id, data) {
                     order = isTRUE(input$order), legend = isTRUE(input$legend),
                     clip = input$clip / 100, split_by = .scroll_nz(input$split),
                     aspect = input$aspect)
-      view_feature_plot(data$cells, params, data$query1(assay(), feat), state)
+      view_feature_plot(cells_r(), params, data$query1(assay(), feat), state)
     })
+    output$plot <- renderPlot(plot_r())
+    output$png <- .scroll_png_handler(plot_r, paste0("scroll_", id, ".png"))
   })
 }
 
@@ -214,18 +218,18 @@ dotplot_ui <- function(id, data) {
                     c("Off" = "off", "Rows" = "rows", "Columns" = "columns", "Both" = "both")),
         .scroll_aspect_input(ns))
     ),
-    div(class = "scroll-plot", plotOutput(ns("plot"), height = "520px"))
+    .scroll_plot_area(ns, "520px")
   )
 }
 
-dotplot_server <- function(id, data) {
+dotplot_server <- function(id, data, cells_r = reactive(data$cells)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     assay <- reactive(input$assay %||% m$default_assay)
     defaults <- intersect(unlist(data$config$markers), .scroll_features_of(m, m$default_assay))
     observe(updateSelectizeInput(session, "markers", choices = .scroll_features_of(m, assay()),
                                  server = TRUE, selected = isolate(input$markers) %||% defaults))
-    output$plot <- renderPlot({
+    plot_r <- reactive({
       req(input$group)
       feats <- input$markers
       validate(need(length(feats) > 0, "Add one or more marker genes to build the panel."))
@@ -233,8 +237,10 @@ dotplot_server <- function(id, data) {
       state <- list(scale = isTRUE(input$scale), palette = input$palette,
                     dot_size = input$dotrange, cluster = input$cluster,
                     aspect = input$aspect)
-      view_dotplot(data$cells, params, data$queryN(assay(), feats), state)
+      view_dotplot(cells_r(), params, data$queryN(assay(), feats), state)
     })
+    output$plot <- renderPlot(plot_r())
+    output$png <- .scroll_png_handler(plot_r, paste0("scroll_", id, ".png"))
   })
 }
 
@@ -262,25 +268,27 @@ violin_ui <- function(id, data) {
         bslib::input_switch(ns("legend"), "Legend", FALSE)),
       .scroll_group("Layout", .scroll_aspect_input(ns))
     ),
-    div(class = "scroll-plot", plotOutput(ns("plot"), height = "460px"))
+    .scroll_plot_area(ns, "460px")
   )
 }
 
-violin_server <- function(id, data) {
+violin_server <- function(id, data, cells_r = reactive(data$cells)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     assay <- reactive(input$assay %||% m$default_assay)
     observe(updateSelectizeInput(session, "feature", choices = .scroll_features_of(m, assay()),
                                  server = TRUE, selected = isolate(input$feature)))
-    output$plot <- renderPlot({
+    plot_r <- reactive({
       req(input$group)
       feat <- .scroll_nz(input$feature)
       validate(need(!is.null(feat), "Search for a gene to plot its distribution."))
       params <- list(feature = feat, group_by = input$group)
       state <- list(palette = input$palette, jitter = isTRUE(input$jitter),
                     legend = isTRUE(input$legend), aspect = input$aspect)
-      view_violin(data$cells, params, data$query1(assay(), feat), state)
+      view_violin(cells_r(), params, data$query1(assay(), feat), state)
     })
+    output$plot <- renderPlot(plot_r())
+    output$png <- .scroll_png_handler(plot_r, paste0("scroll_", id, ".png"))
   })
 }
 
@@ -304,24 +312,30 @@ proportions_ui <- function(id, data) {
         bslib::input_switch(ns("legend"), "Legend", TRUE)),
       .scroll_group("Layout", .scroll_aspect_input(ns))
     ),
-    div(class = "scroll-plot", plotOutput(ns("plot"), height = "460px"))
+    .scroll_plot_area(ns, "460px")
   )
 }
 
-proportions_server <- function(id, data) {
+proportions_server <- function(id, data, cells_r = reactive(data$cells)) {
   moduleServer(id, function(input, output, session) {
-    output$plot <- renderPlot({
+    plot_r <- reactive({
       req(input$group, input$fill)
       params <- list(group_by = input$group, fill_by = input$fill)
       state <- list(palette = input$palette, normalize = isTRUE(input$normalize),
                     legend = isTRUE(input$legend), aspect = input$aspect)
-      view_proportions(data$cells, params, state)
+      view_proportions(cells_r(), params, state)
     })
+    output$plot <- renderPlot(plot_r())
+    output$png <- .scroll_png_handler(plot_r, paste0("scroll_", id, ".png"))
   })
 }
 
 # --- DE panel -----------------------------------------------------------------
 
+# One contrast, computed once via presto, shown two ways: a ranked marker
+# Table and a Volcano. A single `result` reactive feeds both tabs; the table's
+# min-%-expressing and top-N are display filters (so the volcano keeps every
+# gene), and the volcano thresholds only restyle the plot.
 de_ui <- function(id, data) {
   ns <- NS(id)
   m <- data$manifest
@@ -336,19 +350,32 @@ de_ui <- function(id, data) {
         selectInput(ns("ident1"), "Group 1", choices = NULL),
         selectInput(ns("ident2"), "vs.", choices = NULL),
         if (length(assays) > 1) selectInput(ns("assay"), "Assay", assays, selected = m$default_assay)),
-      .scroll_group("Filters",
+      .scroll_group("Table",
         sliderInput(ns("minpct"), "Min % expressing", 0, 50, 10, 1),
         sliderInput(ns("topn"), "Show top", 10, 300, 50, 10)),
+      .scroll_group("Volcano",
+        sliderInput(ns("lfc"), "logFC cutoff", 0, 3, 1, 0.1),
+        numericInput(ns("padj"), "Adj. p cutoff", 0.05, min = 0, max = 1, step = 0.01),
+        sliderInput(ns("labeln"), "Label top", 0, 40, 15, 1),
+        .scroll_aspect_input(ns)),
       actionButton(ns("compute"), "Compute DE", class = "btn-primary", width = "100%")
     ),
-    div(class = "scroll-plot scroll-table",
-        if (.scroll_has_dt()) DT::dataTableOutput(ns("table")) else tableOutput(ns("table")))
+    div(class = "scroll-plot",
+        bslib::navset_tab(
+          bslib::nav_panel("Table",
+            div(class = "scroll-plot-bar", .scroll_dl_button(ns("csv"), "CSV")),
+            div(class = "scroll-table",
+                .scroll_spin(if (.scroll_has_dt()) DT::dataTableOutput(ns("table"))
+                             else tableOutput(ns("table"))))),
+          bslib::nav_panel("Volcano",
+            div(class = "scroll-plot-bar", .scroll_dl_button(ns("png"), "PNG")),
+            .scroll_spin(plotOutput(ns("plot"), height = "520px")))))
   )
 }
 
 .scroll_has_dt <- function() requireNamespace("DT", quietly = TRUE)
 
-de_server <- function(id, data) {
+de_server <- function(id, data, cells_r = reactive(data$cells)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     assay <- reactive(input$assay %||% m$default_assay)
@@ -359,74 +386,47 @@ de_server <- function(id, data) {
       updateSelectInput(session, "ident2", choices = c("rest", lv), selected = "rest")
     })
 
+    # min_pct = 0 so the volcano keeps every gene; the table applies its own
+    # %-expressing filter below. A failed presto run (e.g. a contrast with too
+    # few cells) is caught and surfaced as a friendly inline message, not a raw
+    # Shiny error.
     result <- eventReactive(input$compute, {
       req(input$ident1)
-      scroll_de(data, assay(), input$group, input$ident1,
-                if (identical(input$ident2, "rest")) NULL else input$ident2,
-                min_pct = input$minpct / 100)
+      tryCatch(
+        list(ok = scroll_de(data, assay(), input$group, input$ident1,
+                            if (identical(input$ident2, "rest")) NULL else input$ident2,
+                            min_pct = 0, cells = cells_r())),
+        error = function(e) list(err = conditionMessage(e)))
     })
 
-    draw <- function() {
+    de_df <- reactive({
       validate(need(input$compute > 0, "Pick a contrast and click Compute DE."))
-      utils::head(result(), input$topn)
+      r <- result()
+      validate(need(is.null(r$err), r$err))
+      r$ok
+    })
+
+    table_rows <- function() {
+      res <- de_df()
+      res <- res[pmax(res$pct.1, res$pct.2) >= input$minpct / 100, , drop = FALSE]
+      utils::head(res, input$topn)
     }
     if (.scroll_has_dt())
       output$table <- DT::renderDataTable(
         DT::formatSignif(
-          DT::datatable(draw(), rownames = FALSE, options = list(pageLength = 15, dom = "tip")),
+          DT::datatable(table_rows(), rownames = FALSE, options = list(pageLength = 15, dom = "tip")),
           columns = c("p_val", "p_val_adj"), digits = 3))
     else
-      output$table <- renderTable(draw())
-  })
-}
+      output$table <- renderTable(table_rows())
 
-# --- Volcano panel ------------------------------------------------------------
-
-volcano_ui <- function(id, data) {
-  ns <- NS(id)
-  m <- data$manifest
-  cats <- .scroll_cat_cols(m); assays <- .scroll_assays_of(m)
-  if (!length(cats)) return(.scroll_empty_panel("Needs a categorical metadata column (none found)."))
-  bslib::layout_columns(
-    col_widths = c(3, 9), class = "scroll-panel",
-    div(
-      class = "scroll-controls",
-      .scroll_group("Contrast",
-        selectInput(ns("group"), "Group by", stats::setNames(cats, cats), selected = cats[[1]]),
-        selectInput(ns("ident1"), "Group 1", choices = NULL),
-        selectInput(ns("ident2"), "vs.", choices = NULL),
-        if (length(assays) > 1) selectInput(ns("assay"), "Assay", assays, selected = m$default_assay)),
-      .scroll_group("Thresholds",
-        sliderInput(ns("lfc"), "logFC cutoff", 0, 3, 1, 0.1),
-        numericInput(ns("padj"), "Adj. p cutoff", 0.05, min = 0, max = 1, step = 0.01),
-        sliderInput(ns("labeln"), "Label top", 0, 40, 15, 1)),
-      .scroll_group("Layout", .scroll_aspect_input(ns)),
-      actionButton(ns("compute"), "Compute", class = "btn-primary", width = "100%")
-    ),
-    div(class = "scroll-plot", plotOutput(ns("plot"), height = "520px"))
-  )
-}
-
-volcano_server <- function(id, data) {
-  moduleServer(id, function(input, output, session) {
-    m <- data$manifest
-    assay <- reactive(input$assay %||% m$default_assay)
-    observeEvent(input$group, {
-      lv <- unlist(m$meta[[input$group]]$levels)
-      updateSelectInput(session, "ident1", choices = lv, selected = lv[[1]])
-      updateSelectInput(session, "ident2", choices = c("rest", lv), selected = "rest")
-    })
-    result <- eventReactive(input$compute, {
-      req(input$ident1)
-      scroll_de(data, assay(), input$group, input$ident1,
-                if (identical(input$ident2, "rest")) NULL else input$ident2, min_pct = 0)
-    })
-    output$plot <- renderPlot({
-      validate(need(input$compute > 0, "Pick a contrast and click Compute."))
-      view_volcano(result(),
+    volcano_r <- reactive({
+      view_volcano(de_df(),
                    params = list(lfc = input$lfc, padj = input$padj, label_n = input$labeln),
                    state = list(aspect = input$aspect))
     })
+    output$plot <- renderPlot(volcano_r())
+    output$png <- .scroll_png_handler(volcano_r, paste0("scroll_", id, ".png"))
+    output$csv <- .scroll_csv_handler(reactive(table_rows()), paste0("scroll_", id, ".csv"))
   })
 }
 
@@ -457,17 +457,52 @@ volcano_server <- function(id, data) {
        ui = proportions_ui, server = proportions_server),
   list(id = "de", num = "06", label = "DE",
        title = "Differential expression",
-       desc = "Wilcoxon markers for a contrast, computed live via presto.",
-       ui = de_ui, server = de_server),
-  list(id = "volcano", num = "07", label = "Volcano",
-       title = "Volcano plot",
-       desc = "logFC vs significance for a contrast (live Wilcoxon).",
-       ui = volcano_ui, server = volcano_server)
+       desc = "Wilcoxon markers for a contrast (live via presto): ranked table + volcano.",
+       ui = de_ui, server = de_server)
 )
 
 .scroll_group <- function(title, ...) {
   div(class = "scroll-cgroup", div(class = "scroll-cgroup-h", title), ...)
 }
+
+# --- per-plot export ----------------------------------------------------------
+
+# A compact download button for a plot/table toolbar.
+.scroll_dl_button <- function(id, label)
+  downloadButton(id, label, class = "btn-sm scroll-dl", icon = shiny::icon("download"))
+
+# Wrap an output in a loading spinner when shinycssloaders is available (a
+# guarded Suggests dep); otherwise return the output unchanged.
+.scroll_spin <- function(tag) {
+  if (requireNamespace("shinycssloaders", quietly = TRUE))
+    shinycssloaders::withSpinner(tag, type = 6, color = "#2563A8", size = 0.6,
+                                 proxy.height = "260px")
+  else tag
+}
+
+# Standard plot area: a small toolbar (PNG download) above the plot output.
+.scroll_plot_area <- function(ns, height = "460px")
+  div(class = "scroll-plot",
+      div(class = "scroll-plot-bar", .scroll_dl_button(ns("png"), "PNG")),
+      .scroll_spin(plotOutput(ns("plot"), height = height)))
+
+# PNG downloadHandler for a plot reactive. Uses a png device + print() (not
+# ggsave) so it renders both bare ggplots and the DotPlot's aplot composite,
+# which ggsave() rejects as a non-ggplot.
+.scroll_png_handler <- function(plot_r, name)
+  downloadHandler(
+    filename = function() name,
+    content = function(file) {
+      grDevices::png(file, width = 8, height = 6, units = "in", res = 150, bg = "white")
+      on.exit(grDevices::dev.off())
+      print(plot_r())
+    })
+
+# CSV downloadHandler for a data.frame reactive.
+.scroll_csv_handler <- function(df_r, name)
+  downloadHandler(
+    filename = function() name,
+    content = function(file) utils::write.csv(df_r(), file, row.names = FALSE))
 
 # Shared aspect-ratio control, applied uniformly as a rendered-height multiplier
 # (works for every panel including the aplot dendrogram composite, where
@@ -481,6 +516,14 @@ volcano_server <- function(id, data) {
 .scroll_empty_panel <- function(msg)
   div(class = "scroll-panel", tags$p(class = "scroll-desc", msg))
 
+# The global cell-subset filter: restrict `cells` to rows whose `col` value is in
+# `vals`; no-op when the filter is inactive.
+.scroll_subset_cells <- function(cells, col, vals) {
+  if (is.null(col) || is.null(vals) || !length(vals) || !col %in% names(cells))
+    return(cells)
+  cells[as.character(cells[[col]]) %in% vals, , drop = FALSE]
+}
+
 .scroll_stat <- function(value, label)
   div(class = "scroll-stat", span(class = "scroll-stat-v", value),
       span(class = "scroll-stat-l", label))
@@ -488,15 +531,24 @@ volcano_server <- function(id, data) {
 .scroll_appbar <- function(data, title) {
   m <- data$manifest
   assay <- m$default_assay
+  cats <- .scroll_cat_cols(m)
   brand <- list(span(class = "scroll-logo", "scroll"))
   if (!is.null(title))
     brand <- c(brand, list(span(class = "scroll-slash", "/"),
                            span(class = "scroll-dataset", title)))
+  subset_ui <- if (length(cats)) div(
+    class = "scroll-subset",
+    span(class = "scroll-subset-label", "Subset"),
+    selectInput("scroll_subset_col", NULL,
+                c("All cells" = "", stats::setNames(cats, cats)), width = "150px"),
+    selectizeInput("scroll_subset_val", NULL, choices = NULL, multiple = TRUE,
+                   width = "200px", options = list(placeholder = "all")))
   div(
     class = "scroll-appbar",
     div(class = "scroll-brand", brand),
+    subset_ui,
     div(class = "scroll-stats",
-        .scroll_stat(format(m$n_cells, big.mark = ","), "cells"),
+        .scroll_stat(textOutput("scroll_ncells", inline = TRUE), "cells"),
         .scroll_stat(format(m$assays[[assay]]$n_features, big.mark = ","), "genes"),
         .scroll_stat(paste(.scroll_assays_of(m), collapse = ", "), "assays"),
         .scroll_stat(paste(.scroll_reductions(m), collapse = ", "), "reductions"))
@@ -563,7 +615,22 @@ scroll_app <- function(dir = ".") {
 
   ui <- .scroll_page(data, title, panels)
   server <- function(input, output, session) {
-    for (sec in panels) sec$server(sec$id, data)
+    # global cell-subset filter (app bar) -> the cells every panel operates on
+    active_cells <- reactive(
+      .scroll_subset_cells(data$cells, .scroll_nz(input$scroll_subset_col),
+                           input$scroll_subset_val))
+    observeEvent(input$scroll_subset_col, {
+      col <- .scroll_nz(input$scroll_subset_col)
+      lv <- if (is.null(col)) character(0) else unlist(data$manifest$meta[[col]]$levels)
+      updateSelectizeInput(session, "scroll_subset_val", choices = lv,
+                           selected = character(0), server = TRUE)
+    })
+    output$scroll_ncells <- renderText({
+      n <- nrow(active_cells()); tot <- data$manifest$n_cells
+      if (n < tot) sprintf("%s of %s", format(n, big.mark = ","), format(tot, big.mark = ","))
+      else format(tot, big.mark = ",")
+    })
+    for (sec in panels) sec$server(sec$id, data, active_cells)
   }
   # close the (process-global) duckdb connection when the app stops
   shiny::shinyApp(ui, server, onStart = function() {

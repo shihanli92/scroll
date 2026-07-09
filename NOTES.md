@@ -55,11 +55,11 @@ top-3 blockers + documented the quantization caveat). Items below were
 - **Fix:** sanitize or stop on unsafe feature names.
 - **Priority:** low (gene symbols are normally safe).
 
-### 6. Unused Suggests
-- `shinycssloaders` is in Suggests but never used in `R/`. Either wire a spinner
-  on the DE/Volcano/feature renders, or drop it from DESCRIPTION.
+### 6. Unused Suggests — RESOLVED
+- `shinycssloaders` is now wired via `.scroll_spin()` (guarded `requireNamespace`)
+  around every panel's plot/table output, so slow renders (DE presto, feature
+  queries) show a spinner. No longer an unused Suggest.
 - `SeuratData` is used only by tests/README (fine — keep).
-- **Priority:** trivial.
 
 ## Test gaps to close later
 
@@ -79,12 +79,12 @@ top-3 blockers + documented the quantization caveat). Items below were
 
 ## Enhancement ideas (not bugs)
 
-- **Merge DE + Volcano** into one section with `Table | Volcano` tabs sharing a
-  single presto compute (today they're separate panels, so a user computes DE
-  twice for the same contrast).
-- **Global cell-subset filter** in the app bar (restrict every panel to a cell
-  type / subset at once). The design mockup called for this; not built.
-- **Per-plot export**: PNG (all panels) + CSV (DE table).
+- ~~**Merge DE + Volcano**~~ — DONE. One DE section, `Table | Volcano` tabs from a
+  single presto compute.
+- ~~**Global cell-subset filter**~~ — DONE. App-bar pill threads `cells_r` through
+  every panel; cells stat reads "N of total".
+- ~~**Per-plot export**~~ — DONE. PNG (all panels, via a png-device + `print()`
+  path that also handles the DotPlot aplot) + CSV (DE table).
 - **`register_panel()`**: promote the internal panel registry to a public
   extension point so users can add custom panels.
 - **WebGL / rasterized scatter** (`scattermore`/`ggrastr`) for DimPlot/

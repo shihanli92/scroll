@@ -28,11 +28,36 @@ test_that("grouping panels degrade gracefully with no categorical metadata", {
     embeddings = list(umap = list(dims = 2)),
     default_assay = "RNA", default_embedding = "umap"))
   for (ui in list(scroll:::dotplot_ui, scroll:::violin_ui, scroll:::proportions_ui,
-                  scroll:::de_ui, scroll:::volcano_ui)) {
+                  scroll:::de_ui)) {
     tag <- ui("p", fake)
     expect_s3_class(tag, "shiny.tag")
     expect_true(grepl("categorical metadata", as.character(tag)))
   }
+})
+
+test_that(".scroll_subset_cells filters to selected levels (and is a no-op otherwise)", {
+  cells <- data.frame(cell = paste0("c", 1:6), grp = rep(c("A", "B", "C"), 2),
+                      stringsAsFactors = FALSE)
+  expect_equal(nrow(scroll:::.scroll_subset_cells(cells, "grp", c("A", "B"))), 4)
+  expect_equal(unique(scroll:::.scroll_subset_cells(cells, "grp", "C")$grp), "C")
+  # no column / no values / unknown column -> unchanged
+  expect_identical(scroll:::.scroll_subset_cells(cells, NULL, NULL), cells)
+  expect_identical(scroll:::.scroll_subset_cells(cells, "grp", character(0)), cells)
+  expect_identical(scroll:::.scroll_subset_cells(cells, "missing", "A"), cells)
+})
+
+test_that("a panel server honors a subsetted cells_r (global filter)", {
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  ct <- sort(unique(as.character(data$cells$celltype)))[[1]]
+  sub <- reactive(scroll:::.scroll_subset_cells(data$cells, "celltype", ct))
+  shiny::testServer(scroll:::dimplot_server, args = list(data = data, cells_r = sub), {
+    session$setInputs(reduction = "umap", colorby = "celltype", palette = "Tableau 10",
+                      size = 0.6, alpha = 0.85, labels = TRUE, legend = TRUE, split = "",
+                      aspect = 1, highlight = character(0))
+    # the plot reactive draws only the subset's cells
+    expect_equal(nrow(plot_r()$data), sum(as.character(data$cells$celltype) == ct))
+  })
 })
 
 test_that("violin_server and proportions_server render from controls", {

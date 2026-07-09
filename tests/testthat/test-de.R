@@ -37,26 +37,34 @@ test_that("view_volcano renders from a DE result (and empty input)", {
   expect_s3_class(view_volcano(data.frame()), "ggplot")   # empty -> placeholder, no error
 })
 
-test_that("volcano_server renders on click", {
-  skip_if_not_installed("presto")
-  data <- scroll:::.scroll_load(test_project())
-  on.exit(scroll_disconnect(data$con))
-  ct <- sort(unique(as.character(data$cells$celltype)))[[1]]
-  shiny::testServer(scroll:::volcano_server, args = list(data = data), {
-    session$setInputs(group = "celltype", ident1 = ct, ident2 = "rest",
-                      lfc = 1, padj = 0.05, labeln = 10, aspect = 1, compute = 1)
-    expect_false(is.null(output$plot))
-  })
-})
-
-test_that("de_server computes a table on click", {
+test_that("de_server computes table + volcano from one contrast", {
   skip_if_not_installed("presto")
   data <- scroll:::.scroll_load(test_project())
   on.exit(scroll_disconnect(data$con))
   ct <- sort(unique(as.character(data$cells$celltype)))[[1]]
   shiny::testServer(scroll:::de_server, args = list(data = data), {
     session$setInputs(group = "celltype", ident1 = ct, ident2 = "rest",
-                      minpct = 10, topn = 20, compute = 1)
+                      minpct = 10, topn = 20, lfc = 1, padj = 0.05, labeln = 10,
+                      aspect = 1, compute = 1)
+    # a single Compute feeds both the DT table and the volcano plot
     expect_false(is.null(output$table))
+    expect_false(is.null(output$plot))
+  })
+})
+
+test_that("de_server captures a too-few-cells contrast as a friendly message", {
+  skip_if_not_installed("presto")
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  cts <- sort(unique(as.character(data$cells$celltype)))
+  # a 2-cell subset (all one ident) trips presto's >=3-per-side floor
+  tiny <- utils::head(which(as.character(data$cells$celltype) == cts[[1]]), 2)
+  small <- reactive(data$cells[tiny, , drop = FALSE])
+  shiny::testServer(scroll:::de_server, args = list(data = data, cells_r = small), {
+    session$setInputs(group = "celltype", ident1 = cts[[1]], ident2 = "rest",
+                      minpct = 10, topn = 20, lfc = 1, padj = 0.05, labeln = 10,
+                      aspect = 1, compute = 1)
+    expect_false(is.null(result()$err))          # error captured, not raised
+    expect_match(result()$err, "at least 3 cells")
   })
 })
