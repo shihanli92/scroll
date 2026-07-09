@@ -6,7 +6,7 @@
 .DS_Store
 data/
 demo/
-examples/*/project/
-examples/**/.processed.rds
+examples/*/project*/
+examples/**/*.rds
 inst/doc
 docs/

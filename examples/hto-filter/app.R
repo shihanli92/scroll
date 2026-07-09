@@ -15,12 +15,17 @@ register_panel(
   "qc", qc_filter_ui, qc_filter_server,
   label = "QC filter", title = "RNA QC filter",
   desc  = "Threshold nCount / nFeature / percent.mt; publishes the QC-passing cells.",
-  after = "dimplot")
+  before = "dimplot")   # QC + gating at the top of the app
 register_panel(
   "hto", hto_gate_ui, hto_gate_server,
   label = "HTO gate", title = "Hashtag gating",
   desc  = paste("Draw a lasso around a population on the biaxial hashtag plot,",
                 "label it, and export the kept barcodes (QC-passing) as CSV."),
   after = "qc")
+register_panel(
+  "result", result_ui, result_server,
+  label = "Final selection", title = "Final selection",
+  desc  = "Ridgeplots of the gated selection and the filtered barcodes (gates + QC).",
+  after = "hto")
 
 scroll_app("project")

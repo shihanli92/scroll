@@ -16,7 +16,7 @@
 # neither automated demux nor per-axis cutoffs separate the populations cleanly.
 
 suppressMessages({
-  library(shiny); library(bslib); library(plotly)
+  library(shiny); library(bslib); library(plotly); library(ggplot2)
 })
 
 `%||%` <- function(a, b) if (is.null(a)) b else a
@@ -30,30 +30,86 @@ num_range <- function(manifest, col) {
   c(min = as.numeric(r$min), max = as.numeric(r$max))
 }
 
+# Seed the per-hashtag singlet gates from a saved keep-barcodes CSV (the app's own
+# export: cell, sample, assignment). Returns a named list hashtag-label -> ids for
+# the singlet labels; missing/invalid file -> all-empty. Doublet/Negative are not
+# in the export, so they are re-derived by the prefilter.
+load_saved_singlets <- function(path, labs) {
+  out <- stats::setNames(vector("list", length(labs)), labs)
+  if (is.null(path) || !file.exists(path)) return(out)
+  df <- utils::read.csv(path, stringsAsFactors = FALSE)
+  if (!all(c("cell", "assignment") %in% names(df))) return(out)
+  for (l in labs) out[[l]] <- as.character(df$cell[df$assignment == l])
+  out
+}
+
+# Load a saved keep-barcodes CSV as a reference assignment (named vector
+# cell -> assignment). Used to colour the gating plots by a previous demux.
+load_ref_assignment <- function(path) {
+  if (is.null(path) || !file.exists(path)) return(NULL)
+  df <- utils::read.csv(path, stringsAsFactors = FALSE)
+  if (!all(c("cell", "assignment") %in% names(df))) return(NULL)
+  stats::setNames(as.character(df$assignment), df$cell)
+}
+
+# Rough prefilter classification from a single CLR cutoff, so the biaxial plots
+# are pre-coloured and the singlet/doublet structure is visible before gating. A
+# cell positive (CLR >= thr) for one hashtag is that Singlet, for >=2 a Doublet,
+# for none Negative. Pure -> unit-testable.
+prefilter_classify <- function(cells, hto_cols, thr) {
+  labs <- sub("^hto_", "", hto_cols)
+  pos <- vapply(hto_cols, function(h) cells[[h]] >= thr, logical(nrow(cells)))
+  if (is.null(dim(pos))) pos <- matrix(pos, ncol = length(hto_cols))
+  n <- rowSums(pos)
+  ifelse(n == 0, "Negative",
+         ifelse(n >= 2, "Doublet", labs[max.col(pos, ties.method = "first")]))
+}
+
+# Base ("provisional") class for each cell: the saved CSV assignment where the
+# cell is in it, else the prefilter class. This is what colours the biaxial plots
+# and is the fallback the manual gates override.
+provisional_class <- function(cells, hto_cols, thr, ref = NULL) {
+  cls <- prefilter_classify(cells, hto_cols, thr)
+  if (!is.null(ref)) {
+    idx <- match(cells$cell, names(ref)); has <- !is.na(idx)
+    cls[has] <- ref[idx[has]]
+  }
+  cls
+}
+
 # Classify cells from the per-hashtag single-positive gates plus any manually
 # gated doublets. `singlets` is a named list hashtag-label -> cell ids gated
 # single-positive for that hashtag; `doublet_ids` are cells hand-gated as doublets.
-# A cell is a Doublet if it is manually gated doublet OR falls in >=2 singlet
-# gates; else a Singlet (its one hashtag) if in exactly one gate; else Negative.
-# So the user hand-gates single-positive clouds and, optionally, doublet clouds.
-# Pure -> unit-testable.
-assign_hto <- function(cell_ids, singlets, doublet_ids = character(0)) {
+# A cell is a Doublet if manually gated doublet OR in >=2 singlet gates; a Singlet
+# (its hashtag) if in exactly one gate; otherwise it falls back to `provisional`
+# (the prefilter class) if given, else Negative. So manual gates override the
+# prefilter. Pure -> unit-testable.
+assign_hto <- function(cell_ids, singlets, doublet_ids = character(0), provisional = NULL) {
   labs <- names(singlets)
   memb <- vapply(labs, function(l) cell_ids %in% (singlets[[l]] %||% character(0)),
                  logical(length(cell_ids)))
   if (is.null(dim(memb))) memb <- matrix(memb, ncol = length(labs))
   n <- rowSums(memb)
-  is_doublet <- cell_ids %in% doublet_ids | n >= 2
-  ifelse(is_doublet, "Doublet",
-         ifelse(n == 1, labs[max.col(memb, ties.method = "first")], "Negative"))
+  out <- ifelse(cell_ids %in% doublet_ids | n >= 2, "Doublet",
+                ifelse(n == 1, labs[max.col(memb, ties.method = "first")], NA_character_))
+  ung <- is.na(out)                                # ungated -> prefilter, else Negative
+  out[ung] <- if (is.null(provisional)) "Negative" else provisional[ung]
+  out
 }
 
-# Session-shared reactiveVal holding the QC-passing barcodes. Shared across the
-# two modules via session$userData; whichever module runs first creates it.
+# Session-shared reactives, held in session$userData so the panels (separate
+# modules) can cooperate: the QC panel publishes its passing barcodes, and the
+# gating panel publishes its gate state, for the results panel to consume.
 shared_qc_pass <- function(session) {
   if (is.null(session$userData$qc_pass))
     session$userData$qc_pass <- shiny::reactiveVal(NULL)
   session$userData$qc_pass
+}
+shared_hto_gates <- function(session) {
+  if (is.null(session$userData$hto_gates))
+    session$userData$hto_gates <-
+      shiny::reactiveVal(list(singlets = list(), doublet = character(0), thr = 1))
+  session$userData$hto_gates
 }
 
 # ============================ QC filter section ==============================
@@ -71,9 +127,10 @@ qc_filter_ui <- function(id, data) {
           sliderInput(ns("ncount"), "nCount_RNA", min = floor(nc["min"]),
                       max = ceiling(nc["max"]), value = c(floor(nc["min"]), ceiling(nc["max"]))),
           sliderInput(ns("nfeature"), "nFeature_RNA", min = floor(nf["min"]),
-                      max = ceiling(nf["max"]), value = c(floor(nf["min"]), ceiling(nf["max"]))),
+                      max = ceiling(nf["max"]),
+                      value = c(floor(nf["min"]), min(6000, ceiling(nf["max"])))),
           sliderInput(ns("pmt"), "percent.mt (max)", min = 0,
-                      max = ceiling(mt["max"]), value = ceiling(mt["max"]))),
+                      max = ceiling(mt["max"]), value = min(10, ceiling(mt["max"])))),
       div(class = "scroll-cgroup", div(class = "scroll-cgroup-h", "Pass"),
           div(class = "scroll-stat-v", style = "font-size:20px", textOutput(ns("passcount"))))
     ),
@@ -121,6 +178,7 @@ hto_gate_ui <- function(id, data) {
   ns <- NS(id)
   hto  <- hto_cols_of(data$manifest)
   labs <- sub("^hto_", "", hto)
+  hto_max <- max(vapply(hto, function(h) num_range(data$manifest, h)["max"], numeric(1)))
   pairs <- utils::combn(hto, 2, simplify = FALSE)          # every hashtag pair
   plots <- lapply(seq_along(pairs), function(i) {
     pr <- sub("^hto_", "", pairs[[i]])
@@ -133,6 +191,12 @@ hto_gate_ui <- function(id, data) {
     col_widths = c(3, 9), class = "scroll-panel",
     div(
       class = "scroll-controls",
+      div(class = "scroll-cgroup", div(class = "scroll-cgroup-h", "Prefilter"),
+          tags$p(class = "scroll-desc", style = "margin:0 0 8px",
+                 paste("Plots are coloured by the saved demux (data/hto_keep_barcodes.csv)",
+                       "where available, else by this rough CLR cutoff; your gates override both.")),
+          sliderInput(ns("prethr"), "Positive if CLR ≥",
+                      min = 0, max = ceiling(hto_max), value = 1, step = 0.05)),
       div(class = "scroll-cgroup", div(class = "scroll-cgroup-h", "Gates"),
           tags$p(class = "scroll-desc", style = "margin:0 0 8px",
                  paste("Lasso a single-positive cloud and assign it to its hashtag;",
@@ -161,20 +225,35 @@ hto_gate_ui <- function(id, data) {
   )
 }
 
-hto_gate_server <- function(id, data, cells_r = reactive(data$cells)) {
+hto_gate_server <- function(id, data, cells_r = reactive(data$cells),
+                            saved_csv = NULL,   # pass a path to seed gates from a saved export
+                            ref_csv = "../../data/hto_keep_barcodes.csv") {  # colour plots by this demux
   moduleServer(id, function(input, output, session) {
     qc_pass <- shared_qc_pass(session)
     hto   <- hto_cols_of(data$manifest)
     labs  <- sub("^hto_", "", hto)
     pairs <- utils::combn(hto, 2, simplify = FALSE)
-    singlets <- reactiveVal(stats::setNames(vector("list", length(labs)), labs))  # label -> ids
+    ref    <- load_ref_assignment(ref_csv)                 # saved demux for colouring
+    seeded <- load_saved_singlets(saved_csv, labs)         # saved selection, if any
+    singlets <- reactiveVal(seeded)        # label -> ids (seeded from CSV on startup)
     doublet  <- reactiveVal(character(0))  # cells hand-gated as doublets
     last_sel <- reactiveVal(NULL)          # most recent lasso selection, any plot
 
-    # cells (active subset) classified into Singlet(hashtag) / Doublet / Negative
+    if (sum(lengths(seeded)) > 0)
+      showNotification(sprintf("Loaded %s saved singlet assignments from %s.",
+                               format(sum(lengths(seeded)), big.mark = ","),
+                               basename(saved_csv)), type = "message", duration = 6)
+
+    # publish the gate state + prefilter cutoff for the results panel
+    hto_gates <- shared_hto_gates(session)
+    observe(hto_gates(list(singlets = singlets(), doublet = doublet(), thr = input$prethr)))
+
+    # cells (active subset) classified: manual gates override the base class
+    # (saved-CSV demux where present, else the prefilter)
     gated <- reactive({
-      cells <- cells_r(); req(nrow(cells) > 0)
-      cells$assignment <- assign_hto(cells$cell, singlets(), doublet())
+      cells <- cells_r(); req(nrow(cells) > 0, input$prethr)
+      prov <- provisional_class(cells, hto, input$prethr, ref)
+      cells$assignment <- assign_hto(cells$cell, singlets(), doublet(), prov)
       cells
     })
 
@@ -245,6 +324,87 @@ hto_gate_server <- function(id, data, cells_r = reactive(data$cells)) {
 
     output$csv <- downloadHandler(
       filename = function() "hto_keep_barcodes.csv",
+      content  = function(file)
+        utils::write.csv(kept()[, c("cell", "sample", "assignment")], file, row.names = FALSE))
+  })
+}
+
+# ====================== Final selection / ridgeplots =========================
+
+# Bottom section: ridgeplots of each hashtag's CLR by the final class, and the
+# filtered selection (singlets passing QC). Reads the gate state + QC-pass set the
+# other two sections publish via session$userData, so it always reflects them.
+
+result_ui <- function(id, data) {
+  ns <- NS(id)
+  bslib::layout_columns(
+    col_widths = c(3, 9), class = "scroll-panel",
+    div(
+      class = "scroll-controls",
+      div(class = "scroll-cgroup", div(class = "scroll-cgroup-h", "Show"),
+          radioButtons(ns("show"), NULL,
+                       c("Final kept (singlets, QC-pass)" = "kept",
+                         "All cells (demux QC)" = "all"), selected = "kept"),
+          tags$p(class = "scroll-desc", style = "margin-top:8px",
+                 paste("Each ridge is a hashtag's CLR distribution per class.",
+                       "Clean singlets sit high on their own hashtag, low on the others."))),
+      div(class = "scroll-cgroup", div(class = "scroll-cgroup-h", "Final selection"),
+          tableOutput(ns("summary")),
+          downloadButton(ns("csv"), "Download filtered barcodes (CSV)",
+                         class = "btn-primary", style = "width:100%"))
+    ),
+    div(class = "scroll-plot", plotOutput(ns("ridges"), height = "460px"))
+  )
+}
+
+result_server <- function(id, data, cells_r = reactive(data$cells),
+                          ref_csv = "../../data/hto_keep_barcodes.csv") {
+  moduleServer(id, function(input, output, session) {
+    qc_pass   <- shared_qc_pass(session)
+    hto_gates <- shared_hto_gates(session)
+    hto  <- hto_cols_of(data$manifest)
+    labs <- sub("^hto_", "", hto)
+    ref  <- load_ref_assignment(ref_csv)
+
+    classified <- reactive({
+      cells <- cells_r(); req(nrow(cells) > 0)
+      g <- hto_gates()
+      prov <- provisional_class(cells, hto, g$thr %||% 1, ref)
+      cells$assignment <- factor(assign_hto(cells$cell, g$singlets, g$doublet, prov),
+                                 levels = c(labs, "Doublet", "Negative"))
+      pass <- qc_pass()
+      cells$qc_pass <- if (is.null(pass)) TRUE else cells$cell %in% pass
+      cells
+    })
+    kept <- reactive({
+      a <- classified(); a[a$qc_pass & a$assignment %in% labs, , drop = FALSE]
+    })
+
+    output$ridges <- renderPlot({
+      df <- if (identical(input$show, "kept")) kept() else classified()
+      validate(need(nrow(df) > 0, "Set single-positive gates in the Hashtag gating section first."))
+      long <- do.call(rbind, lapply(hto, function(h)
+        data.frame(feature = sub("^hto_", "", h), clr = df[[h]],
+                   assignment = df$assignment)))
+      long <- long[!is.na(long$assignment), , drop = FALSE]
+      ggplot(long, aes(x = clr, y = assignment, fill = assignment)) +
+        ggridges::geom_density_ridges(scale = 1.8, alpha = 0.85,
+                                      colour = "white", linewidth = 0.2) +
+        facet_wrap(~ feature) +
+        labs(x = "hashtag CLR", y = NULL) +
+        theme_minimal(base_size = 13) +
+        theme(legend.position = "none", panel.grid.minor = element_blank(),
+              strip.text = element_text(face = "bold"))
+    })
+
+    output$summary <- renderTable({
+      k <- kept(); asn <- as.character(k$assignment)
+      data.frame(Class = c(labs, "Total kept"),
+                 Cells = c(vapply(labs, function(l) sum(asn == l), integer(1)), nrow(k)))
+    }, digits = 0, align = "lr")
+
+    output$csv <- downloadHandler(
+      filename = function() "hto_filtered_barcodes.csv",
       content  = function(file)
         utils::write.csv(kept()[, c("cell", "sample", "assignment")], file, row.names = FALSE))
   })
