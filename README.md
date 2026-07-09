@@ -98,12 +98,44 @@ markers: [CD3D, CD8A, MS4A1, CD14, NKG7]   # DotPlot's starting panel
 
 Every plot has an **aspect-ratio** control (reshapes within a fixed canvas) and a
 clean black-box theme. Categorical colors are assigned **deterministically by
-level name**, so a cell type keeps its color across every panel.
+level name**, so a cell type keeps its color across every panel. Each plot
+exports to **PNG** (raster) or **PDF** (vector, for figures/slides) from its
+toolbar; the DE table also exports to **CSV**.
 
 Live DE is the one memory-heavy operation: `presto::wilcoxauc` needs an in-memory
 matrix, so a run reconstructs the contrast's expression matrix from the store
 (on-demand, behind a Compute button). Precomputed `de/<contrast>` tables remain
 supported via `view_de_table()` for full rigor / any test.
+
+## Add your own panel
+
+The panel list is an extension point. `register_panel()` adds a section to every
+`scroll_app()` built afterwards — a panel is just a `ui(id, data)` /
+`server(id, data, cells_r)` pair, the same contract the built-ins use:
+
+```r
+count_ui <- function(id, data) {
+  ns <- shiny::NS(id)
+  cats <- names(Filter(function(x) identical(x$type, "categorical"), data$manifest$meta))
+  shiny::tagList(shiny::selectInput(ns("grp"), "Group", cats),
+                 shiny::plotOutput(ns("plot")))
+}
+count_server <- function(id, data, cells_r = shiny::reactive(data$cells)) {
+  shiny::moduleServer(id, function(input, output, session) {
+    output$plot <- shiny::renderPlot(barplot(table(cells_r()[[input$grp]])))
+  })
+}
+
+register_panel("counts", count_ui, count_server, label = "Counts",
+               title = "Cells per group", after = "dimplot")
+scroll_serve("pbmc3k")           # the new section appears in scroll order
+```
+
+`data` is the shared handle — `data$cells` (metadata + embeddings), `data$manifest`,
+`data$config`, and `data$query1(assay, feature)` / `data$queryN(assay, features)`
+for dequantized expression. Use `cells_r()` (not `data$cells`) so the panel honours
+the app-bar subset filter. Registering an existing `id` overrides that panel in
+place (including a built-in); `scroll_reset_panels()` clears custom ones.
 
 ## Query features directly (no app needed)
 

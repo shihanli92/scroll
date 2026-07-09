@@ -29,7 +29,13 @@ scroll_scaffold_app <- function(dir) {
 
   app_path <- file.path(dir, "app.R")
   if (!file.exists(app_path))
-    writeLines(c("library(scroll)", "", "scroll_app(\".\")"), app_path)
+    writeLines(c(
+      "library(scroll)",
+      "",
+      "# Add custom sections here with register_panel(id, ui, server, ...)",
+      "# before scroll_app(); see ?register_panel.",
+      "",
+      "scroll_app(\".\")"), app_path)
 
   invisible(dir)
 }

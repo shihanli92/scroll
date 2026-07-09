@@ -132,7 +132,7 @@ dimplot_server <- function(id, data, cells_r = reactive(data$cells)) {
       view_umap_colorby(cells_r(), params, state)
     })
     output$plot <- renderPlot(plot_r())
-    output$png <- .scroll_png_handler(plot_r, paste0("scroll_", id, ".png"))
+    .scroll_plot_downloads(output, plot_r, id)
   })
 }
 
@@ -192,7 +192,7 @@ featureplot_server <- function(id, data, cells_r = reactive(data$cells)) {
       view_feature_plot(cells_r(), params, data$query1(assay(), feat), state)
     })
     output$plot <- renderPlot(plot_r())
-    output$png <- .scroll_png_handler(plot_r, paste0("scroll_", id, ".png"))
+    .scroll_plot_downloads(output, plot_r, id)
   })
 }
 
@@ -251,7 +251,7 @@ dotplot_server <- function(id, data, cells_r = reactive(data$cells)) {
       view_dotplot(cells_r(), params, data$queryN(assay(), feats), state)
     })
     output$plot <- renderPlot(plot_r())
-    output$png <- .scroll_png_handler(plot_r, paste0("scroll_", id, ".png"))
+    .scroll_plot_downloads(output, plot_r, id)
   })
 }
 
@@ -305,7 +305,7 @@ violin_server <- function(id, data, cells_r = reactive(data$cells)) {
       view_violin(cells_r(), params, data$query1(assay(), feat), state)
     })
     output$plot <- renderPlot(plot_r())
-    output$png <- .scroll_png_handler(plot_r, paste0("scroll_", id, ".png"))
+    .scroll_plot_downloads(output, plot_r, id)
   })
 }
 
@@ -343,7 +343,7 @@ proportions_server <- function(id, data, cells_r = reactive(data$cells)) {
       view_proportions(cells_r(), params, state)
     })
     output$plot <- renderPlot(plot_r())
-    output$png <- .scroll_png_handler(plot_r, paste0("scroll_", id, ".png"))
+    .scroll_plot_downloads(output, plot_r, id)
   })
 }
 
@@ -385,7 +385,9 @@ de_ui <- function(id, data) {
                 .scroll_spin(if (.scroll_has_dt()) DT::dataTableOutput(ns("table"))
                              else tableOutput(ns("table"))))),
           bslib::nav_panel("Volcano",
-            div(class = "scroll-plot-bar", .scroll_dl_button(ns("png"), "PNG")),
+            div(class = "scroll-plot-bar",
+                .scroll_dl_button(ns("png"), "PNG"),
+                .scroll_dl_button(ns("pdf"), "PDF")),
             .scroll_spin(plotOutput(ns("plot"), height = "520px")))))
   )
 }
@@ -442,41 +444,146 @@ de_server <- function(id, data, cells_r = reactive(data$cells)) {
                    state = list(aspect = input$aspect))
     })
     output$plot <- renderPlot(volcano_r())
-    output$png <- .scroll_png_handler(volcano_r, paste0("scroll_", id, ".png"))
+    .scroll_plot_downloads(output, volcano_r, id)
     output$csv <- .scroll_csv_handler(reactive(table_rows()), paste0("scroll_", id, ".csv"))
   })
 }
 
 # --- section registry + shell -------------------------------------------------
 
-# Panels available in v1, in scroll order. Each entry: display meta + its
-# module's ui/server (the register_panel() extension point in embryo).
-.scroll_panels <- function() list(
-  list(id = "dimplot", num = "01", label = "DimPlot",
+# The built-in panels, in scroll order. Each entry: display meta + its module's
+# ui/server. Display numbers are assigned at assembly time (see
+# .scroll_assemble_panels), so appended custom panels number correctly.
+.scroll_builtin_panels <- function() list(
+  list(id = "dimplot", label = "DimPlot",
        title = "Cells by annotation",
        desc = "The embedding coloured by any cell metadata column.",
        ui = dimplot_ui, server = dimplot_server),
-  list(id = "featureplot", num = "02", label = "FeaturePlot",
+  list(id = "featureplot", label = "FeaturePlot",
        title = "Gene expression",
        desc = "The embedding coloured by a gene's expression.",
        ui = featureplot_ui, server = featureplot_server),
-  list(id = "dotplot", num = "03", label = "DotPlot",
+  list(id = "dotplot", label = "DotPlot",
        title = "Marker panel",
        desc = "Mean expression and fraction expressing across groups.",
        ui = dotplot_ui, server = dotplot_server),
-  list(id = "violin", num = "04", label = "Violin",
+  list(id = "violin", label = "Violin",
        title = "Expression distribution",
        desc = "A gene's per-group expression distribution.",
        ui = violin_ui, server = violin_server),
-  list(id = "proportions", num = "05", label = "Proportions",
+  list(id = "proportions", label = "Proportions",
        title = "Composition",
        desc = "Stacked composition of one annotation within another.",
        ui = proportions_ui, server = proportions_server),
-  list(id = "de", num = "06", label = "DE",
+  list(id = "de", label = "DE",
        title = "Differential expression",
        desc = "Wilcoxon markers for a contrast (live via presto): ranked table + volcano.",
        ui = de_ui, server = de_server)
 )
+
+# Mutable registry of user-added panels (session-global, like knitr's engines).
+.scroll_registry <- new.env(parent = emptyenv())
+.scroll_registry$panels <- list()
+
+#' Register a custom panel in the scroll explorer
+#'
+#' Adds a user-defined analysis panel to every [scroll_app()] built afterwards in
+#' this session. A panel follows the same module contract as the built-ins — a
+#' pair of functions:
+#'
+#' * `ui(id, data)` returns a UI tag; namespace its inputs with [shiny::NS()]`(id)`.
+#' * `server(id, data, cells_r)` wires the module, typically via
+#'   [shiny::moduleServer()]. `cells_r()` is a reactive of the *active* cells
+#'   (already narrowed by the app-bar subset filter); use it, not `data$cells`,
+#'   so the panel honours the global filter.
+#'
+#' `data` is the shared handle: `data$cells` (a data.frame of metadata +
+#' embedding coordinates), `data$manifest`, `data$config`, and the query helpers
+#' `data$query1(assay, feature)` / `data$queryN(assay, features)`, which return
+#' dequantized long expression (`cell`, `value` / `feature`, `cell`, `value`).
+#'
+#' Registering an `id` that matches an existing panel — built-in or custom —
+#' replaces it in place, so you can override a built-in. Clear all custom panels
+#' with [scroll_reset_panels()].
+#'
+#' @param id Unique panel id: a letter followed by letters, digits, or
+#'   underscores. Used as the section anchor and the Shiny module namespace.
+#' @param ui,server The panel's UI and server functions (see contract above).
+#' @param label Short rail label (defaults to `id`).
+#' @param title,desc Section heading and one-line description.
+#' @param after Id of the panel to insert this one after; `NULL` (default)
+#'   appends at the end. Ignored when replacing an existing id.
+#' @return Invisibly, `id`.
+#' @examples
+#' # A minimal custom panel: a cells-per-group bar chart.
+#' count_ui <- function(id, data) {
+#'   ns <- shiny::NS(id)
+#'   cols <- names(Filter(function(x) identical(x$type, "categorical"),
+#'                        data$manifest$meta))
+#'   shiny::tagList(shiny::selectInput(ns("grp"), "Group", cols),
+#'                  shiny::plotOutput(ns("plot")))
+#' }
+#' count_server <- function(id, data, cells_r = shiny::reactive(data$cells)) {
+#'   shiny::moduleServer(id, function(input, output, session) {
+#'     output$plot <- shiny::renderPlot({
+#'       shiny::req(input$grp)
+#'       barplot(table(cells_r()[[input$grp]]))
+#'     })
+#'   })
+#' }
+#' register_panel("counts", count_ui, count_server, label = "Counts",
+#'                title = "Cells per group")
+#' scroll_reset_panels()   # (undo, so the example leaves no state)
+#' @export
+register_panel <- function(id, ui, server, label = id, title = label,
+                           desc = NULL, after = NULL) {
+  .scroll_check_panel_id(id)
+  if (!is.function(ui) || !is.function(server))
+    stop("`ui` and `server` must be functions.", call. = FALSE)
+  spec <- list(id = id, label = label, title = title, desc = desc %||% "",
+               ui = ui, server = server, after = after)
+  reg <- .scroll_registry$panels
+  ids <- vapply(reg, `[[`, "", "id")
+  reg[[if (id %in% ids) which(ids == id) else length(reg) + 1L]] <- spec
+  .scroll_registry$panels <- reg
+  invisible(id)
+}
+
+#' Clear all custom panels registered with [register_panel()]
+#'
+#' @return Invisibly, `NULL`.
+#' @export
+scroll_reset_panels <- function() {
+  .scroll_registry$panels <- list()
+  invisible(NULL)
+}
+
+.scroll_check_panel_id <- function(id) {
+  if (!is.character(id) || length(id) != 1L || is.na(id) ||
+      !grepl("^[A-Za-z][A-Za-z0-9_]*$", id))
+    stop("`id` must be a single name: a letter, then letters/digits/underscores.",
+         call. = FALSE)
+  invisible(id)
+}
+
+# Built-ins + registered panels, in final scroll order, each stamped with a
+# display number by position. A registered id matching an existing panel
+# replaces it in place; otherwise it is inserted after `after` (or appended).
+.scroll_assemble_panels <- function() {
+  panels <- .scroll_builtin_panels()
+  for (spec in .scroll_registry$panels) {
+    ids <- vapply(panels, `[[`, "", "id")
+    if (spec$id %in% ids) {
+      panels[[which(ids == spec$id)]] <- spec
+    } else if (!is.null(spec$after) && spec$after %in% ids) {
+      panels <- append(panels, list(spec), after = which(ids == spec$after))
+    } else {
+      panels <- c(panels, list(spec))
+    }
+  }
+  for (i in seq_along(panels)) panels[[i]]$num <- sprintf("%02d", i)
+  panels
+}
 
 .scroll_group <- function(title, ...) {
   div(class = "scroll-cgroup", div(class = "scroll-cgroup-h", title), ...)
@@ -497,23 +604,36 @@ de_server <- function(id, data, cells_r = reactive(data$cells)) {
   else tag
 }
 
-# Standard plot area: a small toolbar (PNG download) above the plot output.
+# Standard plot area: a small toolbar (PNG + PDF download) above the plot output.
 .scroll_plot_area <- function(ns, height = "460px")
   div(class = "scroll-plot",
-      div(class = "scroll-plot-bar", .scroll_dl_button(ns("png"), "PNG")),
+      div(class = "scroll-plot-bar",
+          .scroll_dl_button(ns("png"), "PNG"),
+          .scroll_dl_button(ns("pdf"), "PDF")),
       .scroll_spin(plotOutput(ns("plot"), height = height)))
 
-# PNG downloadHandler for a plot reactive. Uses a png device + print() (not
-# ggsave) so it renders both bare ggplots and the DotPlot's aplot composite,
-# which ggsave() rejects as a non-ggplot.
-.scroll_png_handler <- function(plot_r, name)
+# Image downloadHandler for a plot reactive, raster (PNG) or vector (PDF). Uses
+# a device + print() (not ggsave) so it renders both bare ggplots and the
+# DotPlot's aplot composite, which ggsave() rejects as a non-ggplot.
+.scroll_img_handler <- function(plot_r, name, format = c("png", "pdf")) {
+  format <- match.arg(format)
   downloadHandler(
     filename = function() name,
     content = function(file) {
-      grDevices::png(file, width = 8, height = 6, units = "in", res = 150, bg = "white")
+      if (format == "pdf") grDevices::pdf(file, width = 8, height = 6, bg = "white")
+      else grDevices::png(file, width = 8, height = 6, units = "in", res = 150, bg = "white")
       on.exit(grDevices::dev.off())
       print(plot_r())
     })
+}
+
+# Register the standard PNG + PDF download outputs (ids "png"/"pdf") for a plot
+# reactive on a module's `output`. Filenames stem from the panel id.
+.scroll_plot_downloads <- function(output, plot_r, id) {
+  output$png <- .scroll_img_handler(plot_r, paste0("scroll_", id, ".png"), "png")
+  output$pdf <- .scroll_img_handler(plot_r, paste0("scroll_", id, ".pdf"), "pdf")
+  invisible()
+}
 
 # CSV downloadHandler for a data.frame reactive.
 .scroll_csv_handler <- function(df_r, name)
@@ -627,7 +747,7 @@ de_server <- function(id, data, cells_r = reactive(data$cells)) {
 #' @export
 scroll_app <- function(dir = ".") {
   data <- .scroll_load(dir)
-  panels <- .scroll_panels()
+  panels <- .scroll_assemble_panels()
   title <- .scroll_nz(data$config$title)
 
   ui <- .scroll_page(data, title, panels)

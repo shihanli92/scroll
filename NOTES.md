@@ -82,8 +82,9 @@ top-3 blockers + documented the quantization caveat). Items below were
   every panel; cells stat reads "N of total".
 - ~~**Per-plot export**~~ — DONE. PNG (all panels, via a png-device + `print()`
   path that also handles the DotPlot aplot) + CSV (DE table).
-- **`register_panel()`**: promote the internal panel registry to a public
-  extension point so users can add custom panels.
+- ~~**`register_panel()`**~~ — DONE. Public `register_panel(id, ui, server, ...)`
+  + `scroll_reset_panels()`; a session-global registry assembled with the
+  built-ins (replace-by-id, `after` positioning, numbered by position).
 - **WebGL / rasterized scatter** (`scattermore`/`ggrastr`) for DimPlot/
   FeaturePlot when cell counts climb past what canvas renders smoothly (~100k+).
 - **Block-wise build** for very large objects (the export currently builds the
