@@ -39,6 +39,8 @@ Suggests:
     aplot,
     ape,
     presto,
+    edgeR,
+    limma,
     DT,
     ggrepel,
     testthat (>= 3.0.0),

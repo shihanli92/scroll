@@ -95,6 +95,7 @@ markers: [CD3D, CD8A, MS4A1, CD14, NKG7]   # DotPlot's starting panel
 | **Violin** | gene · group-by · palette · jitter points |
 | **Proportions** | group-by (x) · fill-by · palette · normalize-to-100% |
 | **DE** | contrast (group vs group / vs rest) · live Wilcoxon via `presto`, computed once and shown as a **Table** (sortable, min-% / top-N filters) and a **Volcano** (logFC &amp; adj-p cutoffs · top-N labels via ggrepel) |
+| **Pseudobulk DE** | aggregate cells into sample-level counts (combined-interaction groups × replicate) and test with **edgeR/limma-voom**; pseudo-replicate fallback + min-cell cutoffs. Needs a counts store (see below). Same Table + Volcano output |
 
 Every plot has an **aspect-ratio** control (reshapes within a fixed canvas) and a
 clean black-box theme. Categorical colors are assigned **deterministically by
@@ -106,6 +107,15 @@ Live DE is the one memory-heavy operation: `presto::wilcoxauc` needs an in-memor
 matrix, so a run reconstructs the contrast's expression matrix from the store
 (on-demand, behind a Compute button). Precomputed `de/<contrast>` tables remain
 supported via `view_de_table()` for full rigor / any test.
+
+**Pseudobulk DE** needs raw counts (edgeR/limma-voom are count-based), which are
+not in the default quantized store. Build with `counts = TRUE` to also export a
+`counts/<assay>.parquet` store; the Pseudobulk DE panel then sums counts per
+pseudobulk sample **in duckdb** (RAM stays flat) and runs limma-voom:
+
+```r
+scroll_build(obj, "proj", counts = TRUE)   # ~doubles expression storage
+```
 
 ## Add your own panel
 

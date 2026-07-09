@@ -452,6 +452,130 @@ de_server <- function(id, data, cells_r = reactive(data$cells)) {
   })
 }
 
+# --- Pseudobulk DE panel ------------------------------------------------------
+
+# Combined-interaction levels observed in `cells` for the given columns.
+.scroll_combo_choices <- function(cells, cols) {
+  if (!length(cols)) return(character(0))
+  combo <- .scroll_combo_levels(cells, cols)
+  sort(unique(combo[!is.na(combo)]))
+}
+
+pseudobulk_de_ui <- function(id, data) {
+  ns <- NS(id)
+  m <- data$manifest
+  cats <- .scroll_cat_cols(m); assays <- .scroll_assays_of(m)
+  if (!isTRUE(m$has_counts))
+    return(.scroll_empty_panel(paste(
+      "Pseudobulk DE needs a counts store. Rebuild the project with",
+      "scroll_build(..., counts = TRUE).")))
+  if (!length(cats)) return(.scroll_empty_panel("Needs a categorical metadata column (none found)."))
+  bslib::layout_columns(
+    col_widths = c(3, 9), class = "scroll-panel",
+    div(
+      class = "scroll-controls",
+      .scroll_group("Contrast",
+        selectizeInput(ns("aggregate_by"), "Aggregate by", stats::setNames(cats, cats),
+                       multiple = TRUE, selected = cats[[1]],
+                       options = list(plugins = list("remove_button"))),
+        selectizeInput(ns("ident1"), "Group 1", choices = NULL, multiple = TRUE,
+                       options = list(plugins = list("remove_button"))),
+        selectizeInput(ns("ident2"), "vs.", choices = NULL, multiple = TRUE,
+                       options = list(plugins = list("remove_button"),
+                                      placeholder = "rest (all other cells)")),
+        selectInput(ns("replicate"), "Replicate",
+                    c("No replicate (pseudo)" = "no_replicate", stats::setNames(cats, cats))),
+        if (length(assays) > 1) selectInput(ns("assay"), "Assay", assays, selected = m$default_assay)),
+      .scroll_group("Pseudobulk",
+        sliderInput(ns("mincells"), "Min cells / sample", 3, 200, 10, 1),
+        numericInput(ns("npseudo"), "Pseudo-reps (if no replicate)", 3, min = 2, max = 10),
+        numericInput(ns("cellsper"), "Cells / pseudo-rep", 50, min = 5, max = 2000)),
+      .scroll_group("Table", sliderInput(ns("topn"), "Show top", 10, 300, 50, 10)),
+      .scroll_group("Volcano",
+        sliderInput(ns("lfc"), "logFC cutoff", 0, 3, 1, 0.1),
+        numericInput(ns("padj"), "Adj. p cutoff", 0.05, min = 0, max = 1, step = 0.01),
+        sliderInput(ns("labeln"), "Label top", 0, 40, 15, 1),
+        .scroll_aspect_input(ns)),
+      actionButton(ns("compute"), "Compute pseudobulk DE", class = "btn-primary", width = "100%")
+    ),
+    div(class = "scroll-plot",
+        uiOutput(ns("note")),
+        bslib::navset_tab(
+          bslib::nav_panel("Table",
+            div(class = "scroll-plot-bar", .scroll_dl_button(ns("csv"), "CSV")),
+            div(class = "scroll-table",
+                .scroll_spin(if (.scroll_has_dt()) DT::dataTableOutput(ns("table"))
+                             else tableOutput(ns("table"))))),
+          bslib::nav_panel("Volcano",
+            div(class = "scroll-plot-bar",
+                .scroll_dl_button(ns("png"), "PNG"), .scroll_dl_button(ns("pdf"), "PDF")),
+            .scroll_spin(plotOutput(ns("plot"), height = "520px")))))
+  )
+}
+
+pseudobulk_de_server <- function(id, data, cells_r = reactive(data$cells)) {
+  moduleServer(id, function(input, output, session) {
+    m <- data$manifest
+    assay <- reactive(input$assay %||% m$default_assay)
+
+    # combined levels depend on the chosen aggregate-by columns + active subset
+    observeEvent(list(input$aggregate_by, cells_r()), {
+      combos <- .scroll_combo_choices(cells_r(), input$aggregate_by)
+      updateSelectizeInput(session, "ident1", choices = combos,
+                           selected = intersect(isolate(input$ident1), combos))
+      updateSelectizeInput(session, "ident2", choices = combos,
+                           selected = intersect(isolate(input$ident2), combos))
+    })
+
+    result <- eventReactive(input$compute, {
+      req(input$aggregate_by, input$ident1)
+      tryCatch(
+        list(ok = scroll_pseudobulk_de(
+          data, assay(), aggregate_cols = input$aggregate_by,
+          ident1 = input$ident1,
+          ident2 = if (length(input$ident2)) input$ident2 else NULL,
+          replicate_col = input$replicate,
+          min_cells = input$mincells, n_pseudo = input$npseudo,
+          cells_per_pseudo = input$cellsper, cells = cells_r())),
+        error = function(e) list(err = conditionMessage(e)))
+    })
+
+    de_df <- reactive({
+      validate(need(input$compute > 0, "Pick a contrast and click Compute pseudobulk DE."))
+      r <- result()
+      validate(need(is.null(r$err), r$err))
+      r$ok
+    })
+
+    output$note <- renderUI({
+      req(input$compute > 0); r <- result()
+      if (!is.null(r$err) || !isTRUE(attr(r$ok, "pseudo"))) return(NULL)
+      n <- attr(r$ok, "n_samples")
+      div(class = "scroll-desc", style = "margin:0 0 8px; color:#B45309",
+          sprintf("Pseudo-replicates used (no biological replicates): %d vs %d samples - treat p-values with caution.",
+                  n[["group1"]], n[["group2"]]))
+    })
+
+    table_rows <- function() utils::head(de_df(), input$topn)
+    if (.scroll_has_dt())
+      output$table <- DT::renderDataTable(
+        DT::formatSignif(
+          DT::datatable(table_rows(), rownames = FALSE, options = list(pageLength = 15, dom = "tip")),
+          columns = c("p_val", "p_val_adj"), digits = 3))
+    else
+      output$table <- renderTable(table_rows())
+
+    volcano_r <- reactive({
+      view_volcano(de_df(),
+                   params = list(lfc = input$lfc, padj = input$padj, label_n = input$labeln),
+                   state = list(aspect = input$aspect))
+    })
+    output$plot <- renderPlot(volcano_r())
+    .scroll_plot_downloads(output, volcano_r, id)
+    output$csv <- .scroll_csv_handler(reactive(table_rows()), paste0("scroll_", id, ".csv"))
+  })
+}
+
 # --- section registry + shell -------------------------------------------------
 
 # The built-in panels, in scroll order. Each entry: display meta + its module's
@@ -481,7 +605,11 @@ de_server <- function(id, data, cells_r = reactive(data$cells)) {
   list(id = "de", label = "DE",
        title = "Differential expression",
        desc = "Wilcoxon markers for a contrast (live via presto): ranked table + volcano.",
-       ui = de_ui, server = de_server)
+       ui = de_ui, server = de_server),
+  list(id = "pseudobulk", label = "Pseudobulk DE",
+       title = "Pseudobulk differential expression",
+       desc = "Aggregate cells into pseudobulk samples and test with edgeR/limma-voom.",
+       ui = pseudobulk_de_ui, server = pseudobulk_de_server)
 )
 
 # Mutable registry of user-added panels (session-global, like knitr's engines).

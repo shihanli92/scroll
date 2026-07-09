@@ -3,7 +3,7 @@
 # levels, and the defaults a fresh dataset needs to render itself.
 
 .scroll_write_manifest <- function(outdir, object, assay_info, embeddings, md,
-                                   meta_cols, n_cells, quantize) {
+                                   meta_cols, n_cells, quantize, has_counts = FALSE) {
   assays <- lapply(names(assay_info), function(a) {
     info <- assay_info[[a]]
     list(max = info$max, n_features = info$n_features,
@@ -31,6 +31,7 @@
     scroll_version = as.character(utils::packageVersion("scroll")),
     n_cells = n_cells,
     quantize = quantize,
+    has_counts = has_counts,
     default_assay = SeuratObject::DefaultAssay(object),
     default_embedding = .scroll_default_embedding(embeddings),
     assays = assays,

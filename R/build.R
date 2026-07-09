@@ -19,13 +19,17 @@
 #'   below ~`max/510` round to zero, so fraction-expressing statistics (dotplot
 #'   dot size, DE `pct.1`/`pct.2`) slightly under-count low-expression cells; use
 #'   `quantize = FALSE` for exact values.
+#' @param counts If `TRUE`, also export each assay's raw `counts` layer to a
+#'   `counts/<assay>.parquet` store (integer, unquantized). This roughly doubles
+#'   expression storage but enables pseudobulk differential expression
+#'   ([scroll_pseudobulk_de()], which needs counts for edgeR/limma-voom).
 #' @param overwrite If `TRUE`, an existing `outdir` is removed first.
 #'
 #' @return `outdir`, invisibly.
 #' @export
 scroll_build <- function(object, outdir,
                          assays = NULL, embeddings = NULL, meta_cols = NULL,
-                         quantize = TRUE, overwrite = FALSE) {
+                         quantize = TRUE, counts = FALSE, overwrite = FALSE) {
   object <- .scroll_load_object(object)
 
   if (is.null(assays)) assays <- SeuratObject::DefaultAssay(object)
@@ -43,20 +47,23 @@ scroll_build <- function(object, outdir,
   }
   dir.create(file.path(outdir, "expr"), recursive = TRUE, showWarnings = FALSE)
   dir.create(file.path(outdir, "de"), showWarnings = FALSE)
+  if (counts) dir.create(file.path(outdir, "counts"), showWarnings = FALSE)
 
   # --- cells.parquet: metadata + all embeddings, the only globally-loaded file
   cells <- .scroll_extract_cells(object, md, meta_cols, embeddings)
   arrow::write_parquet(cells, file.path(outdir, "cells.parquet"))
 
-  # --- expr/<assay>/: long, feature-partitioned expression
+  # --- expr/<assay>/: long, feature-partitioned expression (+ optional counts)
   assay_info <- list()
   for (a in assays) {
     assay_info[[a]] <- .scroll_export_assay(object, a, outdir, quantize)
+    if (counts) .scroll_export_counts(object, a, outdir)
   }
 
   # --- manifest + authored scaffolding
   .scroll_write_manifest(outdir, object, assay_info, embeddings, md, meta_cols,
-                         n_cells = nrow(cells), quantize = quantize)
+                         n_cells = nrow(cells), quantize = quantize,
+                         has_counts = counts)
   scroll_scaffold_app(outdir)
 
   message("scroll project built at: ", normalizePath(outdir))
@@ -165,6 +172,26 @@ scroll_build <- function(object, outdir,
     max_partitions = length(feats) + 1L
   )
   list(features = feats, max = max_a, n_features = length(feats))
+}
+
+# Export one assay's raw `counts` layer as a single long Parquet
+# (counts/<assay>.parquet, columns feature/cell/value, integer, unquantized).
+# Unlike expr/ this is NOT feature-partitioned: pseudobulk always full-scans all
+# genes to aggregate, and one file scans far faster than tens of thousands of
+# partitions. Only the nonzero entries are stored (sparse).
+.scroll_export_counts <- function(object, assay, outdir) {
+  mat <- SeuratObject::GetAssayData(object, assay = assay, layer = "counts")
+  if (is.null(mat) || nrow(mat) == 0 || length(mat@x) == 0)
+    stop("Assay '", assay, "' has an empty `counts` layer; cannot export counts ",
+         "for pseudobulk.", call. = FALSE)
+  feats <- rownames(mat); cell_names <- colnames(mat)
+  trip <- Matrix::summary(mat)             # i (feature), j (cell), x (count)
+  df <- data.frame(feature = feats[trip$i], cell = cell_names[trip$j],
+                   value = as.integer(round(trip$x)), stringsAsFactors = FALSE)
+  tbl <- arrow::as_arrow_table(df)$cast(arrow::schema(
+    feature = arrow::utf8(), cell = arrow::utf8(), value = arrow::int32()))
+  arrow::write_parquet(tbl, file.path(outdir, "counts", paste0(assay, ".parquet")))
+  invisible(NULL)
 }
 
 # Prefer a 2-D visualization embedding over PCA as the plotting default.

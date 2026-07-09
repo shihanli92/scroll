@@ -106,6 +106,48 @@ scroll_query_cells <- function(con, assay, cells) {
     "WHERE cell IN (SELECT cell FROM scroll_cellsel)"), params = list(glob))
 }
 
+# Path to an assay's raw-counts Parquet (counts/<assay>.parquet), rejecting an
+# assay name that is not a plain path segment (defense-in-depth, mirrors
+# .scroll_assay_glob).
+.scroll_counts_path <- function(dir, assay) {
+  if (length(assay) != 1L || is.na(assay) || !nzchar(assay) ||
+      basename(assay) != assay || grepl("[/\\\\]", assay))
+    stop("Invalid assay name: ", assay, call. = FALSE)
+  file.path(dir, "counts", paste0(assay, ".parquet"))
+}
+
+#' Aggregate raw counts into pseudobulk samples
+#'
+#' Sums an assay's raw counts (the `counts/<assay>.parquet` store, written by
+#' [scroll_build()] with `counts = TRUE`) over a cell-to-sample mapping, entirely
+#' in duckdb — so the full genes x cells matrix is never materialized in R. Used
+#' by [scroll_pseudobulk_de()].
+#'
+#' @param con A connection from [scroll_connect()].
+#' @param assay Assay name.
+#' @param mapping A data.frame with columns `cell` and `psample` (a cell may map
+#'   to several pseudobulk samples, e.g. overlapping pseudo-replicates).
+#' @return A data.frame with columns `feature`, `psample`, `count` (summed).
+#' @export
+scroll_aggregate_counts <- function(con, assay, mapping) {
+  stopifnot(all(c("cell", "psample") %in% names(mapping)))
+  path <- .scroll_counts_path(attr(con, "scroll_dir"), assay)
+  if (!file.exists(path))
+    stop("No counts store for assay '", assay, "'; rebuild with counts = TRUE.",
+         call. = FALSE)
+  if (!nrow(mapping))
+    return(data.frame(feature = character(), psample = character(), count = numeric()))
+  duckdb::duckdb_register(con, "scroll_psmap",
+                          data.frame(cell = as.character(mapping$cell),
+                                     psample = as.character(mapping$psample),
+                                     stringsAsFactors = FALSE))
+  on.exit(duckdb::duckdb_unregister(con, "scroll_psmap"), add = TRUE)
+  DBI::dbGetQuery(con, paste0(
+    "SELECT c.feature AS feature, m.psample AS psample, SUM(c.value) AS count ",
+    "FROM read_parquet(?) c JOIN scroll_psmap m ON c.cell = m.cell ",
+    "GROUP BY c.feature, m.psample"), params = list(path))
+}
+
 #' Map stored (possibly quantized) values back to normalized expression
 #'
 #' @param values Numeric/integer vector of stored values.

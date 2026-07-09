@@ -40,7 +40,8 @@ test_project <- local({
       dir <- file.path(tempdir(), "scroll-test-proj")
       if (!dir.exists(file.path(dir, "expr"))) {
         suppressMessages(scroll_build(make_test_object(), dir,
-                                      assays = c("RNA", "ADT"), overwrite = TRUE))
+                                      assays = c("RNA", "ADT"), counts = TRUE,
+                                      overwrite = TRUE))
       }
       cached <<- dir
     }

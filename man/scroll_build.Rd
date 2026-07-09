@@ -11,6 +11,7 @@ scroll_build(
   embeddings = NULL,
   meta_cols = NULL,
   quantize = TRUE,
+  counts = FALSE,
   overwrite = FALSE
 )
 }
@@ -30,6 +31,11 @@ with a per-assay \code{max} recorded in the manifest for dequantization. Values
 below ~\code{max/510} round to zero, so fraction-expressing statistics (dotplot
 dot size, DE \code{pct.1}/\code{pct.2}) slightly under-count low-expression cells; use
 \code{quantize = FALSE} for exact values.}
+
+\item{counts}{If \code{TRUE}, also export each assay's raw \code{counts} layer to a
+\verb{counts/<assay>.parquet} store (integer, unquantized). This roughly doubles
+expression storage but enables pseudobulk differential expression
+(\code{\link[=scroll_pseudobulk_de]{scroll_pseudobulk_de()}}, which needs counts for edgeR/limma-voom).}
 
 \item{overwrite}{If \code{TRUE}, an existing \code{outdir} is removed first.}
 }

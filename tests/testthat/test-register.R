@@ -1,6 +1,8 @@
 # The public panel-registration extension point. Each test that registers a
 # panel resets the (session-global) registry on exit so state never leaks.
 
+nbuiltin <- length(scroll:::.scroll_builtin_panels())   # number of built-in panels
+
 count_ui <- function(id, data) {
   ns <- shiny::NS(id)
   cols <- names(Filter(function(x) identical(x$type, "categorical"), data$manifest$meta))
@@ -19,8 +21,9 @@ test_that("default assembly is the six built-ins, numbered by position", {
   scroll_reset_panels()
   p <- scroll:::.scroll_assemble_panels()
   expect_equal(vapply(p, `[[`, "", "id"),
-               c("dimplot", "featureplot", "dotplot", "violin", "proportions", "de"))
-  expect_equal(vapply(p, `[[`, "", "num"), sprintf("%02d", 1:6))
+               c("dimplot", "featureplot", "dotplot", "violin", "proportions", "de",
+                 "pseudobulk"))
+  expect_equal(vapply(p, `[[`, "", "num"), sprintf("%02d", seq_along(p)))
 })
 
 test_that("register_panel appends a custom panel, and it renders in the page", {
@@ -29,9 +32,9 @@ test_that("register_panel appends a custom panel, and it renders in the page", {
   register_panel("counts", count_ui, count_server, label = "Counts",
                  title = "Cells per group")
   p <- scroll:::.scroll_assemble_panels()
-  expect_length(p, 7)
-  expect_equal(p[[7]]$id, "counts")
-  expect_equal(p[[7]]$num, "07")            # numbered after the six built-ins
+  expect_length(p, nbuiltin + 1L)
+  expect_equal(p[[length(p)]]$id, "counts")     # appended after the built-ins
+  expect_equal(p[[length(p)]]$num, sprintf("%02d", nbuiltin + 1L))
 
   data <- scroll:::.scroll_load(test_project())
   on.exit(scroll_disconnect(data$con), add = TRUE)
@@ -63,7 +66,7 @@ test_that("register_panel positions with `after` and replaces by id in place", {
   # re-registering an id overrides in place rather than duplicating
   register_panel("dimplot", count_ui, count_server, label = "MyDim")
   p <- scroll:::.scroll_assemble_panels()
-  expect_length(p, 7)                            # 6 built-ins + mid; dimplot swapped
+  expect_length(p, nbuiltin + 1L)               # built-ins + mid; dimplot swapped
   expect_equal(p[[1]]$id, "dimplot")
   expect_equal(p[[1]]$label, "MyDim")
 })
@@ -74,15 +77,15 @@ test_that("re-registering the same custom id replaces (no duplicate)", {
   register_panel("counts", count_ui, count_server, label = "A")
   register_panel("counts", count_ui, count_server, label = "B")
   p <- scroll:::.scroll_assemble_panels()
-  expect_length(p, 7)
-  expect_equal(p[[7]]$label, "B")
+  expect_length(p, nbuiltin + 1L)
+  expect_equal(p[[length(p)]]$label, "B")
 })
 
 test_that("scroll_reset_panels clears custom registrations", {
   register_panel("tmp", count_ui, count_server)
-  expect_gt(length(scroll:::.scroll_assemble_panels()), 6)
+  expect_gt(length(scroll:::.scroll_assemble_panels()), nbuiltin)
   scroll_reset_panels()
-  expect_length(scroll:::.scroll_assemble_panels(), 6)
+  expect_length(scroll:::.scroll_assemble_panels(), nbuiltin)
 })
 
 test_that("register_panel validates the id and the functions", {
