@@ -235,8 +235,13 @@ view_umap_colorby <- function(cells, params, state = list()) {
   }
   # legend key glyphs, sized independently of the (small) plotted points
   p <- p + ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(size = 4)))
-  if (isTRUE(.scroll_opt(params, state, "show_labels", FALSE)) && nrow(label_df))
-    p <- p + .scroll_group_labels(label_df, ".col") + ggplot2::guides(color = "none")
+  if (isTRUE(.scroll_opt(params, state, "show_labels", FALSE)) && nrow(label_df)) {
+    p <- p + .scroll_group_labels(label_df, ".col")
+    # on-plot labels stand in for the legend only when the legend is switched off,
+    # so the "Legend" toggle still works when cluster labels are shown
+    if (!isTRUE(.scroll_opt(params, state, "legend", TRUE)))
+      p <- p + ggplot2::guides(color = "none")
+  }
   .scroll_finish_scatter(p, df, state)
 }
 
@@ -494,23 +499,25 @@ view_proportions <- function(cells, params, state = list()) {
                              fill = as.character(cells[[fill]])),
                        stringsAsFactors = FALSE)
   normalize <- isTRUE(.scroll_opt(params, state, "normalize", TRUE))
+  # no lower expansion so the bars sit flush on the x-axis; small headroom on top
+  yexp <- ggplot2::expansion(mult = c(0, 0.05))
   if (normalize) {
     totals <- stats::aggregate(Freq ~ x, tab, sum)
     tab <- merge(tab, totals, by = "x", suffixes = c("", ".total"))
     tab$y <- ifelse(tab$Freq.total > 0, tab$Freq / tab$Freq.total, 0)
-    yscale <- ggplot2::scale_y_continuous(labels = scales::percent)
+    yscale <- ggplot2::scale_y_continuous(labels = scales::percent, expand = yexp)
     ylab <- "composition"
   } else {
     tab$y <- tab$Freq
-    yscale <- NULL
+    yscale <- ggplot2::scale_y_continuous(expand = yexp)
     ylab <- "cells"
   }
   cols <- .scroll_group_colors(tab$fill, state)
   p <- ggplot2::ggplot(tab, ggplot2::aes(x = .data$x, y = .data$y, fill = .data$fill)) +
-    ggplot2::geom_col(width = 0.8) +
+    ggplot2::geom_col(width = 0.8, color = "black", linewidth = 0.2) +
     ggplot2::scale_fill_manual(values = cols) +
+    yscale +
     ggplot2::labs(x = x, y = ylab, fill = fill)
-  if (!is.null(yscale)) p <- p + yscale
   p <- p + .scroll_box_theme(.scroll_opt(params, state, "legend", TRUE))
   .scroll_apply_aspect(p, state$aspect %||% 1)
 }

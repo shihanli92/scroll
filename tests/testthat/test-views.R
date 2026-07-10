@@ -93,6 +93,17 @@ test_that("view cores honour palette / size / order / scale controls", {
     "ggplot")
 })
 
+test_that("DimPlot legend toggle wins even when cluster labels are shown", {
+  cells <- read_cells(test_project())
+  base <- list(embedding = "umap", color_by = "celltype")
+  # labels on + legend on -> legend visible (labels no longer suppress it)
+  p_on <- view_umap_colorby(cells, base, list(show_labels = TRUE, legend = TRUE))
+  expect_identical(p_on$theme$legend.position, "right")
+  # labels on + legend off -> no legend
+  p_off <- view_umap_colorby(cells, base, list(show_labels = TRUE, legend = FALSE))
+  expect_identical(p_off$theme$legend.position, "none")
+})
+
 test_that("DimPlot highlight greys unselected groups; manual colors override", {
   cells <- read_cells(test_project())
   # highlight one cell type: plot keeps a grey background layer + the fg layer
