@@ -928,7 +928,8 @@ scroll_reset_panels <- function() {
   m <- data$manifest
   assay <- m$default_assay
   cats <- .scroll_cat_cols(m)
-  brand <- list(span(class = "scroll-logo", "scroll"))
+  # brand wordmark; `brand:` in config.yaml overrides the default "scroll"
+  brand <- list(span(class = "scroll-logo", .scroll_nz(data$config$brand) %||% "scroll"))
   if (!is.null(title))
     brand <- c(brand, list(span(class = "scroll-slash", "/"),
                            span(class = "scroll-dataset", title)))
@@ -942,7 +943,9 @@ scroll_reset_panels <- function() {
                 c("Whole dataset" = "",
                   stats::setNames(subs, vapply(subs, function(s) m$subsets[[s]]$label, ""))),
                 width = "160px"))
-  subset_ui <- if (length(cats)) div(
+  # Ad-hoc categorical subset filter. Off by default (subset views cover the
+  # common case); set `subset_filter: true` in config.yaml to re-enable.
+  subset_ui <- if (isTRUE(data$config$subset_filter) && length(cats)) div(
     class = "scroll-subset",
     span(class = "scroll-subset-label", "Subset"),
     selectInput("scroll_subset_col", NULL,
