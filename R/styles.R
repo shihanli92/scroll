@@ -38,6 +38,22 @@ body{background:var(--sc-ground); color:var(--sc-ink);
 .scroll-subset .form-select,.scroll-subset .selectize-input{min-height:32px; padding-top:3px;
   padding-bottom:3px; border-radius:8px; font-size:13px;}
 .scroll-subset .selectize-control{margin-bottom:0;}
+/* keep the selected label clear of the dropdown caret (which flips on open) */
+.scroll-subset .selectize-input{padding-right:28px !important;}
+.scroll-subset .selectize-control.single .selectize-input:after{right:12px;}
+.scroll-subset .selectize-input>.item{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+
+/* Manual per-level colour pickers: compact hex pills that wrap into rows */
+.scroll-manual-grid{display:flex; flex-wrap:wrap; gap:6px 8px; margin:4px 0 2px;}
+.scroll-swatch{display:flex; flex-direction:column; align-items:center; width:74px;}
+.scroll-swatch .shiny-input-container,.scroll-swatch .form-group{width:74px !important;
+  margin:0 !important; padding:0 !important;}
+.scroll-swatch .shiny-colour-input{width:74px !important; height:24px !important;
+  min-height:24px !important; padding:0 4px !important; border:1px solid var(--sc-line) !important;
+  border-radius:6px !important; box-shadow:none !important; cursor:pointer;
+  font-size:11px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:-.02em;}
+.scroll-swatch-label{font-size:9px; line-height:1.1; color:var(--sc-muted); margin-top:3px;
+  max-width:74px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:center;}
 
 /* layout */
 .scroll-layout{display:grid; grid-template-columns:200px minmax(0,1fr); gap:32px;

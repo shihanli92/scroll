@@ -164,6 +164,33 @@
   data$config[[key]] %||% data$manifest[[key]] %||% fallback
 }
 
+# Per-level colour pickers for the "Manual" palette, shared by the categorical
+# panels. `.scroll_manual_ui` builds colourInputs (ids col_1..col_n) seeded from
+# the Tableau-10 defaults; `.scroll_manual_colors` reads them back into a named
+# vector (NULL until set). A panel wires them by: adding "Manual" to its palette
+# choices, a `uiOutput(ns("manual"))`, and passing `manual_colors` into the view
+# state (which `.scroll_group_colors` honours when palette == "Manual").
+.scroll_manual_ui <- function(ns, levels) {
+  defaults <- .scroll_discrete_colors(levels, "Tableau 10")
+  # compact circular swatches that wrap into rows (rather than tall full-width
+  # inputs), so many levels stay manageable; the level name is a caption + title.
+  div(class = "scroll-manual-grid",
+    lapply(seq_along(levels), function(i)
+      div(class = "scroll-swatch", title = levels[i],
+        colourpicker::colourInput(ns(paste0("col_", i)), label = NULL,
+                                  value = defaults[[levels[i]]],
+                                  showColour = "both", closeOnClick = TRUE),
+        span(class = "scroll-swatch-label", levels[i]))))
+}
+.scroll_manual_colors <- function(input, levels) {
+  vals <- lapply(seq_along(levels), function(i) input[[paste0("col_", i)]])
+  names(vals) <- levels
+  vals <- vals[!vapply(vals, is.null, logical(1))]
+  if (length(vals)) unlist(vals) else NULL
+}
+# Categorical palette choices including the Manual option.
+.scroll_cat_palettes <- function() c(names(.scroll_discrete_palettes), "Manual")
+
 # --- DimPlot panel ------------------------------------------------------------
 
 dimplot_ui <- function(id, data) {
@@ -239,18 +266,11 @@ dimplot_server <- function(id, data, cells_r = reactive(data$cells),
     # per-group color pickers, shown only when the palette is "Manual"
     output$manual <- renderUI({
       if (!is_cat() || !identical(input$palette, "Manual")) return(NULL)
-      lv <- levels_of()
-      defaults <- .scroll_discrete_colors(lv, "Tableau 10")
-      shiny::tagList(lapply(seq_along(lv), function(i)
-        colourpicker::colourInput(session$ns(paste0("col_", i)), lv[i], value = defaults[[lv[i]]])))
+      .scroll_manual_ui(session$ns, levels_of())
     })
     manual_colors <- reactive({
       if (!is_cat() || !identical(input$palette, "Manual")) return(NULL)
-      lv <- levels_of()
-      vals <- lapply(seq_along(lv), function(i) input[[paste0("col_", i)]])
-      names(vals) <- lv
-      vals <- vals[!vapply(vals, is.null, logical(1))]
-      if (length(vals)) unlist(vals) else NULL
+      .scroll_manual_colors(input, levels_of())
     })
 
     # DATA reactive (cells + params) invalidates only on data-input changes.
@@ -468,7 +488,8 @@ violin_ui <- function(id, data) {
       .scroll_group("Grouping",
         selectInput(ns("group"), "Group by", stats::setNames(cats, cats), selected = cats[[1]])),
       .scroll_group("Appearance",
-        selectInput(ns("palette"), "Palette", names(.scroll_discrete_palettes)),
+        selectInput(ns("palette"), "Palette", .scroll_cat_palettes()),
+        uiOutput(ns("manual")),
         bslib::input_switch(ns("jitter"), "Show points", FALSE),
         bslib::input_switch(ns("legend"), "Legend", FALSE)),
       .scroll_group("Layout", .scroll_aspect_input(ns))
@@ -491,6 +512,12 @@ violin_server <- function(id, data, cells_r = reactive(data$cells),
       keep <- if (!is.null(cur) && cur %in% feats) cur else character(0)
       updateSelectizeInput(session, "feature", choices = feats, server = TRUE, selected = keep)
     })
+    # per-group color pickers when the palette is "Manual" (levels of Group by)
+    lvl_r <- reactive({ req(input$group); unlist(m$meta[[input$group]]$levels) })
+    output$manual <- renderUI(
+      if (identical(input$palette, "Manual")) .scroll_manual_ui(session$ns, lvl_r()))
+    manual_colors <- reactive(
+      if (identical(input$palette, "Manual")) .scroll_manual_colors(input, lvl_r()))
     # DATA reactive: cells + query (cosmetic changes no longer re-hit duckdb).
     data_r <- reactive({
       req(input$group)
@@ -502,7 +529,8 @@ violin_server <- function(id, data, cells_r = reactive(data$cells),
     })
     cosmetic_r <- .scroll_cosmetic(reactive(
       list(palette = input$palette, jitter = isTRUE(input$jitter),
-           legend = isTRUE(input$legend), aspect = input$aspect)))
+           legend = isTRUE(input$legend), aspect = input$aspect,
+           manual_colors = manual_colors())))
     plot_r <- reactive({
       d <- data_r()
       view_violin(d$cells, list(feature = d$feature, group_by = d$group_by),
@@ -528,7 +556,8 @@ proportions_ui <- function(id, data) {
         selectInput(ns("group"), "Group by (x)", stats::setNames(cats, cats), selected = x_default),
         selectInput(ns("fill"), "Fill by", stats::setNames(cats, cats), selected = cats[[1]])),
       .scroll_group("Appearance",
-        selectInput(ns("palette"), "Palette", names(.scroll_discrete_palettes)),
+        selectInput(ns("palette"), "Palette", .scroll_cat_palettes()),
+        uiOutput(ns("manual")),
         bslib::input_switch(ns("normalize"), "Normalize to 100%", TRUE),
         bslib::input_switch(ns("legend"), "Legend", TRUE)),
       .scroll_group("Layout", .scroll_aspect_input(ns))
@@ -540,14 +569,22 @@ proportions_ui <- function(id, data) {
 proportions_server <- function(id, data, cells_r = reactive(data$cells),
                                view_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
-    .scroll_bind_view_cats(input, session, view_r, data$manifest, c("group", "fill"))
+    m <- data$manifest
+    .scroll_bind_view_cats(input, session, view_r, m, c("group", "fill"))
+    # per-fill color pickers when the palette is "Manual" (levels of Fill by)
+    lvl_r <- reactive({ req(input$fill); unlist(m$meta[[input$fill]]$levels) })
+    output$manual <- renderUI(
+      if (identical(input$palette, "Manual")) .scroll_manual_ui(session$ns, lvl_r()))
+    manual_colors <- reactive(
+      if (identical(input$palette, "Manual")) .scroll_manual_colors(input, lvl_r()))
     data_r <- reactive({
       req(input$group, input$fill)
       list(cells = cells_r(), group_by = input$group, fill_by = input$fill)
     })
     cosmetic_r <- .scroll_cosmetic(reactive(
       list(palette = input$palette, normalize = isTRUE(input$normalize),
-           legend = isTRUE(input$legend), aspect = input$aspect)))
+           legend = isTRUE(input$legend), aspect = input$aspect,
+           manual_colors = manual_colors())))
     plot_r <- reactive({
       d <- data_r()
       view_proportions(d$cells, list(group_by = d$group_by, fill_by = d$fill_by), cosmetic_r())
@@ -587,7 +624,8 @@ biaxial_ui <- function(id, data) {
         selectInput(ns("colorby"), "Colour by", stats::setNames(cats, cats),
                     selected = color_default)),
       .scroll_group("Appearance",
-        selectInput(ns("palette"), "Palette", names(.scroll_discrete_palettes)),
+        selectInput(ns("palette"), "Palette", .scroll_cat_palettes()),
+        uiOutput(ns("manual")),
         sliderInput(ns("size"), "Point size", 0.1, 3, 0.5, 0.1),
         sliderInput(ns("alpha"), "Opacity", 0.1, 1, 0.6, 0.05),
         bslib::input_switch(ns("legend"), "Legend", TRUE),
@@ -601,7 +639,14 @@ biaxial_ui <- function(id, data) {
 biaxial_server <- function(id, data, cells_r = reactive(data$cells),
                            view_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
-    .scroll_bind_view_cats(input, session, view_r, data$manifest, "colorby")
+    m <- data$manifest
+    .scroll_bind_view_cats(input, session, view_r, m, "colorby")
+    # per-level color pickers when the palette is "Manual" (levels of Colour by)
+    lvl_r <- reactive({ req(input$colorby); unlist(m$meta[[input$colorby]]$levels) })
+    output$manual <- renderUI(
+      if (identical(input$palette, "Manual")) .scroll_manual_ui(session$ns, lvl_r()))
+    manual_colors <- reactive(
+      if (identical(input$palette, "Manual")) .scroll_manual_colors(input, lvl_r()))
     # DATA reactive: build the (potentially large) pairwise long df once; cosmetic
     # drags no longer re-expand it. `params` is carried for the colour label.
     data_r <- reactive({
@@ -613,7 +658,8 @@ biaxial_server <- function(id, data, cells_r = reactive(data$cells),
     })
     cosmetic_r <- .scroll_cosmetic(reactive(
       list(palette = input$palette, point_size = input$size,
-           alpha = input$alpha, legend = isTRUE(input$legend), aspect = input$aspect)))
+           alpha = input$alpha, legend = isTRUE(input$legend), aspect = input$aspect,
+           manual_colors = manual_colors())))
     build <- function(raster) {
       d <- data_r(); st <- cosmetic_r(); st$raster <- raster
       view_biaxial(NULL, d$params, st, df = d$df)

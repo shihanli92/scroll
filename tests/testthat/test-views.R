@@ -136,8 +136,11 @@ test_that("aspect ratio sets theme(aspect.ratio); default 1 leaves it unset", {
   expect_equal(p$theme$aspect.ratio, 2.5)
   p1 <- view_umap_colorby(cells, list(embedding = "umap", color_by = "celltype"),
                           state = list(aspect = 1))
-  expect_null(p1$theme$aspect.ratio)
-  # violin honours it too
+  expect_equal(p1$theme$aspect.ratio, 1)          # embedding scatter is square at aspect 1
+  # non-scatter panels leave aspect 1 unconstrained (fill the width), but honour != 1
+  v1 <- view_violin(cells, list(feature = "CD3D", group_by = "celltype"), NULL,
+                    state = list(aspect = 1))
+  expect_null(v1$theme$aspect.ratio)
   v <- view_violin(cells, list(feature = "CD3D", group_by = "celltype"), NULL,
                    state = list(aspect = 0.5))
   expect_equal(v$theme$aspect.ratio, 0.5)

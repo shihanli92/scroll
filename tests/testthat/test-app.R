@@ -74,3 +74,19 @@ test_that("violin_server and proportions_server render from controls", {
     expect_false(is.null(output$plot))
   })
 })
+
+test_that("categorical panels expose Manual per-level colour pickers", {
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  shiny::testServer(scroll:::violin_server, args = list(data = data), {
+    session$setInputs(group = "celltype", feature = "CD3D", palette = "Manual",
+                      jitter = FALSE, legend = FALSE, aspect = 1)
+    session$flushReact()
+    lv <- lvl_r()
+    expect_gt(length(lv), 0)
+    expect_false(is.null(output$manual))                 # colour pickers rendered
+    session$setInputs(col_1 = "#010203")                 # set first level's colour
+    session$flushReact()
+    expect_equal(unname(manual_colors()[[lv[[1]]]]), "#010203")
+  })
+})

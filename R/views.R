@@ -156,7 +156,11 @@
 
 # Scatter finish: facet, then aspect.
 .scroll_finish_scatter <- function(p, df, state) {
-  .scroll_apply_aspect(.scroll_maybe_facet(p, df, state), state$aspect %||% 1)
+  # Embedding scatters honour aspect.ratio even at 1, so aspect = 1 is a *square*
+  # UMAP (unlike .scroll_apply_aspect, which leaves 1 unconstrained -- kept for
+  # the bar/violin/dot panels where filling the width is the sensible default).
+  .scroll_maybe_facet(p, df, state) +
+    ggplot2::theme(aspect.ratio = state$aspect %||% 1)
 }
 
 # Per-group centroid labels for a categorical scatter.
