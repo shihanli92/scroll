@@ -630,7 +630,8 @@ de_ui <- function(id, data) {
         if (length(assays) > 1) selectInput(ns("assay"), "Assay", assays, selected = m$default_assay)),
       .scroll_group("Table",
         sliderInput(ns("minpct"), "Min % expressing", 0, 50, 10, 1),
-        sliderInput(ns("topn"), "Show top", 10, 300, 50, 10)),
+        sliderInput(ns("topn"), "Show top", 10, 300, 50, 10),
+        bslib::input_switch(ns("export_all"), "Export all genes (CSV)", FALSE)),
       .scroll_group("Volcano",
         sliderInput(ns("lfc"), "logFC cutoff", 0, 3, 1, 0.1),
         numericInput(ns("padj"), "Adj. p cutoff", 0.05, min = 0, max = 1, step = 0.01),
@@ -708,7 +709,9 @@ de_server <- function(id, data, cells_r = reactive(data$cells),
     })
     output$plot <- renderPlot(volcano_r())
     .scroll_plot_downloads(output, volcano_r, id)
-    output$csv <- .scroll_csv_handler(reactive(table_rows()), paste0("scroll_", id, ".csv"))
+    output$csv <- .scroll_csv_handler(
+      reactive(if (isTRUE(input$export_all)) de_df() else table_rows()),
+      paste0("scroll_", id, ".csv"))
   })
 }
 
@@ -753,7 +756,9 @@ pseudobulk_de_ui <- function(id, data) {
       .scroll_group("Stability",
         numericInput(ns("runs"), "Runs (re-sample; pseudo only)", 1, min = 1, max = 100),
         sliderInput(ns("stabcut"), "Consistency cutoff", 0, 1, 0.8, 0.05)),
-      .scroll_group("Table", sliderInput(ns("topn"), "Show top", 10, 300, 50, 10)),
+      .scroll_group("Table",
+        sliderInput(ns("topn"), "Show top", 10, 300, 50, 10),
+        bslib::input_switch(ns("export_all"), "Export all genes (CSV)", FALSE)),
       .scroll_group("Volcano / stability",
         sliderInput(ns("lfc"), "logFC cutoff", 0, 3, 1, 0.1),
         numericInput(ns("padj"), "Adj. p cutoff", 0.05, min = 0, max = 1, step = 0.01),
@@ -858,7 +863,9 @@ pseudobulk_de_server <- function(id, data, cells_r = reactive(data$cells)) {
     })
     output$plot <- renderPlot(plot_r())
     .scroll_plot_downloads(output, plot_r, id)
-    output$csv <- .scroll_csv_handler(reactive(table_rows()), paste0("scroll_", id, ".csv"))
+    output$csv <- .scroll_csv_handler(
+      reactive(if (isTRUE(input$export_all)) de_df() else table_rows()),
+      paste0("scroll_", id, ".csv"))
   })
 }
 

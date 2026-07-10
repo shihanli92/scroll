@@ -65,6 +65,24 @@ test_that("de_server computes table + volcano from one contrast", {
   })
 })
 
+test_that("de_server can export all genes (not just the top-N)", {
+  skip_if_not_installed("presto")
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  ct <- sort(unique(as.character(data$cells$celltype)))[[1]]
+  shiny::testServer(scroll:::de_server, args = list(data = data), {
+    session$setInputs(group = "celltype", ident1 = ct, ident2 = "rest",
+                      minpct = 0, topn = 5, lfc = 1, padj = 0.05, labeln = 10,
+                      aspect = 1, export_all = FALSE, compute = 1)
+    full <- nrow(de_df())
+    expect_gt(full, 5)                         # full result has more than the cap
+    expect_lte(nrow(table_rows()), 5)          # default CSV is the displayed top-N
+    session$setInputs(export_all = TRUE)       # "Export all genes" -> full de_df()
+    exported <- if (isTRUE(input$export_all)) de_df() else table_rows()
+    expect_equal(nrow(exported), full)
+  })
+})
+
 test_that("de_server captures a too-few-cells contrast as a friendly message", {
   skip_if_not_installed("presto")
   data <- scroll:::.scroll_load(test_project())

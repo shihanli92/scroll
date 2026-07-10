@@ -144,6 +144,15 @@ test_that("pseudobulk_de_server populates combined levels and computes", {
     expect_false(is.null(result()$ok))
     expect_false(is.null(output$table))
     expect_false(is.null(output$plot))
+    # export-all switch: CSV picks the full de_df() over the displayed top-N
+    session$setInputs(topn = 3, export_all = FALSE)
+    full <- nrow(de_df())
+    if (full > 3) {
+      expect_lte(nrow(table_rows()), 3)
+      session$setInputs(export_all = TRUE)
+      exported <- if (isTRUE(input$export_all)) de_df() else table_rows()
+      expect_equal(nrow(exported), full)
+    }
   })
 })
 
