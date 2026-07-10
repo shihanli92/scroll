@@ -40,6 +40,7 @@ scroll_build <- function(object, outdir,
                          assays = NULL, embeddings = NULL, meta_cols = NULL,
                          quantize = TRUE, counts = FALSE, subsets = NULL,
                          overwrite = FALSE) {
+  .scroll_need_seurat()
   object <- .scroll_load_object(object)
 
   if (is.null(assays)) assays <- SeuratObject::DefaultAssay(object)
@@ -82,6 +83,16 @@ scroll_build <- function(object, outdir,
 
   message("scroll project built at: ", normalizePath(outdir))
   invisible(outdir)
+}
+
+# SeuratObject is only needed for the offline build (reading the Seurat object);
+# the runtime app never uses it, so it lives in Suggests. Fail early and clearly
+# if a build is attempted without it.
+.scroll_need_seurat <- function() {
+  if (!requireNamespace("SeuratObject", quietly = TRUE))
+    stop("scroll's build step needs the 'SeuratObject' package. Install it with ",
+         "install.packages('SeuratObject'). (The runtime app does not need it.)",
+         call. = FALSE)
 }
 
 # Load + normalize the object to a Seurat v5 object.
@@ -301,6 +312,7 @@ scroll_build <- function(object, outdir,
 #' @export
 scroll_add_subset <- function(object, sub_object, name, embeddings,
                               label = name, meta = NULL) {
+  .scroll_need_seurat()
   if (!inherits(object, "Seurat") || !inherits(sub_object, "Seurat"))
     stop("`object` and `sub_object` must be Seurat objects.", call. = FALSE)
   new_names <- names(embeddings) %||% as.character(embeddings)
