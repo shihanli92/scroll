@@ -44,6 +44,9 @@ Suggests:
     limma,
     DT,
     ggrepel,
+    knitr,
+    rmarkdown,
     testthat (>= 3.0.0),
     SeuratData
+VignetteBuilder: knitr
 Config/testthat/edition: 3

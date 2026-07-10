@@ -1,0 +1,200 @@
+---
+title: "Writing a custom panel"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Writing a custom panel}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.width = 6, fig.height = 5)
+```
+
+`scroll`'s panel list is an extension point. `register_panel()` adds a section to
+every `scroll_app()` built afterwards, using the **same module contract as the
+built-ins**. This vignette builds a working example: a **Centroid map** that plots
+the median position of each cell group in an embedding and links the group
+centroids with a minimum spanning tree.
+
+## The panel contract
+
+A panel is a pair of functions:
+
+* **`ui(id, data)`** returns a UI tag. Namespace every input/output with
+  `shiny::NS(id)`.
+* **`server(id, data, cells_r)`** wires the module, usually via
+  `shiny::moduleServer()`. Use **`cells_r()`**, not `data$cells`, so the panel
+  honours the app-bar view / subset filters.
+
+Both receive the shared **`data`** handle:
+
+| Field | What it is |
+|-------|------------|
+| `data$cells` | one row per cell: `cell` id, every exported metadata column, and embedding coordinates named `<reduction>_1`, `<reduction>_2` |
+| `data$manifest` | the parsed `manifest.yaml` — assays, `embeddings`, `meta` (per-column `type`/`levels`/`range`), `default_embedding`, … |
+| `data$config` | the parsed `config.yaml`, or `NULL` |
+| `data$query1(assay, feature)` | one gene's expression, as `data.frame(cell, value)` (dequantized; zero cells omitted) |
+| `data$queryN(assay, features)` | many genes at once, as `data.frame(feature, cell, value)` |
+
+Two manifest lookups you'll use constantly:
+
+```{r manifest-lookups, eval = FALSE}
+# available embeddings (reductions)
+reductions <- names(data$manifest$embeddings)
+
+# categorical metadata columns (for a "group by" control)
+cats <- names(Filter(function(x) identical(x$type, "categorical"),
+                     data$manifest$meta))
+```
+
+## Step 1 — the plot, as a plain function
+
+Keep the analysis in a standalone function that takes a data frame and returns a
+`ggplot`. It's easier to test and reuse than logic buried in a reactive. This one
+computes a per-group **median centroid**, links the centroids with a **minimum
+spanning tree** (a small base-R Prim's algorithm — no extra packages), and draws
+the cells faintly underneath.
+
+```{r plot-fn}
+library(ggplot2)
+
+# Minimum spanning tree over 2-D points, returned as (from, to) index pairs.
+mst_edges <- function(x, y) {
+  n <- length(x)
+  if (n < 2) return(data.frame(from = integer(0), to = integer(0)))
+  d <- as.matrix(stats::dist(cbind(x, y)))
+  in_tree <- c(TRUE, rep(FALSE, n - 1))
+  from <- to <- integer(n - 1)
+  for (k in seq_len(n - 1)) {                 # Prim's: cheapest edge tree -> rest
+    cand <- d[in_tree, !in_tree, drop = FALSE]
+    ij <- which(cand == min(cand), arr.ind = TRUE)[1, ]
+    i <- which(in_tree)[ij[1]]; j <- which(!in_tree)[ij[2]]
+    from[k] <- i; to[k] <- j
+    in_tree[j] <- TRUE
+  }
+  data.frame(from = from, to = to)
+}
+
+# cells: a data.frame with the two coordinate columns + a grouping column.
+centroid_map <- function(cells, group_by, x = "umap_1", y = "umap_2") {
+  cells <- cells[!is.na(cells[[x]]) & !is.na(cells[[y]]), , drop = FALSE]
+  g <- as.character(cells[[group_by]])
+  cent <- stats::aggregate(cells[, c(x, y)], list(group = g), stats::median)
+  names(cent) <- c("group", "cx", "cy")
+
+  e <- mst_edges(cent$cx, cent$cy)
+  seg <- data.frame(x = cent$cx[e$from], y = cent$cy[e$from],
+                    xend = cent$cx[e$to], yend = cent$cy[e$to])
+
+  ggplot() +
+    geom_point(data = cells, aes(.data[[x]], .data[[y]]),
+               colour = "grey85", size = 0.4) +
+    geom_segment(data = seg, aes(x, y, xend = xend, yend = yend),
+                 linewidth = 0.6, colour = "grey40") +
+    geom_point(data = cent, aes(cx, cy, colour = group), size = 4) +
+    geom_text(data = cent, aes(cx, cy, label = group), vjust = -1.2, size = 3.3,
+              show.legend = FALSE) +
+    labs(x = x, y = y, colour = group_by) +
+    theme_bw() + theme(panel.grid = element_blank())
+}
+```
+
+Try it on a small synthetic embedding (five Gaussian blobs) — this is exactly the
+shape of `data$cells`:
+
+```{r plot-demo}
+set.seed(1)
+blob <- function(g, mx, my, n = 200)
+  data.frame(cell = paste0(g, seq_len(n)),
+             umap_1 = rnorm(n, mx), umap_2 = rnorm(n, my), celltype = g)
+cells <- rbind(blob("Tfh", 0, 0), blob("CD8", 4, 1), blob("Treg", 1, 4),
+               blob("B", -3, 3), blob("NK", -4, -2))
+
+centroid_map(cells, group_by = "celltype")
+```
+
+## Step 2 — wrap it as a panel
+
+The UI offers an embedding and a group-by control (both read from the manifest);
+the server reads the chosen `<reduction>_1/_2` columns off `cells_r()` and calls
+`centroid_map()`.
+
+```{r panel, eval = FALSE}
+centroid_ui <- function(id, data) {
+  ns <- shiny::NS(id)
+  reductions <- names(data$manifest$embeddings)
+  cats <- names(Filter(function(x) identical(x$type, "categorical"),
+                       data$manifest$meta))
+  shiny::tagList(
+    shiny::selectInput(ns("reduction"), "Embedding", reductions,
+                       selected = data$manifest$default_embedding),
+    shiny::selectInput(ns("group"), "Group by", cats),
+    shiny::plotOutput(ns("plot"), height = "480px"),
+    shiny::downloadButton(ns("png"), "PNG")
+  )
+}
+
+centroid_server <- function(id, data, cells_r = shiny::reactive(data$cells)) {
+  shiny::moduleServer(id, function(input, output, session) {
+    plot_r <- shiny::reactive({
+      shiny::req(input$reduction, input$group)
+      centroid_map(cells_r(), group_by = input$group,       # cells_r(), not data$cells
+                   x = paste0(input$reduction, "_1"),
+                   y = paste0(input$reduction, "_2"))
+    })
+    output$plot <- shiny::renderPlot(plot_r())
+    output$png <- shiny::downloadHandler(
+      filename = function() "centroids.png",
+      content  = function(file) ggplot2::ggsave(file, plot_r(), width = 7, height = 6))
+  })
+}
+```
+
+## Step 3 — register and serve
+
+Register the panel *before* `scroll_app()`/`scroll_serve()`. `after = "dimplot"`
+places it right after the DimPlot section (use `before =` or an existing `id` to
+replace a built-in; omit both to append).
+
+```{r register, eval = FALSE}
+library(scroll)
+# ... define centroid_map / mst_edges / centroid_ui / centroid_server ...
+
+register_panel("centroids", centroid_ui, centroid_server,
+               label = "Centroid map", title = "Group centroids",
+               desc = "Median position of each group, linked by a minimum spanning tree.",
+               after = "dimplot")
+
+scroll_serve("pbmc3k")      # the new section appears in scroll order
+```
+
+In a deployed app, put the panel code and the `register_panel()` call in the
+project's `app.R`, above `scroll_app(".")`.
+
+The registered section appears in scroll order (here after DimPlot), controls on
+the left and the centroid map on the right:
+
+```{r screenshot, echo = FALSE, out.width = "100%", fig.cap = "The Centroid map section in a running app (pbmc3k demo): each cell type's median UMAP position, linked by a minimum spanning tree, over a faint cell scatter."}
+knitr::include_graphics("centroid-map.png")
+```
+
+## Conventions & tips
+
+* **Namespace** every input/output id with `ns()` (`shiny::NS(id)`); this keeps
+  panels independent.
+* **Use `cells_r()`**, never `data$cells`, in the server — it is the *active*
+  cells reactive, already narrowed by the app-bar View and Subset controls.
+* **Subset-view aware.** Add a fourth `view_r` argument to your server —
+  `server(id, data, cells_r, view_r = shiny::reactive(NULL))` — and `scroll` will
+  pass the active subset-view name, so you can, e.g., restrict the embedding list
+  to that view's sub-embedding. Panels without a `view_r` formal are untouched.
+* **Placement:** `after` / `before` name an existing panel id
+  (`dimplot`, `featureplot`, `dotplot`, `violin`, `proportions`, `de`, …);
+  registering an existing id *replaces* that panel in place.
+* **`scroll_reset_panels()`** clears everything you've registered this session.
+* **Expression:** for a gene-driven panel, call `data$query1(assay, gene)` inside
+  the reactive; it reads a single Parquet partition, so runtime memory stays flat.
+
+A larger real-world panel — a live QC + hashtag-gating workflow with cross-panel
+state — lives in the package source at `examples/hto-filter/panel.R`.

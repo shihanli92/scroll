@@ -1,0 +1,157 @@
+---
+title: "Getting started: from a Seurat object to a running app"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting started: from a Seurat object to a running app}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+`scroll` turns a processed Seurat object into a polished, interactive single-cell
+explorer. It has **two phases**:
+
+1. A heavy, one-time **build** (`scroll_build()`) that extracts lightweight
+   on-disk artifacts — cell metadata + embeddings as one small Parquet table, and
+   expression as a feature-partitioned Parquet store.
+2. A light **runtime** (`scroll_app()` / `scroll_serve()`) — a bslib Shiny app
+   that reads only those artifacts, querying expression **one gene at a time**
+   through duckdb. The running app never loads the Seurat object, so runtime
+   memory stays flat regardless of dataset size, and it deploys as a plain `app.R`.
+
+The code chunks below are illustrative (they need a dataset / launch a server), so
+they are not executed when this vignette is rendered.
+
+## Install
+
+```{r install}
+install.packages(c("shiny", "bslib", "arrow", "duckdb", "DBI", "ggplot2",
+                   "scales", "yaml", "Matrix", "colourpicker"))
+install.packages("SeuratObject")            # the build step needs this (runtime does not)
+# then install scroll itself: R CMD INSTALL scroll  (or install.packages the tarball)
+```
+
+## 1. Build a project
+
+Start from any processed Seurat object with at least one dimensional reduction and
+a non-empty `data` layer. Here we use the `pbmc3k` demo from **SeuratData**:
+
+```{r build}
+library(scroll)
+library(SeuratData)                    # for the example object
+data("pbmc3k.final", package = "pbmc3k.SeuratData")
+obj <- SeuratObject::UpdateSeuratObject(pbmc3k.final)   # ensure a v5 object
+
+scroll_build(obj, "pbmc3k")            # object -> project directory
+```
+
+`scroll_build()` reads the object once and writes a self-contained project:
+
+```
+pbmc3k/
+  cells.parquet        cell metadata + embeddings (loaded once at runtime)
+  expr/<assay>/feature=*/…   feature-partitioned expression (queried per gene)
+  manifest.yaml        the app's index of assays / embeddings / metadata
+  config.yaml          optional defaults (edit to taste)
+  app.R                deployable runtime: scroll_app(".")
+```
+
+Useful `scroll_build()` arguments:
+
+* `assays = c("RNA", "ADT")` — export more than the default assay (multimodal /
+  CITE-seq). Each becomes its own `expr/<assay>/` subtree and the app gains an
+  **Assay** selector.
+* `counts = TRUE` — also export a raw `counts/<assay>.parquet` store. This roughly
+  doubles expression storage but enables the **Pseudobulk DE** panel (edgeR/
+  limma-voom need counts).
+* `meta_cols =` — choose which metadata columns to expose (default: a sensible set
+  of categorical annotations + `nCount`/`nFeature`/`percent.*` QC columns).
+* `quantize = FALSE` — keep full-precision expression (the default quantizes to
+  `uint8` for compactness).
+
+## 2. Customize the defaults
+
+Every control auto-populates from the manifest; `config.yaml` only sets optional
+defaults. Edit it after building:
+
+```yaml
+title: "PBMC 3k"          # app-bar label (omit for just the brand)
+brand: "My Lab"           # replaces the "scroll" wordmark
+default_embedding: umap
+default_assay: RNA
+markers: [CD3D, CD8A, MS4A1, CD14, NKG7]   # DotPlot's starting gene panel
+```
+
+## 3. Explore
+
+Run it locally:
+
+```{r serve}
+scroll_serve("pbmc3k")                 # opens the app in your browser
+```
+
+The app is a scrolling page of analysis sections, each with its own controls:
+
+* **DimPlot** — the embedding coloured by any metadata column.
+* **FeaturePlot** — coloured by a gene's expression, or by a numeric metadata
+  column, with colour-quantile clipping.
+* **Biaxial** — pairwise scatters of numeric columns (hashtag / ADT / QC).
+* **DotPlot / Violin / Proportions** — marker panels, distributions, composition.
+* **DE** — live Wilcoxon markers for a contrast (table + volcano).
+* **Pseudobulk DE** — edgeR/limma-voom (needs `counts = TRUE`).
+
+Every categorical plot supports a **Manual** palette (per-level colour pickers),
+every plot exports to PNG/PDF, and colours are assigned deterministically by level
+name so a cell type keeps its colour across panels.
+
+## 4. Subset views (optional)
+
+If you have reprocessed a slice of the data in isolation — say the T cells,
+re-embedded with their own UMAP and subclusters — expose it as a linked **View**.
+`scroll_add_subset()` copies the child object's reduction (and any subset-only
+metadata) onto the parent by barcode; `scroll_build(subsets = …)` records it.
+
+```{r subsets}
+obj <- scroll_add_subset(obj, tcell_obj, name = "tcell", label = "T cells",
+                         embeddings = c(umap_tcell = "umap"),
+                         meta = "tcell_subcluster")
+scroll_build(obj, "pbmc3k")
+```
+
+Selecting *T cells* in the app bar restricts every panel to those cells and
+switches the scatter panels to the sub-embedding.
+
+## 5. Deploy to a Shiny Server
+
+The built project **is** a deployable app — its `app.R` is just `scroll_app(".")`.
+Copy the directory into your Shiny Server app root:
+
+```{r deploy}
+# on the server, after installing scroll + its runtime dependencies:
+#   cp -r pbmc3k /srv/shiny-server/pbmc3k
+# then browse to http://<server>:3838/pbmc3k/
+```
+
+The runtime does **not** need `SeuratObject` (only the build does), so a
+viewer-only server stays lightweight. See the bundled `DEPLOY.md` in a built
+project's parent for the full dependency list.
+
+## 6. Query expression without the app
+
+The same flat-RAM query layer is available programmatically:
+
+```{r query}
+con <- scroll_connect("pbmc3k")
+hit <- scroll_query_feature(con, "RNA", "MS4A1")   # data.frame(cell, value)
+man <- scroll_manifest("pbmc3k")
+hit$value <- scroll_dequantize(hit$value, man, "RNA")
+scroll_disconnect(con)
+```
+
+## Next
+
+To add your own analysis section, see
+`vignette("custom-panels", package = "scroll")`.

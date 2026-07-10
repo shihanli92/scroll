@@ -30,11 +30,21 @@ The running app **never loads the Seurat object**. It loads `cells.parquet`
 (metadata + embeddings, a few MB) once globally, and answers each feature lookup
 with a duckdb query that reads only that feature's Parquet partition.
 
+## Tutorials
+
+Two vignettes walk through the package (`browseVignettes("scroll")`):
+
+- **Getting started** — from a Seurat object to a running app:
+  `vignette("getting-started", package = "scroll")`.
+- **Writing a custom panel** — extend the app with `register_panel()`, building a
+  worked "centroid map" example: `vignette("custom-panels", package = "scroll")`.
+
 ## Install
 
 ```r
-# install.packages(c("SeuratObject","Matrix","arrow","duckdb","DBI",
-#                     "ggplot2","scales","shiny","bslib","yaml"))
+# runtime: install.packages(c("Matrix","arrow","duckdb","DBI","ggplot2",
+#                             "scales","shiny","bslib","yaml","colourpicker"))
+# build only: install.packages("SeuratObject")
 R CMD INSTALL scroll        # from the repo root
 ```
 
