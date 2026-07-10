@@ -107,6 +107,22 @@
   as.numeric(expr[cells$cell])
 }
 
+# A scatter point layer that rasterizes on screen for speed but stays a true
+# geom_point for exports and tests. `raster = FALSE` (the default) always yields
+# a vector geom_point, so direct view calls are unchanged. When `raster = TRUE`
+# and scattermore is installed, points are drawn into a raster buffer (~10x
+# faster for tens of thousands of points); absent scattermore it falls back to
+# geom_point. scattermore takes a pixel `pointsize`, not the mm `size` aesthetic,
+# so we approximate it from `size` (interactive-only; exports use vector points).
+.scroll_point_layer <- function(mapping = NULL, size = 0.6, alpha = 1,
+                                raster = FALSE, ...) {
+  if (isTRUE(raster) && requireNamespace("scattermore", quietly = TRUE))
+    scattermore::geom_scattermore(mapping = mapping,
+                                  pointsize = max(1, round(size * 2)), alpha = alpha, ...)
+  else
+    ggplot2::geom_point(mapping = mapping, size = size, alpha = alpha, ...)
+}
+
 .scroll_base_scatter <- function(df, embedding, legend = TRUE) {
   ggplot2::ggplot(df, ggplot2::aes(x = .data$.x, y = .data$.y)) +
     ggplot2::labs(x = sprintf("%s 1", embedding), y = sprintf("%s 2", embedding)) +
@@ -184,12 +200,13 @@ view_umap_colorby <- function(cells, params, state = list()) {
   df$.col <- df[[color_by]]
   size <- .scroll_opt(params, state, "point_size", 0.6)
   alpha <- .scroll_opt(params, state, "alpha", 0.85)
+  raster <- isTRUE(state$raster)
   base <- .scroll_base_scatter(df, embedding, .scroll_opt(params, state, "legend", TRUE))
 
   # numeric color-by: a continuous gradient
   if (is.numeric(df$.col)) {
     p <- base +
-      ggplot2::geom_point(ggplot2::aes(color = .data$.col), size = size, alpha = alpha) +
+      .scroll_point_layer(ggplot2::aes(color = .data$.col), size = size, alpha = alpha, raster = raster) +
       .scroll_continuous_scale(.scroll_opt(params, state, "palette", "viridis"), color_by) +
       ggplot2::labs(color = color_by)
     return(.scroll_finish_scatter(p, df, state))
@@ -204,14 +221,14 @@ view_umap_colorby <- function(cells, params, state = list()) {
     bg <- df[!(df$.col %in% highlight), , drop = FALSE]
     fg <- df[df$.col %in% highlight, , drop = FALSE]
     p <- base +
-      ggplot2::geom_point(data = bg, color = "grey85", size = size, alpha = alpha) +
-      ggplot2::geom_point(data = fg, ggplot2::aes(color = .data$.col), size = size, alpha = alpha) +
+      .scroll_point_layer(data = bg, color = "grey85", size = size, alpha = alpha, raster = raster) +
+      .scroll_point_layer(ggplot2::aes(color = .data$.col), data = fg, size = size, alpha = alpha, raster = raster) +
       ggplot2::scale_color_manual(values = cols, limits = highlight) +
       ggplot2::labs(color = color_by)
     label_df <- fg
   } else {
     p <- base +
-      ggplot2::geom_point(ggplot2::aes(color = .data$.col), size = size, alpha = alpha) +
+      .scroll_point_layer(ggplot2::aes(color = .data$.col), size = size, alpha = alpha, raster = raster) +
       ggplot2::scale_color_manual(values = cols) +
       ggplot2::labs(color = color_by)
     label_df <- df
@@ -240,7 +257,7 @@ view_feature_plot <- function(cells, params, values = NULL, state = list()) {
   size <- .scroll_opt(params, state, "point_size", 0.7)
   lims <- .scroll_expr_limits(df$.expr, .scroll_opt(params, state, "clip", NULL))
   p <- .scroll_base_scatter(df, embedding, .scroll_opt(params, state, "legend", TRUE)) +
-    ggplot2::geom_point(ggplot2::aes(color = .data$.expr), size = size) +
+    .scroll_point_layer(ggplot2::aes(color = .data$.expr), size = size, raster = isTRUE(state$raster)) +
     .scroll_continuous_scale(.scroll_opt(params, state, "palette", "grey-purple"),
                              params$feature %||% "expression", lims)
   .scroll_finish_scatter(p, df, state)
@@ -248,21 +265,12 @@ view_feature_plot <- function(cells, params, values = NULL, state = list()) {
 
 # --- aggregate views ----------------------------------------------------------
 
-#' Dot plot: mean expression x fraction expressing, across groups
-#'
-#' @param cells The cells data.frame (its group sizes are the denominators).
-#' @param params List with `features`, `group_by`, and optionally `assay`.
-#' @param expr_long A data.frame(feature, cell, value) in normalized units for
-#'   the requested features (zero-valued cells absent).
-#' @param state Optional toggle state (`split_by` overrides `group_by`).
-#' @return A ggplot.
-#' @export
-view_dotplot <- function(cells, params, expr_long, state = list()) {
-  features <- unlist(params$features)
-  group_by <- .scroll_group_col(params, state)
-  if (is.null(group_by) || !group_by %in% names(cells))
-    stop("dotplot needs a valid `group_by` metadata column.", call. = FALSE)
-
+# The heavy dotplot work — aggregation, optional z-scoring, and hierarchical
+# clustering — depends only on data inputs (features, group, scale, cluster), not
+# cosmetics. Factored out so the Shiny server computes it once in a data reactive
+# rather than on every palette/dot-size change.
+.scroll_dotplot_assemble <- function(cells, features, group_by, expr_long,
+                                     scale = FALSE, cluster = "off") {
   grp <- stats::setNames(as.character(cells[[group_by]]), cells$cell)
   ng <- table(as.character(cells[[group_by]]))          # cells per group
   groups <- names(ng)
@@ -287,8 +295,7 @@ view_dotplot <- function(cells, params, expr_long, state = list()) {
   agg$mean <- agg$sum / as.numeric(ng[agg$group])
   agg$frac <- agg$npos / as.numeric(ng[agg$group])
 
-  scaled <- isTRUE(.scroll_opt(params, state, "scale", FALSE))
-  if (scaled) {
+  if (isTRUE(scale)) {
     agg$mean <- stats::ave(agg$mean, agg$feature, FUN = function(x) {
       s <- stats::sd(x); if (is.na(s) || s == 0) x * 0 else (x - mean(x)) / s
     })
@@ -297,14 +304,40 @@ view_dotplot <- function(cells, params, expr_long, state = list()) {
   M <- matrix(0, length(features), length(groups), dimnames = list(features, groups))
   M[cbind(match(agg$feature, features), match(agg$group, groups))] <- agg$mean
 
-  cl <- .scroll_opt(params, state, "cluster", "off")
-  hr <- if (cl %in% c("rows", "both") && length(features) > 2) stats::hclust(stats::dist(M))
-  hc <- if (cl %in% c("columns", "both") && length(groups) > 2) stats::hclust(stats::dist(t(M)))
+  hr <- if (cluster %in% c("rows", "both") && length(features) > 2) stats::hclust(stats::dist(M))
+  hc <- if (cluster %in% c("columns", "both") && length(groups) > 2) stats::hclust(stats::dist(t(M)))
   feature_order <- if (!is.null(hr)) rownames(M)[hr$order] else features
   group_order   <- if (!is.null(hc)) colnames(M)[hc$order] else groups
 
   agg$feature <- factor(agg$feature, levels = rev(feature_order))
   agg$group   <- factor(agg$group, levels = group_order)
+  list(agg = agg, hr = hr, hc = hc, group_by = group_by, scaled = isTRUE(scale))
+}
+
+#' Dot plot: mean expression x fraction expressing, across groups
+#'
+#' @param cells The cells data.frame (its group sizes are the denominators).
+#' @param params List with `features`, `group_by`, and optionally `assay`.
+#' @param expr_long A data.frame(feature, cell, value) in normalized units for
+#'   the requested features (zero-valued cells absent).
+#' @param state Optional toggle state (`split_by` overrides `group_by`).
+#' @param assembly Optional precomputed result of the internal aggregation +
+#'   clustering step; when supplied (as the Shiny app does), `cells`/`expr_long`
+#'   are ignored for assembly and only cosmetics are applied.
+#' @return A ggplot.
+#' @export
+view_dotplot <- function(cells, params, expr_long, state = list(), assembly = NULL) {
+  if (is.null(assembly)) {
+    group_by <- .scroll_group_col(params, state)
+    if (is.null(group_by) || !group_by %in% names(cells))
+      stop("dotplot needs a valid `group_by` metadata column.", call. = FALSE)
+    assembly <- .scroll_dotplot_assemble(
+      cells, unlist(params$features), group_by, expr_long,
+      scale = isTRUE(.scroll_opt(params, state, "scale", FALSE)),
+      cluster = .scroll_opt(params, state, "cluster", "off"))
+  }
+  agg <- assembly$agg; hr <- assembly$hr; hc <- assembly$hc
+  group_by <- assembly$group_by; scaled <- assembly$scaled
 
   dsize <- .scroll_opt(params, state, "dot_size", c(1, 6))
   pal <- .scroll_opt(params, state, "palette", "magma")
@@ -391,6 +424,56 @@ view_violin <- function(cells, params, values = NULL, state = list()) {
     ggplot2::scale_fill_manual(values = cols) +
     ggplot2::labs(x = group_by, y = params$feature %||% "expression", fill = group_by) +
     .scroll_box_theme(.scroll_opt(params, state, "legend", FALSE))
+  .scroll_apply_aspect(p, state$aspect %||% 1)
+}
+
+# Long data.frame of all column pairs (one facet per pair), NA rows dropped.
+# Factored out so the Shiny server can build it once in a data reactive rather
+# than re-expanding on every cosmetic change.
+.scroll_biaxial_df <- function(cells, params) {
+  feats <- params$features
+  feats <- feats[feats %in% names(cells)]
+  feats <- feats[!duplicated(feats)]
+  if (length(feats) < 2)
+    stop("biaxial needs at least two numeric metadata columns.", call. = FALSE)
+  color_by <- params$color_by
+  if (is.null(color_by) || !color_by %in% names(cells))
+    stop("biaxial needs a valid `color_by` metadata column.", call. = FALSE)
+  col_vals <- as.character(cells[[color_by]])
+  pairs <- utils::combn(feats, 2, simplify = FALSE)
+  df <- do.call(rbind, lapply(pairs, function(p) data.frame(
+    .x = as.numeric(cells[[p[1]]]), .y = as.numeric(cells[[p[2]]]), .col = col_vals,
+    pair = paste(p[1], "vs", p[2]), stringsAsFactors = FALSE)))
+  df[!is.na(df$.x) & !is.na(df$.y), , drop = FALSE]
+}
+
+#' Pairwise biaxial scatter of numeric metadata columns
+#'
+#' All unique pairs of the chosen numeric columns as a faceted grid of scatter
+#' plots, coloured by a categorical selection (e.g. hashtag CLR values coloured by
+#' demux assignment, or ADT/QC pairs coloured by cell type). Rows missing either
+#' coordinate are dropped.
+#'
+#' @param cells The cells data.frame.
+#' @param params List with `features` (>= 2 numeric metadata column names) and
+#'   `color_by` (a categorical metadata column).
+#' @param state Optional (`palette`, `point_size`, `alpha`, `legend`, `aspect`).
+#' @param df Optional precomputed pair data.frame (as the Shiny app supplies); when
+#'   given, `cells`/`params` are not re-expanded.
+#' @return A ggplot (facet per column pair).
+#' @export
+view_biaxial <- function(cells, params, state = list(), df = NULL) {
+  if (is.null(df)) df <- .scroll_biaxial_df(cells, params)
+  cols <- .scroll_group_colors(df$.col, state)
+  p <- ggplot2::ggplot(df, ggplot2::aes(.data$.x, .data$.y, color = .data$.col)) +
+    .scroll_point_layer(size = state$point_size %||% 0.5, alpha = state$alpha %||% 0.6,
+                        raster = isTRUE(state$raster)) +
+    ggplot2::facet_wrap(~ pair, scales = "free") +
+    ggplot2::scale_color_manual(values = cols) +
+    ggplot2::labs(x = NULL, y = NULL, color = params$color_by) +
+    ggplot2::guides(color = ggplot2::guide_legend(
+      override.aes = list(size = 2, alpha = 1))) +
+    .scroll_box_theme(.scroll_opt(params, state, "legend", TRUE))
   .scroll_apply_aspect(p, state$aspect %||% 1)
 }
 

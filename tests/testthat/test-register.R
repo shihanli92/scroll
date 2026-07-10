@@ -17,12 +17,12 @@ count_server <- function(id, data, cells_r = shiny::reactive(data$cells)) {
   })
 }
 
-test_that("default assembly is the six built-ins, numbered by position", {
+test_that("default assembly is the built-ins, numbered by position", {
   scroll_reset_panels()
   p <- scroll:::.scroll_assemble_panels()
   expect_equal(vapply(p, `[[`, "", "id"),
-               c("dimplot", "featureplot", "dotplot", "violin", "proportions", "de",
-                 "pseudobulk"))
+               c("dimplot", "featureplot", "biaxial", "dotplot", "violin",
+                 "proportions", "de", "pseudobulk"))
   expect_equal(vapply(p, `[[`, "", "num"), sprintf("%02d", seq_along(p)))
 })
 

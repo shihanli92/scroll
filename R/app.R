@@ -16,21 +16,72 @@
     config = scroll_config(dir),
     con = con
   )
-  # bound query helpers that dequantize to normalized units
+  # bound query helpers that dequantize to normalized units, memoized by an LRU
+  # so cosmetic re-renders, the vector-export path, and re-selecting a recent gene
+  # never re-hit duckdb.
+  cache <- .scroll_lru(256L)
   d$query1 <- function(assay, feature) {
-    hit <- scroll_query_feature(con, assay, feature)
-    if (nrow(hit)) hit$value <- scroll_dequantize(hit$value, manifest, assay)
+    key <- paste0("1|", assay, "|", feature)
+    hit <- cache$get(key)
+    if (is.null(hit)) {
+      hit <- scroll_query_feature(con, assay, feature)
+      if (nrow(hit)) hit$value <- scroll_dequantize(hit$value, manifest, assay)
+      cache$set(key, hit)
+    }
     hit
   }
   d$queryN <- function(assay, features) {
-    hit <- scroll_query_features(con, assay, features)
-    if (nrow(hit)) hit$value <- scroll_dequantize(hit$value, manifest, assay)
+    key <- paste0("N|", assay, "|", paste(sort(unique(features)), collapse = ","))
+    hit <- cache$get(key)
+    if (is.null(hit)) {
+      hit <- scroll_query_features(con, assay, features)
+      if (nrow(hit)) hit$value <- scroll_dequantize(hit$value, manifest, assay)
+      cache$set(key, hit)
+    }
     hit
   }
   d
 }
 
+# A bounded LRU over query results keyed by a string. Bounded so a long session
+# browsing many genes cannot grow memory without limit; each entry is one
+# feature's small sparse long table, so a generous bound is cheap.
+.scroll_lru <- function(max = 256L) {
+  store <- new.env(parent = emptyenv())
+  order <- character(0)
+  list(
+    get = function(key) {
+      if (!exists(key, store, inherits = FALSE)) return(NULL)
+      order <<- c(setdiff(order, key), key)                # accessing bumps to MRU
+      base::get(key, store)
+    },
+    set = function(key, val) {
+      order <<- c(setdiff(order, key), key)                # most-recently-used last
+      assign(key, val, store)
+      while (length(order) > max) {                        # evict least-recently-used
+        rm(list = order[[1]], envir = store); order <<- order[-1L]
+      }
+    }
+  )
+}
+
 .scroll_nz <- function(x) if (is.null(x) || !length(x) || !nzchar(x)) NULL else x
+
+# Debounce a reactive snapshot of cosmetic inputs so a slider drag coalesces into
+# one redraw (~120 ms after the last move) instead of one render per tick. Pass a
+# `reactive({...})` (constructed at the call site so input dependencies are
+# tracked). Data inputs are kept out of this reactive so a gene change stays
+# immediate.
+.scroll_cosmetic <- function(r, millis = 120) shiny::debounce(r, millis)
+
+# Above this many plotted points, rasterize the scatter on screen (kept below the
+# small test project's n so tests/direct view calls stay vector).
+.scroll_raster_threshold <- 15000L
+
+# Whether to rasterize on screen: the per-panel toggle (default on) AND the point
+# count exceeding the threshold. With the toggle off, points stay vector even on
+# large datasets (slower, but exact/zoomable).
+.scroll_use_raster <- function(on, n) isTRUE(on %||% TRUE) && n > .scroll_raster_threshold
 
 # --- manifest-derived control choices -----------------------------------------
 
@@ -138,7 +189,8 @@ dimplot_ui <- function(id, data) {
         sliderInput(ns("size"), "Point size", 0.1, 5, 0.6, 0.1),
         sliderInput(ns("alpha"), "Opacity", 0.1, 1, 0.85, 0.05),
         bslib::input_switch(ns("labels"), "Cluster labels", TRUE),
-        bslib::input_switch(ns("legend"), "Legend", TRUE)),
+        bslib::input_switch(ns("legend"), "Legend", TRUE),
+        bslib::input_switch(ns("raster"), "Rasterize (fast)", TRUE)),
       .scroll_group("Layout",
         selectInput(ns("split"), "Split by",
                     c("None" = "", stats::setNames(cats, cats))),
@@ -201,17 +253,27 @@ dimplot_server <- function(id, data, cells_r = reactive(data$cells),
       if (length(vals)) unlist(vals) else NULL
     })
 
-    plot_r <- reactive({
+    # DATA reactive (cells + params) invalidates only on data-input changes.
+    data_r <- reactive({
       req(input$reduction, input$colorby)
-      params <- list(embedding = input$reduction, color_by = input$colorby)
-      state <- list(palette = input$palette, point_size = input$size, alpha = input$alpha,
-                    show_labels = isTRUE(input$labels), legend = isTRUE(input$legend),
-                    split_by = .scroll_nz(input$split), aspect = input$aspect,
-                    highlight = input$highlight, manual_colors = manual_colors())
-      view_umap_colorby(cells_r(), params, state)
+      cells <- cells_r()
+      list(cells = cells, embedding = input$reduction, color_by = input$colorby,
+           n = nrow(cells))
     })
+    # COSMETIC reactive, debounced; restyle-only inputs (incl. highlight/manual).
+    cosmetic_r <- .scroll_cosmetic(reactive(
+      list(palette = input$palette, point_size = input$size, alpha = input$alpha,
+           show_labels = isTRUE(input$labels), legend = isTRUE(input$legend),
+           split_by = .scroll_nz(input$split), aspect = input$aspect,
+           highlight = input$highlight, manual_colors = manual_colors())))
+    build <- function(raster) {
+      d <- data_r(); st <- cosmetic_r(); st$raster <- raster
+      view_umap_colorby(d$cells, list(embedding = d$embedding, color_by = d$color_by), st)
+    }
+    plot_r   <- reactive(build(.scroll_use_raster(input$raster, data_r()$n)))  # rasterized on screen
+    export_r <- reactive(build(FALSE))                                         # vector for downloads
     output$plot <- renderPlot(plot_r())
-    .scroll_plot_downloads(output, plot_r, id)
+    .scroll_plot_downloads(output, export_r, id)
   })
 }
 
@@ -238,7 +300,8 @@ featureplot_ui <- function(id, data) {
         sliderInput(ns("size"), "Point size", 0.1, 5, 0.7, 0.1),
         sliderInput(ns("clip"), "Color quantiles (%)", 0, 100, c(0, 100), 1),
         bslib::input_switch(ns("order"), "Expressing cells on top", TRUE),
-        bslib::input_switch(ns("legend"), "Legend", TRUE)),
+        bslib::input_switch(ns("legend"), "Legend", TRUE),
+        bslib::input_switch(ns("raster"), "Rasterize (fast)", TRUE)),
       .scroll_group("Layout",
         selectInput(ns("split"), "Split by", c("None" = "", stats::setNames(cats, cats))),
         .scroll_aspect_input(ns))
@@ -268,19 +331,30 @@ featureplot_server <- function(id, data, cells_r = reactive(data$cells),
       keep <- if (!is.null(cur) && cur %in% feats) cur else character(0)
       updateSelectizeInput(session, "feature", choices = feats, server = TRUE, selected = keep)
     })
-    plot_r <- reactive({
+    # DATA reactive: cells + the (cached) expression query. Cosmetic drags do not
+    # invalidate it, so they never re-hit duckdb.
+    data_r <- reactive({
       req(input$reduction)
       feat <- .scroll_nz(input$feature)
       validate(need(!is.null(feat), "Search for a gene to plot its expression."))
-      params <- list(embedding = input$reduction, feature = feat)
-      state <- list(palette = input$palette, point_size = input$size,
-                    order = isTRUE(input$order), legend = isTRUE(input$legend),
-                    clip = input$clip / 100, split_by = .scroll_nz(input$split),
-                    aspect = input$aspect)
-      view_feature_plot(cells_r(), params, data$query1(assay(), feat), state)
+      cells <- cells_r()
+      list(cells = cells, embedding = input$reduction, feature = feat,
+           values = data$query1(assay(), feat), n = nrow(cells))
     })
+    cosmetic_r <- .scroll_cosmetic(reactive(
+      list(palette = input$palette, point_size = input$size,
+           order = isTRUE(input$order), legend = isTRUE(input$legend),
+           clip = input$clip / 100, split_by = .scroll_nz(input$split),
+           aspect = input$aspect)))
+    build <- function(raster) {
+      d <- data_r(); st <- cosmetic_r(); st$raster <- raster
+      view_feature_plot(d$cells, list(embedding = d$embedding, feature = d$feature),
+                        d$values, st)
+    }
+    plot_r   <- reactive(build(.scroll_use_raster(input$raster, data_r()$n)))
+    export_r <- reactive(build(FALSE))
     output$plot <- renderPlot(plot_r())
-    .scroll_plot_downloads(output, plot_r, id)
+    .scroll_plot_downloads(output, export_r, id)
   })
 }
 
@@ -330,15 +404,25 @@ dotplot_server <- function(id, data, cells_r = reactive(data$cells),
       updateSelectizeInput(session, "markers", choices = feats, server = TRUE,
                            selected = intersect(cur, feats))
     })
-    plot_r <- reactive({
+    # DATA reactive: query + aggregation + hclust. `scale` and `cluster` change
+    # the aggregation/clustering, so they are DATA inputs (not cosmetic); palette
+    # and dot size are cosmetic. No rasterization (dots = features x groups).
+    data_r <- reactive({
       req(input$group)
       feats <- input$markers
       validate(need(length(feats) > 0, "Add one or more marker genes to build the panel."))
-      params <- list(group_by = input$group, features = feats)
-      state <- list(scale = isTRUE(input$scale), palette = input$palette,
-                    dot_size = input$dotrange, cluster = input$cluster,
-                    aspect = input$aspect)
-      view_dotplot(cells_r(), params, data$queryN(assay(), feats), state)
+      cells <- cells_r()
+      list(cells = cells, group_by = input$group, features = feats,
+           assembly = .scroll_dotplot_assemble(
+             cells, feats, input$group, data$queryN(assay(), feats),
+             scale = isTRUE(input$scale), cluster = input$cluster))
+    })
+    cosmetic_r <- .scroll_cosmetic(reactive(
+      list(palette = input$palette, dot_size = input$dotrange, aspect = input$aspect)))
+    plot_r <- reactive({
+      d <- data_r()
+      view_dotplot(d$cells, list(group_by = d$group_by, features = d$features),
+                   NULL, cosmetic_r(), assembly = d$assembly)
     })
     output$plot <- renderPlot(plot_r())
     .scroll_plot_downloads(output, plot_r, id)
@@ -387,14 +471,22 @@ violin_server <- function(id, data, cells_r = reactive(data$cells),
       keep <- if (!is.null(cur) && cur %in% feats) cur else character(0)
       updateSelectizeInput(session, "feature", choices = feats, server = TRUE, selected = keep)
     })
-    plot_r <- reactive({
+    # DATA reactive: cells + query (cosmetic changes no longer re-hit duckdb).
+    data_r <- reactive({
       req(input$group)
       feat <- .scroll_nz(input$feature)
       validate(need(!is.null(feat), "Search for a gene to plot its distribution."))
-      params <- list(feature = feat, group_by = input$group)
-      state <- list(palette = input$palette, jitter = isTRUE(input$jitter),
-                    legend = isTRUE(input$legend), aspect = input$aspect)
-      view_violin(cells_r(), params, data$query1(assay(), feat), state)
+      cells <- cells_r()
+      list(cells = cells, feature = feat, group_by = input$group,
+           values = data$query1(assay(), feat))
+    })
+    cosmetic_r <- .scroll_cosmetic(reactive(
+      list(palette = input$palette, jitter = isTRUE(input$jitter),
+           legend = isTRUE(input$legend), aspect = input$aspect)))
+    plot_r <- reactive({
+      d <- data_r()
+      view_violin(d$cells, list(feature = d$feature, group_by = d$group_by),
+                  d$values, cosmetic_r())
     })
     output$plot <- renderPlot(plot_r())
     .scroll_plot_downloads(output, plot_r, id)
@@ -429,15 +521,87 @@ proportions_server <- function(id, data, cells_r = reactive(data$cells),
                                view_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     .scroll_bind_view_cats(input, session, view_r, data$manifest, c("group", "fill"))
-    plot_r <- reactive({
+    data_r <- reactive({
       req(input$group, input$fill)
-      params <- list(group_by = input$group, fill_by = input$fill)
-      state <- list(palette = input$palette, normalize = isTRUE(input$normalize),
-                    legend = isTRUE(input$legend), aspect = input$aspect)
-      view_proportions(cells_r(), params, state)
+      list(cells = cells_r(), group_by = input$group, fill_by = input$fill)
+    })
+    cosmetic_r <- .scroll_cosmetic(reactive(
+      list(palette = input$palette, normalize = isTRUE(input$normalize),
+           legend = isTRUE(input$legend), aspect = input$aspect)))
+    plot_r <- reactive({
+      d <- data_r()
+      view_proportions(d$cells, list(group_by = d$group_by, fill_by = d$fill_by), cosmetic_r())
     })
     output$plot <- renderPlot(plot_r())
     .scroll_plot_downloads(output, plot_r, id)
+  })
+}
+
+# --- Biaxial panel ------------------------------------------------------------
+
+# Prefer hashtag / antibody CLR columns for the default axes, else the first few
+# numerics — so an HTO or CITE-seq dataset opens on its biaxial signal plots.
+.scroll_default_biaxial <- function(nums) {
+  hit <- grep("^hto_|hashtag|adt_|_adt$|^ab_", nums, value = TRUE, ignore.case = TRUE)
+  if (length(hit) >= 2) hit else utils::head(nums, 3)
+}
+
+biaxial_ui <- function(id, data) {
+  ns <- NS(id)
+  m <- data$manifest
+  nums <- .scroll_num_cols(m); cats <- .scroll_cat_cols(m)
+  if (length(nums) < 2)
+    return(.scroll_empty_panel("Needs at least two numeric metadata columns (none found)."))
+  if (!length(cats))
+    return(.scroll_empty_panel("Needs a categorical column to colour by (none found)."))
+  color_default <- if ("hto" %in% cats) "hto" else cats[[1]]
+  bslib::layout_columns(
+    col_widths = c(3, 9), class = "scroll-panel",
+    div(
+      class = "scroll-controls",
+      .scroll_group("Axes",
+        selectizeInput(ns("features"), "Numeric columns", choices = nums,
+                       selected = .scroll_default_biaxial(nums), multiple = TRUE,
+                       options = list(placeholder = "Pick 2+ numeric columns"))),
+      .scroll_group("Colour",
+        selectInput(ns("colorby"), "Colour by", stats::setNames(cats, cats),
+                    selected = color_default)),
+      .scroll_group("Appearance",
+        selectInput(ns("palette"), "Palette", names(.scroll_discrete_palettes)),
+        sliderInput(ns("size"), "Point size", 0.1, 3, 0.5, 0.1),
+        sliderInput(ns("alpha"), "Opacity", 0.1, 1, 0.6, 0.05),
+        bslib::input_switch(ns("legend"), "Legend", TRUE),
+        bslib::input_switch(ns("raster"), "Rasterize (fast)", TRUE)),
+      .scroll_group("Layout", .scroll_aspect_input(ns))
+    ),
+    .scroll_plot_area(ns, "460px")
+  )
+}
+
+biaxial_server <- function(id, data, cells_r = reactive(data$cells),
+                           view_r = reactive(NULL)) {
+  moduleServer(id, function(input, output, session) {
+    .scroll_bind_view_cats(input, session, view_r, data$manifest, "colorby")
+    # DATA reactive: build the (potentially large) pairwise long df once; cosmetic
+    # drags no longer re-expand it. `params` is carried for the colour label.
+    data_r <- reactive({
+      req(input$colorby)
+      feats <- input$features
+      validate(need(length(feats) >= 2, "Pick at least two numeric columns."))
+      params <- list(features = feats, color_by = input$colorby)
+      list(params = params, df = .scroll_biaxial_df(cells_r(), params))
+    })
+    cosmetic_r <- .scroll_cosmetic(reactive(
+      list(palette = input$palette, point_size = input$size,
+           alpha = input$alpha, legend = isTRUE(input$legend), aspect = input$aspect)))
+    build <- function(raster) {
+      d <- data_r(); st <- cosmetic_r(); st$raster <- raster
+      view_biaxial(NULL, d$params, st, df = d$df)
+    }
+    plot_r   <- reactive(build(.scroll_use_raster(input$raster, nrow(data_r()$df))))
+    export_r <- reactive(build(FALSE))
+    output$plot <- renderPlot(plot_r())
+    .scroll_plot_downloads(output, export_r, id)
   })
 }
 
@@ -712,6 +876,10 @@ pseudobulk_de_server <- function(id, data, cells_r = reactive(data$cells)) {
        title = "Gene expression",
        desc = "The embedding coloured by a gene's expression.",
        ui = featureplot_ui, server = featureplot_server),
+  list(id = "biaxial", label = "Biaxial",
+       title = "Biaxial signal",
+       desc = "Pairwise scatters of numeric columns (e.g. hashtags) coloured by a selection.",
+       ui = biaxial_ui, server = biaxial_server),
   list(id = "dotplot", label = "DotPlot",
        title = "Marker panel",
        desc = "Mean expression and fraction expressing across groups.",

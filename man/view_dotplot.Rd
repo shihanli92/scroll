@@ -4,7 +4,7 @@
 \alias{view_dotplot}
 \title{Dot plot: mean expression x fraction expressing, across groups}
 \usage{
-view_dotplot(cells, params, expr_long, state = list())
+view_dotplot(cells, params, expr_long, state = list(), assembly = NULL)
 }
 \arguments{
 \item{cells}{The cells data.frame (its group sizes are the denominators).}
@@ -15,6 +15,10 @@ view_dotplot(cells, params, expr_long, state = list())
 the requested features (zero-valued cells absent).}
 
 \item{state}{Optional toggle state (\code{split_by} overrides \code{group_by}).}
+
+\item{assembly}{Optional precomputed result of the internal aggregation +
+clustering step; when supplied (as the Shiny app does), \code{cells}/\code{expr_long}
+are ignored for assembly and only cosmetics are applied.}
 }
 \value{
 A ggplot.
