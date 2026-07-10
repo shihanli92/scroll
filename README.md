@@ -90,7 +90,7 @@ markers: [CD3D, CD8A, MS4A1, CD14, NKG7]   # DotPlot's starting panel
 | Panel | Controls |
 |-------|----------|
 | **DimPlot** | reduction · color-by (metadata, categorical or numeric) · palette · point size · opacity · cluster labels · split-by |
-| **FeaturePlot** | gene (server-side search over ~all genes) · assay · reduction · palette · point size · expressing-on-top · split-by |
+| **FeaturePlot** | gene (server-side search over ~all genes) **or a numeric metadata column** (QC / hashtag-CLR / ADT) · assay · reduction · palette · point size · **colour-quantile clipping** · expressing-on-top · split-by |
 | **Biaxial** | pairwise scatters of numeric metadata columns (e.g. hashtag / ADT / QC pairs), coloured by a categorical selection · point size · opacity · palette |
 | **DotPlot** | marker genes (ordered multi-select) · group-by · assay · z-score scaling · palette · dot-size range · hclust rows/cols with dendrograms |
 | **Violin** | gene · group-by · palette · jitter points |

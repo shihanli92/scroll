@@ -290,6 +290,9 @@ featureplot_ui <- function(id, data) {
       .scroll_group("Feature",
         selectizeInput(ns("feature"), "Gene", choices = NULL, multiple = FALSE,
                        options = list(placeholder = "Search a gene...", maxOptions = 50)),
+        if (length(.scroll_num_cols(m)))
+          selectInput(ns("metacol"), "...or numeric column",
+                      c("(use gene)" = "", stats::setNames(.scroll_num_cols(m), .scroll_num_cols(m)))),
         if (length(assays) > 1)
           selectInput(ns("assay"), "Assay", assays, selected = m$default_assay)),
       .scroll_group("Embedding",
@@ -321,6 +324,11 @@ featureplot_server <- function(id, data, cells_r = reactive(data$cells),
         .scroll_default(data, "default_embedding", reds[[1]]) else reds[[1]]
       if (!sel_red %in% reds) sel_red <- reds[[1]]
       updateSelectInput(session, "reduction", choices = reds, selected = sel_red)
+      # numeric-column choices follow the view (scoped numerics appear in-view)
+      nums <- .scroll_num_cols(m, view_r()); cur <- input$metacol
+      updateSelectInput(session, "metacol",
+                        choices = c("(use gene)" = "", stats::setNames(nums, nums)),
+                        selected = if (!is.null(cur) && cur %in% nums) cur else "")
     }, ignoreNULL = FALSE)
     .scroll_bind_view_cats(input, session, view_r, m, "split", prepend = c("None" = ""))
     # repopulate the gene list for the active assay; drop a selection that does
@@ -335,9 +343,21 @@ featureplot_server <- function(id, data, cells_r = reactive(data$cells),
     # invalidate it, so they never re-hit duckdb.
     data_r <- reactive({
       req(input$reduction)
-      feat <- .scroll_nz(input$feature)
-      validate(need(!is.null(feat), "Search for a gene to plot its expression."))
       cells <- cells_r()
+      metacol <- .scroll_nz(input$metacol)
+      # a numeric metadata column is coloured like expression (same continuous
+      # controls: quantile clip, order-on-top, palette) but read from `cells`,
+      # not queried; picking one takes precedence over the gene selector.
+      if (!is.null(metacol) && metacol %in% names(cells)) {
+        vals <- data.frame(cell = cells$cell,
+                           value = suppressWarnings(as.numeric(cells[[metacol]])),
+                           stringsAsFactors = FALSE)
+        return(list(cells = cells, embedding = input$reduction, feature = metacol,
+                    values = vals, n = nrow(cells)))
+      }
+      feat <- .scroll_nz(input$feature)
+      validate(need(!is.null(feat),
+                    "Search for a gene, or pick a numeric column, to colour the embedding."))
       list(cells = cells, embedding = input$reduction, feature = feat,
            values = data$query1(assay(), feat), n = nrow(cells))
     })

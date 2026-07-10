@@ -85,6 +85,24 @@ test_that("cosmetic changes do not re-query; data changes do (featureplot)", {
   })
 })
 
+test_that("featureplot colours a numeric metadata column without querying", {
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  calls <- 0L
+  orig <- data$query1
+  data$query1 <- function(assay, feature) { calls <<- calls + 1L; orig(assay, feature) }
+  shiny::testServer(scroll:::featureplot_server, args = list(data = data), {
+    session$setInputs(reduction = "umap", feature = "", metacol = "nCount_RNA", assay = "RNA",
+                      palette = "grey-purple", size = 0.7, order = TRUE, legend = TRUE,
+                      clip = c(0, 100), split = "", aspect = 1)
+    session$flushReact(); force(output$plot)
+    expect_equal(calls, 0L)                          # metadata path never queries duckdb
+    expect_true(inherits(export_r()$layers[[1]]$geom, "GeomPoint"))
+    # the plotted colour values are the metadata column, not zero-filled expression
+    expect_equal(sort(plot_r()$data$.expr), sort(cells_r()$nCount_RNA))
+  })
+})
+
 test_that("view_dotplot accepts a precomputed assembly", {
   cells <- as.data.frame(arrow::read_parquet(file.path(test_project(), "cells.parquet")))
   feats <- c("CD3D", "CD8A")
