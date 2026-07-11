@@ -25,3 +25,61 @@ test_that("feature partitions exist for exported features", {
   parts <- list.files(file.path(dir, "expr", "RNA"))
   expect_true("feature=MS4A1" %in% parts)
 })
+
+# A minimal object where one gene's only nonzero data value sits below the
+# per-assay quantization floor (~max/510), so it survives full precision but
+# rounds to zero under uint8 quantization. Pins the documented tradeoff.
+.lowexpr_object <- function(seed = 1) {
+  set.seed(seed)
+  genes <- c("HIGH", "LOW"); n <- 6
+  cm <- matrix(1L, nrow = 2, ncol = n, dimnames = list(genes, paste0("c", seq_len(n))))
+  obj <- SeuratObject::CreateSeuratObject(counts = Matrix::Matrix(cm, sparse = TRUE),
+                                          min.cells = 0, min.features = 0)
+  dat <- matrix(0, nrow = 2, ncol = n, dimnames = dimnames(cm))
+  dat["HIGH", 1] <- 100     # sets the per-assay max -> floor is 100/510 ~ 0.196
+  dat["LOW", 1]  <- 0.05    # below the floor
+  obj <- SeuratObject::SetAssayData(obj, layer = "data",
+                                    new.data = Matrix::Matrix(dat, sparse = TRUE))
+  emb <- matrix(rnorm(n * 2), ncol = 2, dimnames = list(colnames(obj), c("UMAP_1", "UMAP_2")))
+  obj[["umap"]] <- SeuratObject::CreateDimReducObject(embeddings = emb, key = "UMAP_", assay = "RNA")
+  obj$grp <- factor(rep(c("a", "b"), length.out = n))
+  obj
+}
+
+test_that("quantization floors sub-max/510 values to zero; quantize=FALSE keeps them", {
+  skip_if_not_installed("SeuratObject")
+  obj <- .lowexpr_object()
+
+  qdir <- file.path(tempdir(), "scroll-quant-on")
+  suppressMessages(scroll_build(obj, qdir, assays = "RNA", meta_cols = "grp",
+                                quantize = TRUE, overwrite = TRUE))
+  con <- scroll_connect(qdir); on.exit(scroll_disconnect(con), add = TRUE)
+  low_q <- scroll_query_feature(con, "RNA", "LOW")
+  expect_true(all(low_q$value == 0))                 # floored away by quantization
+  expect_true(any(scroll_query_feature(con, "RNA", "HIGH")$value > 0))
+  scroll_disconnect(con); on.exit(NULL)
+
+  fdir <- file.path(tempdir(), "scroll-quant-off")
+  suppressMessages(scroll_build(obj, fdir, assays = "RNA", meta_cols = "grp",
+                                quantize = FALSE, overwrite = TRUE))
+  con2 <- scroll_connect(fdir); on.exit(scroll_disconnect(con2), add = TRUE)
+  low_f <- scroll_query_feature(con2, "RNA", "LOW")
+  expect_true(any(low_f$value > 0))                  # preserved at full precision
+})
+
+test_that("unsafe feature names (path separators) warn", {
+  expect_warning(scroll:::.scroll_warn_unsafe_features(c("OK", "BAD/NAME")),
+                 "path separators")
+  expect_silent(scroll:::.scroll_warn_unsafe_features(c("CD3D", "MS4A1")))
+})
+
+test_that("building into a non-empty dir without overwrite errors", {
+  skip_if_not_installed("SeuratObject")
+  dir <- file.path(tempdir(), "scroll-nonempty")
+  dir.create(dir, showWarnings = FALSE)
+  writeLines("x", file.path(dir, "sentinel.txt"))    # make it non-empty
+  expect_error(
+    suppressMessages(scroll_build(.lowexpr_object(), dir, assays = "RNA",
+                                  meta_cols = "grp", overwrite = FALSE)),
+    "use overwrite = TRUE")
+})

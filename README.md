@@ -2,18 +2,28 @@
 
 *Interactive single-cell explorers, served from your own infrastructure.*
 
-`scroll` turns a processed Seurat object into a polished, interactive web
-explorer — a scrolling page of analysis panels (DimPlot, FeaturePlot, DotPlot,
-Violin, Proportions, DE), each with its own fine-grained controls. A heavy
-offline **build phase** extracts lightweight on-disk artifacts; the **runtime**
-(a bslib Shiny app) reads only those, querying expression one feature at a time
-via duckdb — so runtime memory stays flat regardless of dataset size. It deploys
-as a plain `app.R` on an open-source Shiny Server, with no render step.
+<!-- badges: start -->
+[![R-CMD-check](https://github.com/shihanli1992/scroll/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/shihanli1992/scroll/actions/workflows/R-CMD-check.yaml)
+[![pkgdown](https://github.com/shihanli1992/scroll/actions/workflows/pkgdown.yaml/badge.svg)](https://github.com/shihanli1992/scroll/actions/workflows/pkgdown.yaml)
+<!-- badges: end -->
 
-> **Status:** build phase + all six panels (incl. a live DE section — ranked
-> table + volcano from one `presto` compute) + multimodal (multi-assay) support,
-> wired end-to-end and validated live on pbmc3k. `register_panel()` and WebGL
-> scatter for very large datasets are next.
+`scroll` turns a processed Seurat object into a polished, interactive web
+explorer — a scrolling page of analysis panels (DimPlot, FeaturePlot, Biaxial,
+DotPlot, Violin, Proportions, DE, Pseudobulk DE), each with its own fine-grained
+controls. A heavy offline **build phase** extracts lightweight on-disk artifacts;
+the **runtime** (a bslib Shiny app) reads only those, querying expression one
+feature at a time via duckdb — so runtime memory stays flat regardless of dataset
+size. It deploys as a plain `app.R` on an open-source Shiny Server, with no render
+step.
+
+> **Status:** feature-complete for the MVP — the build phase, eight analysis
+> panels (incl. a live DE section and replicate-aware **Pseudobulk DE**),
+> multimodal (multi-assay) support, **subset views** for reprocessed
+> sub-embeddings, per-level **Manual** palettes, PNG/PDF/CSV export, a
+> rasterization/memoization performance pass, and the public `register_panel()`
+> extension point — all wired end-to-end and validated live on pbmc3k.
+> Documentation: [pkgdown site](https://shihanli1992.github.io/scroll/) +
+> two vignettes (`browseVignettes("scroll")`).
 
 ## The two phases
 

@@ -12,6 +12,8 @@ Description: Turns a processed Seurat object into a polished, interactive
     one feature at a time via duckdb, so runtime memory stays flat regardless of
     matrix size.
 License: MIT + file LICENSE
+URL: https://github.com/shihanli1992/scroll, https://shihanli1992.github.io/scroll/
+BugReports: https://github.com/shihanli1992/scroll/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
@@ -48,5 +50,8 @@ Suggests:
     rmarkdown,
     testthat (>= 3.0.0),
     SeuratData
+Remotes:
+    immunogenomics/presto,
+    satijalab/seurat-data
 VignetteBuilder: knitr
 Config/testthat/edition: 3

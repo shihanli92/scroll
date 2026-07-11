@@ -1,0 +1,75 @@
+url: https://shihanli1992.github.io/scroll/
+
+template:
+  bootstrap: 5
+
+navbar:
+  structure:
+    left:  [intro, reference, articles, news]
+    right: [search, github]
+
+articles:
+- title: Tutorials
+  navbar: ~
+  contents:
+  - getting-started
+  - custom-panels
+
+reference:
+- title: Build & assemble
+  desc: >
+    Turn a processed Seurat object into an on-disk project, and attach
+    reprocessed sub-embeddings as linked views.
+  contents:
+  - scroll_build
+  - scroll_add_subset
+
+- title: Run the app
+  desc: Launch or scaffold the runtime explorer; read optional config defaults.
+  contents:
+  - scroll_app
+  - scroll_serve
+  - scroll_scaffold_app
+  - scroll_config
+
+- title: Query layer
+  desc: >
+    The flat-RAM duckdb query interface, usable programmatically without the app.
+  contents:
+  - scroll_connect
+  - scroll_disconnect
+  - scroll_manifest
+  - scroll_query_feature
+  - scroll_query_features
+  - scroll_query_cells
+  - scroll_dequantize
+  - scroll_aggregate_counts
+
+- title: Differential expression
+  desc: Live Wilcoxon markers and replicate-aware pseudobulk testing.
+  contents:
+  - scroll_de
+  - scroll_pseudobulk_de
+  - scroll_pseudobulk_stability
+
+- title: Extend the app
+  desc: Register custom panels using the same module contract as the built-ins.
+  contents:
+  - register_panel
+  - scroll_reset_panels
+
+- title: View cores
+  desc: >
+    The pure ggplot render functions behind each panel, reusable on their own.
+  contents:
+  - render_view
+  - scroll_view_kind
+  - view_umap_colorby
+  - view_feature_plot
+  - view_biaxial
+  - view_dotplot
+  - view_violin
+  - view_proportions
+  - view_de_table
+  - view_volcano
+  - view_stability

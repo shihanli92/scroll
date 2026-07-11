@@ -103,7 +103,7 @@ centroid_map <- function(cells, group_by, x = "umap_1", y = "umap_2") {
 Try it on a small synthetic embedding (five Gaussian blobs) — this is exactly the
 shape of `data$cells`:
 
-```{r plot-demo}
+```{r plot-demo, fig.alt = "Five Gaussian cell-type blobs in a 2-D embedding, each group's median centroid marked and labelled, with the centroids linked by a minimum spanning tree."}
 set.seed(1)
 blob <- function(g, mx, my, n = 200)
   data.frame(cell = paste0(g, seq_len(n)),
