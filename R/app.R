@@ -1,7 +1,7 @@
 # The runtime: a polished bslib explorer with one scrolling section per analysis
 # type, each with its own controls. The app never loads the Seurat object -- it
 # reads the built artifacts (cells.parquet once globally; expression one feature
-# at a time via duckdb), so runtime RAM stays flat.
+# at a time via arrow), so runtime RAM stays flat.
 
 # --- data handle --------------------------------------------------------------
 
@@ -18,7 +18,7 @@
   )
   # bound query helpers that dequantize to normalized units, memoized by an LRU
   # so cosmetic re-renders, the vector-export path, and re-selecting a recent gene
-  # never re-hit duckdb.
+  # never re-hit the store.
   cache <- .scroll_lru(256L)
   d$query1 <- function(assay, feature) {
     key <- paste0("1|", assay, "|", feature)
@@ -360,7 +360,7 @@ featureplot_server <- function(id, data, cells_r = reactive(data$cells),
       updateSelectizeInput(session, "feature", choices = feats, server = TRUE, selected = keep)
     })
     # DATA reactive: cells + the (cached) expression query. Cosmetic drags do not
-    # invalidate it, so they never re-hit duckdb.
+    # invalidate it, so they never re-hit the store.
     data_r <- reactive({
       req(input$reduction)
       cells <- cells_r()
@@ -518,7 +518,7 @@ violin_server <- function(id, data, cells_r = reactive(data$cells),
       if (identical(input$palette, "Manual")) .scroll_manual_ui(session$ns, lvl_r()))
     manual_colors <- reactive(
       if (identical(input$palette, "Manual")) .scroll_manual_colors(input, lvl_r()))
-    # DATA reactive: cells + query (cosmetic changes no longer re-hit duckdb).
+    # DATA reactive: cells + query (cosmetic changes no longer re-hit the store).
     data_r <- reactive({
       req(input$group)
       feat <- .scroll_nz(input$feature)
@@ -1296,7 +1296,7 @@ scroll_app <- function(dir = ".") {
       do.call(sec$server, args)
     }
   }
-  # close the (process-global) duckdb connection when the app stops
+  # release the query handle's cached datasets when the app stops
   shiny::shinyApp(ui, server, onStart = function() {
     shiny::onStop(function() try(scroll_disconnect(data$con), silent = TRUE))
   })

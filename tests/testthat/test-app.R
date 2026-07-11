@@ -8,6 +8,15 @@ test_that(".scroll_load exposes cells, manifest, config and query helpers", {
   expect_true(all(c("cell", "value") %in% names(hit)))
 })
 
+test_that("scroll_app returns a shiny app and handle cleanup is a safe no-op", {
+  expect_s3_class(scroll_app(test_project()), "shiny.appobj")
+  # scroll_disconnect just drops the handle's cached datasets (no live db
+  # connection), so it is idempotent and silent — onStop can't crash the session.
+  data <- scroll:::.scroll_load(test_project())
+  expect_silent(scroll_disconnect(data$con))
+  expect_silent(scroll_disconnect(data$con))     # second call is a no-op
+})
+
 test_that("dimplot_server renders a plot from its controls", {
   data <- scroll:::.scroll_load(test_project())
   on.exit(scroll_disconnect(data$con))

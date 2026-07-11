@@ -25,7 +25,7 @@ test_that("queries and dequantization are per-assay", {
   expect_equal(nrow(scroll_query_feature(con, "RNA", "CD3-P")), 0)
 })
 
-test_that(".scroll_assay_glob rejects unsafe assay names (defense-in-depth)", {
+test_that(".scroll_assay_dir rejects unsafe assay names (defense-in-depth)", {
   con <- scroll_connect(test_project()); on.exit(scroll_disconnect(con))
   expect_error(scroll_query_feature(con, "../secret", "x"), "Invalid assay")
   expect_error(scroll_query_feature(con, "a/b", "x"), "Invalid assay")

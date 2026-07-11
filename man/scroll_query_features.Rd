@@ -7,7 +7,7 @@
 scroll_query_features(con, assay, features)
 }
 \arguments{
-\item{con}{A connection from \code{\link[=scroll_connect]{scroll_connect()}}.}
+\item{con}{A handle from \code{\link[=scroll_connect]{scroll_connect()}}.}
 
 \item{assay}{Assay name.}
 
@@ -18,7 +18,7 @@ A data.frame with columns \code{feature}, \code{cell}, \code{value} (zero-valued
 cells absent).
 }
 \description{
-Reads only the named features' partitions (via \verb{feature IN (...)} predicate
-pushdown). Used by aggregate views (e.g. dotplot) that draw a bounded marker
-panel; still touches only those partitions, never the whole store.
+Reads only the named features' partitions (partition pruning). Used by
+aggregate views (e.g. dotplot) that draw a bounded marker panel; still touches
+only those partitions, never the whole store.
 }

@@ -1,5 +1,5 @@
 # Pseudobulk differential expression. Cells are aggregated into sample-level
-# count profiles (summed raw counts, in duckdb) and compared with the
+# count profiles (summed raw counts, via arrow) and compared with the
 # edgeR / limma-voom pipeline, so the statistics are replicate-based rather than
 # per-cell. Needs a counts store (scroll_build(counts = TRUE)).
 

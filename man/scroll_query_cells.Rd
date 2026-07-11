@@ -7,7 +7,7 @@
 scroll_query_cells(con, assay, cells)
 }
 \arguments{
-\item{con}{A connection from \code{\link[=scroll_connect]{scroll_connect()}}.}
+\item{con}{A handle from \code{\link[=scroll_connect]{scroll_connect()}}.}
 
 \item{assay}{Assay name.}
 

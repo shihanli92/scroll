@@ -7,7 +7,7 @@
 scroll_aggregate_counts(con, assay, mapping)
 }
 \arguments{
-\item{con}{A connection from \code{\link[=scroll_connect]{scroll_connect()}}.}
+\item{con}{A handle from \code{\link[=scroll_connect]{scroll_connect()}}.}
 
 \item{assay}{Assay name.}
 
@@ -19,7 +19,7 @@ A data.frame with columns \code{feature}, \code{psample}, \code{count} (summed).
 }
 \description{
 Sums an assay's raw counts (the \verb{counts/<assay>.parquet} store, written by
-\code{\link[=scroll_build]{scroll_build()}} with \code{counts = TRUE}) over a cell-to-sample mapping, entirely
-in duckdb — so the full genes x cells matrix is never materialized in R. Used
-by \code{\link[=scroll_pseudobulk_de]{scroll_pseudobulk_de()}}.
+\code{\link[=scroll_build]{scroll_build()}} with \code{counts = TRUE}) over a cell-to-sample mapping. The join
+and summation run in arrow's engine, so the full genes x cells matrix is never
+materialized in R. Used by \code{\link[=scroll_pseudobulk_de]{scroll_pseudobulk_de()}}.
 }

@@ -1,6 +1,6 @@
 # Live differential expression. presto::wilcoxauc needs an in-memory
 # genes x cells matrix, so a DE run reconstructs the contrast's expression
-# matrix from the duckdb store (the one runtime operation that materialises a
+# matrix from the Parquet store (the one runtime operation that materialises a
 # chunk of the matrix — hence on-demand, behind a Compute button).
 
 #' Live differential expression for a contrast (presto / Wilcoxon)

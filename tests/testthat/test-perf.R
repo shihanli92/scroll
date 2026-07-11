@@ -1,6 +1,6 @@
 # Performance refactor: rasterized point layer (vector by default / export),
 # query LRU memoization, and the data/cosmetic reactive split (cosmetic changes
-# must not re-query duckdb).
+# must not re-query the store).
 
 test_that(".scroll_point_layer is a vector geom_point by default", {
   lyr <- scroll:::.scroll_point_layer(size = 0.6)
@@ -43,7 +43,7 @@ test_that(".scroll_lru get / set / evict / MRU", {
   expect_equal(lru$get("c"), 3)
 })
 
-test_that("query results are memoized (repeat lookup does not re-hit duckdb)", {
+test_that("query results are memoized (repeat lookup does not re-hit the store)", {
   data <- scroll:::.scroll_load(test_project())
   on.exit(scroll_disconnect(data$con))
   calls <- 0L
@@ -56,7 +56,7 @@ test_that("query results are memoized (repeat lookup does not re-hit duckdb)", {
       data$query1("RNA", "CD3D"); data$query1("RNA", "CD3D")
       expect_equal(calls, 1L)            # second call served from the LRU
       data$query1("RNA", "CD8A")
-      expect_equal(calls, 2L)            # a different gene does hit duckdb
+      expect_equal(calls, 2L)            # a different gene does hit the store
     },
     .package = "scroll")
 })
@@ -96,7 +96,7 @@ test_that("featureplot colours a numeric metadata column without querying", {
                       palette = "grey-purple", size = 0.7, order = TRUE, legend = TRUE,
                       clip = c(0, 100), split = "", aspect = 1)
     session$flushReact(); force(output$plot)
-    expect_equal(calls, 0L)                          # metadata path never queries duckdb
+    expect_equal(calls, 0L)                          # metadata path never queries the store
     expect_true(inherits(export_r()$layers[[1]]$geom, "GeomPoint"))
     # the plotted colour values are the metadata column, not zero-filled expression
     expect_equal(sort(plot_r()$data$.expr), sort(cells_r()$nCount_RNA))

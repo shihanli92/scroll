@@ -1,4 +1,4 @@
-# Pseudobulk DE: counts store, duckdb aggregation, edgeR/limma-voom, and the panel.
+# Pseudobulk DE: counts store, arrow aggregation, edgeR/limma-voom, and the panel.
 # The shared test_project() is built with counts = TRUE.
 
 test_that("counts store is written and recorded when counts = TRUE", {

@@ -2,7 +2,7 @@
 % Please edit documentation in R/query.R
 \name{scroll_connect}
 \alias{scroll_connect}
-\title{Open a duckdb connection for a scroll project}
+\title{Open a scroll project for querying}
 \usage{
 scroll_connect(dir)
 }
@@ -10,8 +10,11 @@ scroll_connect(dir)
 \item{dir}{A scroll project directory (must contain \verb{expr/}).}
 }
 \value{
-A DBIConnection. Close it with \code{\link[=scroll_disconnect]{scroll_disconnect()}}.
+A \code{scroll_con} handle. Close it with \code{\link[=scroll_disconnect]{scroll_disconnect()}}.
 }
 \description{
-Open a duckdb connection for a scroll project
+Returns a lightweight handle over a built project's Parquet store. The handle
+caches one \code{arrow::Dataset} per assay (built lazily on first use), so feature
+lookups avoid re-scanning the partition directory. Release it with
+\code{\link[=scroll_disconnect]{scroll_disconnect()}}.
 }

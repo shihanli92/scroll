@@ -19,7 +19,7 @@ explorer. It has **two phases**:
    expression as a feature-partitioned Parquet store.
 2. A light **runtime** (`scroll_app()` / `scroll_serve()`) — a bslib Shiny app
    that reads only those artifacts, querying expression **one gene at a time**
-   through duckdb. The running app never loads the Seurat object, so runtime
+   through arrow. The running app never loads the Seurat object, so runtime
    memory stays flat regardless of dataset size, and it deploys as a plain `app.R`.
 
 The code chunks below are illustrative (they need a dataset / launch a server), so
@@ -28,7 +28,7 @@ they are not executed when this vignette is rendered.
 ## Install
 
 ```{r install}
-install.packages(c("shiny", "bslib", "arrow", "duckdb", "DBI", "ggplot2",
+install.packages(c("shiny", "bslib", "arrow", "dplyr", "ggplot2",
                    "scales", "yaml", "Matrix", "colourpicker"))
 install.packages("SeuratObject")            # the build step needs this (runtime does not)
 # then install scroll itself: R CMD INSTALL scroll  (or install.packages the tarball)

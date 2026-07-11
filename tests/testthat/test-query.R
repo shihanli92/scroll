@@ -31,6 +31,38 @@ test_that("querying a missing feature returns zero rows, not an error", {
   expect_equal(nrow(scroll_query_feature(con, "RNA", "NOT_A_GENE")), 0)
 })
 
+test_that("scroll_query_feature matches a direct partition read (and repeats identically)", {
+  dir <- test_project()
+  con <- scroll_connect(dir); on.exit(scroll_disconnect(con))
+  part <- list.files(file.path(dir, "expr", "RNA", "feature=MS4A1"), full.names = TRUE)
+  direct <- as.data.frame(arrow::read_parquet(part))          # the raw partition file
+  ord <- function(d) d[order(d$cell), c("cell", "value")]
+  hit <- scroll_query_feature(con, "RNA", "MS4A1")
+  expect_equal(ord(hit), ord(direct), ignore_attr = TRUE)
+  # the cached Dataset in the handle returns identical rows on a repeat lookup
+  expect_equal(ord(scroll_query_feature(con, "RNA", "MS4A1")), ord(hit), ignore_attr = TRUE)
+})
+
+test_that("scroll_aggregate_counts sums a many-to-many mapping correctly", {
+  dir <- test_project()                                       # built with counts = TRUE
+  con <- scroll_connect(dir); on.exit(scroll_disconnect(con))
+  cells <- as.data.frame(arrow::read_parquet(file.path(dir, "cells.parquet")))$cell
+  c1 <- cells[1]; c2 <- cells[2]
+  mapping <- data.frame(cell = c(c1, c2, c1), psample = c("A", "A", "B"))  # c1 in A and B
+  agg <- scroll_aggregate_counts(con, "RNA", mapping)
+  expect_true(all(c("feature", "psample", "count") %in% names(agg)))
+
+  # independent expected sums from a direct read of the counts store
+  raw <- as.data.frame(arrow::read_parquet(file.path(dir, "counts", "RNA.parquet")))
+  expected <- do.call(rbind, lapply(unique(mapping$psample), function(ps) {
+    sub <- raw[raw$cell %in% mapping$cell[mapping$psample == ps], ]
+    a <- stats::aggregate(value ~ feature, sub, sum)
+    data.frame(feature = a$feature, psample = ps, count = a$value)
+  }))
+  key <- function(d) d[order(d$feature, d$psample), c("feature", "psample", "count")]
+  expect_equal(key(agg), key(expected), ignore_attr = TRUE)
+})
+
 test_that("dequantized values match the source matrix within the quant bound", {
   skip_if_not_installed("SeuratObject")
   obj <- make_test_object()

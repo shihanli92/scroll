@@ -12,7 +12,7 @@ explorer — a scrolling page of analysis panels (DimPlot, FeaturePlot, Biaxial,
 DotPlot, Violin, Proportions, DE, Pseudobulk DE), each with its own fine-grained
 controls. A heavy offline **build phase** extracts lightweight on-disk artifacts;
 the **runtime** (a bslib Shiny app) reads only those, querying expression one
-feature at a time via duckdb — so runtime memory stays flat regardless of dataset
+feature at a time via arrow — so runtime memory stays flat regardless of dataset
 size. It deploys as a plain `app.R` on an open-source Shiny Server, with no render
 step.
 
@@ -38,7 +38,7 @@ Seurat .rds ──scroll_build()──▶  project/            ──scroll_serv
 
 The running app **never loads the Seurat object**. It loads `cells.parquet`
 (metadata + embeddings, a few MB) once globally, and answers each feature lookup
-with a duckdb query that reads only that feature's Parquet partition.
+with an arrow query that reads only that feature's Parquet partition.
 
 ## Tutorials
 
@@ -52,7 +52,7 @@ Two vignettes walk through the package (`browseVignettes("scroll")`):
 ## Install
 
 ```r
-# runtime: install.packages(c("Matrix","arrow","duckdb","DBI","ggplot2",
+# runtime: install.packages(c("Matrix","arrow","dplyr","ggplot2",
 #                             "scales","shiny","bslib","yaml","colourpicker"))
 # build only: install.packages("SeuratObject")
 R CMD INSTALL scroll        # from the repo root
@@ -132,7 +132,7 @@ supported via `view_de_table()` for full rigor / any test.
 **Pseudobulk DE** needs raw counts (edgeR/limma-voom are count-based), which are
 not in the default quantized store. Build with `counts = TRUE` to also export a
 `counts/<assay>.parquet` store; the Pseudobulk DE panel then sums counts per
-pseudobulk sample **in duckdb** (RAM stays flat) and runs limma-voom:
+pseudobulk sample **in arrow's engine** (RAM stays flat) and runs limma-voom:
 
 ```r
 scroll_build(obj, "proj", counts = TRUE)   # ~doubles expression storage
@@ -209,7 +209,7 @@ scroll_disconnect(con)
 |------|------|
 | `R/build.R` | `scroll_build()` + Seurat v5 extraction |
 | `R/manifest.R` / `R/scaffold.R` | manifest + `app.R`/`config.yaml` scaffolding |
-| `R/query.R` | duckdb connection + `scroll_query_feature()` / `scroll_query_features()` |
+| `R/query.R` | arrow query handle + `scroll_query_feature()` / `scroll_query_features()` |
 | `R/views.R` | plot cores: `view_umap_colorby`, `view_feature_plot`, `view_dotplot`, … |
 | `R/app.R` | `scroll_app()`, `scroll_serve()`, the panel modules |
 | `R/styles.R` | the bslib app's design-system CSS + scroll-spy |

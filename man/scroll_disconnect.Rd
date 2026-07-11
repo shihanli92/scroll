@@ -2,13 +2,18 @@
 % Please edit documentation in R/query.R
 \name{scroll_disconnect}
 \alias{scroll_disconnect}
-\title{Close a scroll duckdb connection}
+\title{Close a scroll project handle}
 \usage{
 scroll_disconnect(con)
 }
 \arguments{
-\item{con}{A connection from \code{\link[=scroll_connect]{scroll_connect()}}.}
+\item{con}{A handle from \code{\link[=scroll_connect]{scroll_connect()}}.}
+}
+\value{
+\code{invisible(NULL)}.
 }
 \description{
-Close a scroll duckdb connection
+Drops the handle's cached datasets. There is no live database connection to
+close (queries read Parquet directly via arrow), so this is a safe no-op that
+may be called more than once.
 }

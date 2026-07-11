@@ -6,7 +6,16 @@
 \alias{scroll-package}
 \title{scroll: Interactive Single-Cell Explorers from Seurat Objects}
 \description{
-Turns a processed Seurat object into a polished, interactive single-cell explorer (a Shiny app with DimPlot, FeaturePlot and DotPlot panels, each with its own controls). A heavy offline build phase extracts lightweight on-disk artifacts (metadata and embeddings as a small Parquet table, expression as a feature-partitioned Parquet store) that the app reads one feature at a time via duckdb, so runtime memory stays flat regardless of matrix size.
+Turns a processed Seurat object into a polished, interactive single-cell explorer (a Shiny app with DimPlot, FeaturePlot and DotPlot panels, each with its own controls). A heavy offline build phase extracts lightweight on-disk artifacts (metadata and embeddings as a small Parquet table, expression as a feature-partitioned Parquet store) that the app reads one feature at a time via arrow, so runtime memory stays flat regardless of matrix size.
+}
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/shihanli1992/scroll}
+  \item \url{https://shihanli1992.github.io/scroll/}
+  \item Report bugs at \url{https://github.com/shihanli1992/scroll/issues}
+}
+
 }
 \author{
 \strong{Maintainer}: Shihan Li \email{shihanli1992@gmail.com}

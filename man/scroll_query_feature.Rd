@@ -7,7 +7,7 @@
 scroll_query_feature(con, assay, feature)
 }
 \arguments{
-\item{con}{A connection from \code{\link[=scroll_connect]{scroll_connect()}}.}
+\item{con}{A handle from \code{\link[=scroll_connect]{scroll_connect()}}.}
 
 \item{assay}{Assay name (subtree under \verb{expr/}).}
 
