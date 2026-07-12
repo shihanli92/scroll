@@ -13,6 +13,9 @@ polished, flat-RAM interactive single-cell explorer.
   runtime memory stays flat regardless of matrix size.
 * **Deploys as a plain `app.R`** on an open-source Shiny Server — no render step.
   The running app never loads the Seurat object.
+* **Build progress.** `scroll_build(verbose = interactive())` reports each phase
+  and shows a progress bar over the feature-partition export (the slow step);
+  the export is written in feature batches, which also bounds peak memory.
 * Expression is `uint8`-quantized by default (`quantize = FALSE` for exact
   precision); an opt-in raw `counts/<assay>.parquet` store (`counts = TRUE`)
   backs the pseudobulk panel.

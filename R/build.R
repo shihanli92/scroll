@@ -33,13 +33,17 @@
 #'   restricts every panel to those cells and exposes its embedding + metadata.
 #'   Defaults to any spec attached by [scroll_add_subset()].
 #' @param overwrite If `TRUE`, an existing `outdir` is removed first.
+#' @param verbose If `TRUE`, report progress: a step message per phase and a
+#'   progress bar over each assay's feature-partition export (the slow step).
+#'   Defaults to [interactive()], so it is quiet in scripts/CI; pass `TRUE` to
+#'   force progress in a non-interactive session.
 #'
 #' @return `outdir`, invisibly.
 #' @export
 scroll_build <- function(object, outdir,
                          assays = NULL, embeddings = NULL, meta_cols = NULL,
                          quantize = TRUE, counts = FALSE, subsets = NULL,
-                         overwrite = FALSE) {
+                         overwrite = FALSE, verbose = interactive()) {
   .scroll_need_seurat()
   object <- .scroll_load_object(object)
 
@@ -64,6 +68,7 @@ scroll_build <- function(object, outdir,
   if (counts) dir.create(file.path(outdir, "counts"), showWarnings = FALSE)
 
   # --- cells.parquet: metadata + all embeddings, the only globally-loaded file
+  .scroll_step(verbose, "Extracting cell metadata + embeddings...")
   cells <- .scroll_extract_cells(object, md, meta_cols, embeddings)
   .scroll_check_subset_coverage(subsets, cells)
   arrow::write_parquet(cells, file.path(outdir, "cells.parquet"))
@@ -71,11 +76,15 @@ scroll_build <- function(object, outdir,
   # --- expr/<assay>/: long, feature-partitioned expression (+ optional counts)
   assay_info <- list()
   for (a in assays) {
-    assay_info[[a]] <- .scroll_export_assay(object, a, outdir, quantize)
-    if (counts) .scroll_export_counts(object, a, outdir)
+    assay_info[[a]] <- .scroll_export_assay(object, a, outdir, quantize, verbose = verbose)
+    if (counts) {
+      .scroll_step(verbose, sprintf("Exporting raw counts for '%s'...", a))
+      .scroll_export_counts(object, a, outdir)
+    }
   }
 
   # --- manifest + authored scaffolding
+  .scroll_step(verbose, "Writing manifest + app scaffold...")
   .scroll_write_manifest(outdir, object, assay_info, embeddings, md, meta_cols,
                          n_cells = nrow(cells), quantize = quantize,
                          has_counts = counts, cells = cells, subsets = subsets)
@@ -157,9 +166,16 @@ scroll_build <- function(object, outdir,
   tab
 }
 
+# Emit a progress step message when verbose.
+.scroll_step <- function(verbose, ...) if (isTRUE(verbose)) message(...)
+
 # Export one assay's `data` layer as long, feature-partitioned Parquet.
-# Returns list(features=, max=, n_features=) for the manifest.
-.scroll_export_assay <- function(object, assay, outdir, quantize) {
+# Returns list(features=, max=, n_features=) for the manifest. The write is done
+# in feature batches so a progress bar can advance over the (potentially tens of
+# thousands of) partitions; batching also keeps peak memory and open file handles
+# bounded. Each feature lands in exactly one batch, so every partition holds one
+# part file, identical in content to a single write.
+.scroll_export_assay <- function(object, assay, outdir, quantize, verbose = FALSE) {
   mat <- SeuratObject::GetAssayData(object, assay = assay, layer = "data")
   if (is.null(mat) || nrow(mat) == 0 || length(mat@x) == 0)
     stop("Assay '", assay, "' has an empty `data` layer; normalize the object ",
@@ -168,6 +184,9 @@ scroll_build <- function(object, outdir,
   feats <- rownames(mat)
   cell_names <- colnames(mat)
   .scroll_warn_unsafe_features(feats)
+  nfeat <- length(feats)
+  .scroll_step(verbose, sprintf("Exporting assay '%s' (%s features)...",
+                                assay, format(nfeat, big.mark = ",")))
 
   trip <- Matrix::summary(mat)             # i (feature), j (cell), x (value)
   max_a <- max(trip$x)
@@ -175,28 +194,36 @@ scroll_build <- function(object, outdir,
   if (quantize) {
     value <- as.integer(pmin(pmax(round(value / max_a * 255), 0L), 255L))
   }
-  df <- data.frame(
-    feature = feats[trip$i],
-    cell    = cell_names[trip$j],
-    value   = value,
-    stringsAsFactors = FALSE
-  )
-  # Sort by feature so each partition is written contiguously: arrow can close a
-  # partition's file before opening the next, keeping open handles bounded even
-  # with tens of thousands of features.
-  df <- df[order(df$feature), , drop = FALSE]
+  # Group nonzeros by feature (contiguous blocks), so a feature batch is a slice.
+  o <- order(trip$i)
+  fi <- trip$i[o]; cj <- trip$j[o]; vv <- value[o]
+  bnd <- c(0L, cumsum(tabulate(fi, nbins = nfeat)))   # feature f rows: (bnd[f]+1):bnd[f+1]
 
-  tbl <- arrow::as_arrow_table(df)
-  if (quantize) {
-    tbl <- tbl$cast(arrow::schema(
-      feature = arrow::utf8(), cell = arrow::utf8(), value = arrow::uint8()))
+  dest <- file.path(outdir, "expr", assay)
+  sch  <- arrow::schema(feature = arrow::utf8(), cell = arrow::utf8(),
+                        value = arrow::uint8())
+  bsize  <- max(256L, ceiling(nfeat / 40))            # ~40 bar ticks at most
+  starts <- seq.int(1L, nfeat, by = bsize)
+  pb <- if (isTRUE(verbose)) utils::txtProgressBar(min = 0, max = length(starts), style = 3)
+  on.exit(if (!is.null(pb)) close(pb), add = TRUE)
+
+  for (bi in seq_along(starts)) {
+    lo <- starts[bi]; hi <- min(lo + bsize - 1L, nfeat)
+    r0 <- bnd[lo] + 1L; r1 <- bnd[hi + 1L]
+    if (r1 >= r0) {                                    # some features here are nonzero
+      idx <- r0:r1
+      tbl <- arrow::as_arrow_table(data.frame(
+        feature = feats[fi[idx]], cell = cell_names[cj[idx]], value = vv[idx],
+        stringsAsFactors = FALSE))
+      if (quantize) tbl <- tbl$cast(sch)
+      arrow::write_dataset(
+        tbl, dest, partitioning = "feature", format = "parquet",
+        basename_template = sprintf("part-%d-{i}.parquet", bi),
+        max_partitions = (hi - lo + 1L) + 1L)
+    }
+    if (!is.null(pb)) utils::setTxtProgressBar(pb, bi)
   }
-  arrow::write_dataset(
-    tbl, file.path(outdir, "expr", assay),
-    partitioning = "feature", format = "parquet",
-    max_partitions = length(feats) + 1L
-  )
-  list(features = feats, max = max_a, n_features = length(feats))
+  list(features = feats, max = max_a, n_features = nfeat)
 }
 
 # Export one assay's raw `counts` layer as a single long Parquet

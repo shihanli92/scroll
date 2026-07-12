@@ -13,7 +13,8 @@ scroll_build(
   quantize = TRUE,
   counts = FALSE,
   subsets = NULL,
-  overwrite = FALSE
+  overwrite = FALSE,
+  verbose = interactive()
 )
 }
 \arguments{
@@ -48,6 +49,11 @@ restricts every panel to those cells and exposes its embedding + metadata.
 Defaults to any spec attached by \code{\link[=scroll_add_subset]{scroll_add_subset()}}.}
 
 \item{overwrite}{If \code{TRUE}, an existing \code{outdir} is removed first.}
+
+\item{verbose}{If \code{TRUE}, report progress: a step message per phase and a
+progress bar over each assay's feature-partition export (the slow step).
+Defaults to \code{\link[=interactive]{interactive()}}, so it is quiet in scripts/CI; pass \code{TRUE} to
+force progress in a non-interactive session.}
 }
 \value{
 \code{outdir}, invisibly.
