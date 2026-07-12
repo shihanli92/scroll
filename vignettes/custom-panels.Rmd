@@ -11,13 +11,65 @@ vignette: >
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.width = 6, fig.height = 5)
 ```
 
-`scroll`'s panel list is an extension point. `register_panel()` adds a section to
-every `scroll_app()` built afterwards, using the **same module contract as the
-built-ins**. This vignette builds a working example: a **Centroid map** that plots
-the median position of each cell group in an embedding and links the group
-centroids with a minimum spanning tree.
+`scroll`'s panel list is an extension point. This vignette builds a working
+example — a **Centroid map** that plots the median position of each cell group in
+an embedding and links the group centroids with a minimum spanning tree — two ways:
 
-## The panel contract
+* **`register_plot_panel()`** — declarative. You write only a *plot function* and a
+  list of *declared controls*; scroll generates the whole Shiny module (UI, control
+  population, a Compute gate, error messages, PNG/PDF export, spinner, and app-bar
+  subset/view awareness). Start here.
+* **`register_panel()`** — the low-level module contract the built-ins use. Reach
+  for it when a panel needs cross-output state or custom reactivity the builder
+  doesn't cover.
+
+## The quick way — `register_plot_panel()`
+
+Write the analysis as a plain function of a cell data frame (Step 1 below), then
+register it with a one-line control declaration. This complete panel adds a
+**Group by** dropdown of categorical columns and draws the centroid map:
+
+```{r quickway, eval = FALSE}
+library(scroll)
+# centroid_map() is the plain function defined in Step 1
+register_plot_panel("centroids",
+  label = "Centroid map", title = "Group centroids", after = "dimplot",
+  compute = FALSE,                                   # live: redraw on any change
+  controls = list(
+    scroll_input_column("group", "Group by", "categorical")),
+  plot = function(cells, input, data) {
+    emb <- data$manifest$default_embedding
+    centroid_map(cells, group_by = input$group,
+                 x = paste0(emb, "_1"), y = paste0(emb, "_2"))
+  })
+
+scroll_serve("pbmc3k")            # the section appears after DimPlot
+```
+
+That's the whole panel — no `moduleServer`, no `renderPlot`, no download handlers.
+`plot = function(cells, input, data)` receives the **active** (subset/view-filtered)
+cells, the control values by id (`input$group`), and the data handle. An empty
+required control or an error in the plot function shows an inline message instead of
+a blank plot.
+
+**Declared controls** (`controls = list(...)`):
+
+| Constructor | Input |
+|-------------|-------|
+| `scroll_input_column(id, label, type)` | pick a metadata column (`"categorical"`/`"numeric"`/`"any"`) |
+| `scroll_input_levels(id, label, from, required=, none=)` | selectize of the levels of the column chosen by control `from` |
+| `scroll_input_gene(id, label, multiple=)` | server-side gene search over the default assay |
+| `scroll_input_numeric` / `_slider` / `_choice` / `_text` | the matching Shiny inputs |
+
+`compute = TRUE` (the default) gates redraws behind a **Compute** button — use it
+when the plot is expensive (e.g. runs `scroll_de()`); `compute = FALSE` redraws live.
+A worked, real-world builder panel — a two-contrast concordance scatter — ships at
+`examples/concordance-panel.R`.
+
+## The panel contract (advanced)
+
+When you need full control, `register_panel()` takes the same pair the built-ins
+use:
 
 A panel is a pair of functions:
 

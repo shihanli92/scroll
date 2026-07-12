@@ -165,33 +165,32 @@ reprocessing itself happens in your own Seurat pipeline, outside `scroll`.)
 
 ## Add your own panel
 
-The panel list is an extension point. `register_panel()` adds a section to every
-`scroll_app()` built afterwards — a panel is just a `ui(id, data)` /
-`server(id, data, cells_r)` pair, the same contract the built-ins use:
+The panel list is an extension point. The quickest way is `register_plot_panel()` —
+declare the controls and one plot function, and scroll builds the whole Shiny
+section (UI, control population, a Compute gate, inline error messages, PNG/PDF
+export, and app-bar subset/view awareness):
 
 ```r
-count_ui <- function(id, data) {
-  ns <- shiny::NS(id)
-  cats <- names(Filter(function(x) identical(x$type, "categorical"), data$manifest$meta))
-  shiny::tagList(shiny::selectInput(ns("grp"), "Group", cats),
-                 shiny::plotOutput(ns("plot")))
-}
-count_server <- function(id, data, cells_r = shiny::reactive(data$cells)) {
-  shiny::moduleServer(id, function(input, output, session) {
-    output$plot <- shiny::renderPlot(barplot(table(cells_r()[[input$grp]])))
-  })
-}
-
-register_panel("counts", count_ui, count_server, label = "Counts",
-               title = "Cells per group", after = "dimplot")
+register_plot_panel("counts", label = "Counts", title = "Cells per group",
+  after = "dimplot", compute = FALSE,
+  controls = list(scroll_input_column("grp", "Group", "categorical")),
+  plot = function(cells, input, data)
+    ggplot2::ggplot(cells, ggplot2::aes(.data[[input$grp]])) + ggplot2::geom_bar())
 scroll_serve("pbmc3k")           # the new section appears in scroll order
 ```
 
-`data` is the shared handle — `data$cells` (metadata + embeddings), `data$manifest`,
+`plot = function(cells, input, data)` receives the **active** (subset/view-filtered)
+cells, the control values by id, and the shared handle — `data$manifest`,
 `data$config`, and `data$query1(assay, feature)` / `data$queryN(assay, features)`
-for dequantized expression. Use `cells_r()` (not `data$cells`) so the panel honours
-the app-bar subset filter. Registering an existing `id` overrides that panel in
-place (including a built-in); `scroll_reset_panels()` clears custom ones.
+for dequantized expression. Controls are declared with `scroll_input_column()`,
+`scroll_input_levels()`, `scroll_input_gene()`, `scroll_input_numeric/slider/choice/text()`.
+
+For full control (cross-output state, custom reactivity), `register_panel(id, ui,
+server, …)` takes a raw `ui(id, data)` / `server(id, data, cells_r)` module pair —
+the same contract the built-ins use — and the helpers `scroll_render_plot()` /
+`scroll_bind_levels()` remove most of the boilerplate. Registering an existing `id`
+overrides that panel in place; `scroll_reset_panels()` clears custom ones. See
+`vignette("custom-panels")`.
 
 ## Query features directly (no app needed)
 

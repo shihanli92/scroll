@@ -56,6 +56,13 @@ Eight built-in analysis sections, each with its own fine-grained controls:
 * `register_panel(id, ui, server, ...)` adds a section to every app built
   afterwards, using the same module contract as the built-ins;
   `scroll_reset_panels()` clears custom registrations.
+* `register_plot_panel(id, plot, controls, ...)` is a declarative wrapper: describe
+  the controls (`scroll_input_column()`, `scroll_input_levels()`,
+  `scroll_input_gene()`, …) and a single `plot(cells, input, data)` function, and
+  scroll generates the whole module — UI, control population, a Compute gate,
+  inline error messages, PNG/PDF export, and subset/view awareness. The lower-level
+  helpers (`scroll_render_plot()`, `scroll_bind_levels()`, `scroll_columns()`) are
+  exported for hand-written panels too.
 
 ## Documentation
 
