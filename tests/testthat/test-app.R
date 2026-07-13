@@ -99,3 +99,18 @@ test_that("categorical panels expose Manual per-level colour pickers", {
     expect_equal(unname(manual_colors()[[lv[[1]]]]), "#010203")
   })
 })
+
+test_that("base CSS suppresses scrollbar-toggle resize loops (both axes)", {
+  css <- scroll:::.scroll_css()
+  # Reserve the vertical gutter so a toggling vertical bar can't change width,
+  # and hide page-level horizontal overflow so a toggling horizontal bar can't
+  # change height -- either would fire window 'resize' and re-render every plot.
+  expect_match(css, "overflow-y:scroll")
+  expect_match(css, "scrollbar-gutter:stable")
+  expect_match(css, "overflow-x:hidden")
+  # .scroll-plot pins min-width:0, and the plot output snaps to a whole pixel
+  # (round(down, 100%, 1px)) so a fractional grid width can't drive a HiDPI
+  # (devicePixelRatio 2) sub-pixel ResizeObserver re-render loop.
+  expect_match(css, "\\.scroll-plot\\{[^}]*min-width:0")
+  expect_match(css, "round\\(down, 100%, 1px\\)")
+})

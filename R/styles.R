@@ -8,7 +8,14 @@
   --sc-faint:#8A93A2; --sc-line:#E4E8EE; --sc-line-2:#EEF1F5;
   --sc-accent:#2563A8; --sc-wash:#EAF1F8; --sc-accent-deep:#1B4C86;
 }
-body{background:var(--sc-ground); color:var(--sc-ink);
+/* Kill scrollbar-driven resize loops. On a tall multi-panel page a scrollbar can
+   toggle on/off as plots render: the VERTICAL bar changes content width and the
+   HORIZONTAL bar changes content height, either of which fires window 'resize',
+   which re-renders every fluid-width plotOutput, which nudges the size back --
+   an endless self-triggering loop. Reserve the vertical gutter always, and never
+   show a page-level horizontal bar (wide plots scroll inside .scroll-plot). */
+html{overflow-x:hidden; overflow-y:scroll; scrollbar-gutter:stable;}
+body{background:var(--sc-ground); color:var(--sc-ink); overflow-x:hidden;
   font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
   -webkit-font-smoothing:antialiased;}
 .container-fluid{padding:0;}
@@ -88,7 +95,26 @@ body{background:var(--sc-ground); color:var(--sc-ink);
   color:var(--sc-faint); padding-bottom:8px; margin-bottom:10px; border-bottom:1px solid var(--sc-line-2);}
 .scroll-controls .form-label{font-size:13px; font-weight:600; margin-bottom:3px;}
 .scroll-controls .form-group,.scroll-controls .shiny-input-container{margin-bottom:12px;}
-.scroll-plot{border-radius:10px; background:var(--sc-card); overflow-x:auto;}
+/* min-width:0 is essential: .scroll-plot is a flex item, so its default
+   min-width:auto resolves to min-content = the rendered plot image's width. That
+   makes the container size to the image, the image size to the container, and on a
+   fractional grid column at HiDPI (devicePixelRatio 2) the sub-pixel rounding
+   oscillates -> Shiny's ResizeObserver re-renders endlessly at narrow widths.
+   Pinning min-width:0 lets the wrapper track its grid cell; a wide plot scrolls. */
+/* overflow-y MUST be hidden, not the default. Setting overflow-x:auto alone forces
+   the computed overflow-y from visible to auto, so at HiDPI a plot rendered a
+   sub-pixel too tall pops a VERTICAL scrollbar that steals ~15px of width -> the
+   plot re-renders narrower -> it fits -> scrollbar vanishes -> loop (the 15px
+   width oscillation). Keep horizontal scroll for wide plots, never vertical. */
+.scroll-plot{border-radius:10px; background:var(--sc-card); overflow-x:auto; overflow-y:hidden; min-width:0;}
+/* Snap the plot output to a whole CSS pixel. bslib's grid columns are fractional
+   (e.g. 518.25px); at devicePixelRatio 2 that .25px is 0.5 device px, so Shiny
+   renders the image at a rounded device size that displays back a hair different,
+   ResizeObserver fires, and every plot re-renders forever (only at HiDPI + narrow
+   widths). round(down, 100%, 1px) makes the measured width an integer so device
+   pixels land exactly; wide plots still scroll via the overflow above. */
+.scroll-plot .shiny-plot-output,
+.scroll-plot .shiny-spinner-output-container{width:round(down, 100%, 1px); min-width:0;}
 .scroll-plot-bar{display:flex; justify-content:flex-end; padding:0 2px 8px;}
 .scroll-dl.btn{padding:3px 10px; font-size:12px; font-weight:600; color:var(--sc-muted);
   background:var(--sc-card); border:1px solid var(--sc-line); border-radius:8px;}

@@ -50,6 +50,20 @@ Eight built-in analysis sections, each with its own fine-grained controls:
   with an "export all genes" option.
 * **Performance** — large scatters rasterize on screen (`scattermore`) while
   exports stay vector; queries are memoized (LRU) and cosmetic controls debounced.
+* **Stability** — killed scrollbar-driven resize loops on tall multi-panel pages.
+  A scrollbar toggling as plots render (vertical bar → width change, horizontal bar
+  → height change) fires window `resize`, which re-renders every fluid-width
+  `plotOutput`, which nudges the size back — an endless loop where plots appeared to
+  update on their own. The page now reserves the vertical gutter
+  (`overflow-y:scroll; scrollbar-gutter:stable`) and hides page-level horizontal
+  overflow (`overflow-x:hidden`; wide plots still scroll inside their card). The
+  plot wrapper also pins `min-width:0` and snaps the plot output to a whole CSS
+  pixel (`width: round(down, 100%, 1px)`). bslib's grid columns are fractional
+  (e.g. 518.25px); on a HiDPI display (`devicePixelRatio` 2) that .25px is half a
+  device pixel, so Shiny rendered the image at a rounded device size that displayed
+  back a hair different, tripping the per-output `ResizeObserver` into re-rendering
+  every plot forever (only at HiDPI + narrow widths). Snapping the width to an
+  integer makes the device pixels land exactly, so nothing oscillates.
 
 ## Extend
 
