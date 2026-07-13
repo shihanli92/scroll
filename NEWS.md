@@ -37,6 +37,16 @@ Eight built-in analysis sections, each with its own fine-grained controls:
 * **Pseudobulk DE** — replicate-aware `edgeR` / `limma-voom` on aggregated
   sample-level counts, with pseudo-replicate modes and optional stability re-runs.
 
+## Multi-dataset
+
+* **`scroll_multi_app(projects)`** mounts several built projects behind one app —
+  a tab per dataset, each with its own app bar, manifest-driven panels, and query
+  handle. The per-dataset page + server were refactored into a namespaced module
+  (`shiny::NS()`), so independent datasets (even different organisms / feature
+  spaces) coexist without id collisions; `scroll_app()` is the single-dataset case
+  and is unchanged. Custom panels should read baked assets from the per-dataset
+  handle (`data$dir`) so each tab loads its own files.
+
 ## Explore & customize
 
 * **Subset views** — expose a reprocessed slice (its own sub-embedding +

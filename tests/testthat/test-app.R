@@ -8,6 +8,13 @@ test_that(".scroll_load exposes cells, manifest, config and query helpers", {
   expect_true(all(c("cell", "value") %in% names(hit)))
 })
 
+test_that("scroll_multi_app mounts several projects into one namespaced app", {
+  p <- test_project()
+  app <- scroll_multi_app(c("First" = p, "Second" = p))
+  expect_s3_class(app, "shiny.appobj")     # both projects mount, namespaced (ds1-*/ds2-*)
+  expect_error(scroll_multi_app(list()), "at least one project")
+})
+
 test_that("scroll_app returns a shiny app and handle cleanup is a safe no-op", {
   expect_s3_class(scroll_app(test_project()), "shiny.appobj")
   # scroll_disconnect just drops the handle's cached datasets (no live db

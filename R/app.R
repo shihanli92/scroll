@@ -1165,7 +1165,7 @@ scroll_reset_panels <- function() {
   div(class = "scroll-stat", span(class = "scroll-stat-v", value),
       span(class = "scroll-stat-l", label))
 
-.scroll_appbar <- function(data, title) {
+.scroll_appbar <- function(data, title, ns = identity) {
   m <- data$manifest
   assay <- m$default_assay
   cats <- .scroll_cat_cols(m)
@@ -1180,7 +1180,7 @@ scroll_reset_panels <- function() {
   view_ui <- if (length(subs)) div(
     class = "scroll-subset",
     span(class = "scroll-subset-label", "View"),
-    selectInput("scroll_view", NULL,
+    selectInput(ns("scroll_view"), NULL,
                 c("Whole dataset" = "",
                   stats::setNames(subs, vapply(subs, function(s) m$subsets[[s]]$label, ""))),
                 width = "160px"))
@@ -1189,9 +1189,9 @@ scroll_reset_panels <- function() {
   subset_ui <- if (isTRUE(data$config$subset_filter) && length(cats)) div(
     class = "scroll-subset",
     span(class = "scroll-subset-label", "Subset"),
-    selectInput("scroll_subset_col", NULL,
+    selectInput(ns("scroll_subset_col"), NULL,
                 c("All cells" = "", stats::setNames(cats, cats)), width = "150px"),
-    selectizeInput("scroll_subset_val", NULL, choices = NULL, multiple = TRUE,
+    selectizeInput(ns("scroll_subset_val"), NULL, choices = NULL, multiple = TRUE,
                    width = "200px", options = list(placeholder = "all")))
   div(
     class = "scroll-appbar",
@@ -1199,32 +1199,47 @@ scroll_reset_panels <- function() {
     view_ui,
     subset_ui,
     div(class = "scroll-stats",
-        .scroll_stat(textOutput("scroll_ncells", inline = TRUE), "cells"),
+        .scroll_stat(textOutput(ns("scroll_ncells"), inline = TRUE), "cells"),
         .scroll_stat(format(m$assays[[assay]]$n_features, big.mark = ","), "genes"),
         .scroll_stat(paste(.scroll_assays_of(m), collapse = ", "), "assays"),
         .scroll_stat(paste(.scroll_reductions(m), collapse = ", "), "reductions"))
   )
 }
 
-.scroll_rail <- function(panels) {
+.scroll_rail <- function(panels, ns = identity) {
   tags$nav(
     class = "scroll-rail",
     lapply(panels, function(s) tags$a(
-      class = "scroll-rail-item", href = paste0("#", s$id),
+      class = "scroll-rail-item", href = paste0("#", ns(s$id)),
       span(class = "scroll-rail-num", s$num), span(s$label))),
     div(class = "scroll-rail-foot", "auto-generated from manifest.yaml")
   )
 }
 
-.scroll_section_card <- function(sec, data) {
+.scroll_section_card <- function(sec, data, ns = identity) {
   bslib::card(
-    id = sec$id, class = "scroll-section", full_screen = FALSE,
+    id = ns(sec$id), class = "scroll-section", full_screen = FALSE,
     bslib::card_header(
       div(class = "scroll-eyebrow",
           span(class = "scroll-num", sec$num), span(class = "scroll-kicker", sec$label)),
       tags$h2(class = "scroll-title", sec$title),
       tags$p(class = "scroll-desc", sec$desc)),
-    sec$ui(sec$id, data)
+    sec$ui(ns(sec$id), data)
+  )
+}
+
+# The per-dataset body (app bar + rail + section cards), with every id passed
+# through `ns` so multiple datasets can coexist in one page (see scroll_multi_app).
+# Does NOT include page_fluid/theme/head -- those wrap it once at the page level.
+.scroll_body <- function(data, title, panels, ns = identity) {
+  tagList(
+    .scroll_appbar(data, title, ns),
+    div(
+      class = "scroll-layout",
+      .scroll_rail(panels, ns),
+      div(class = "scroll-content",
+          lapply(panels, function(s) .scroll_section_card(s, data, ns)))
+    )
   )
 }
 
@@ -1232,14 +1247,41 @@ scroll_reset_panels <- function() {
   bslib::page_fluid(
     theme = .scroll_theme(),
     tags$head(tags$style(HTML(.scroll_css())), tags$script(HTML(.scroll_spy_js()))),
-    .scroll_appbar(data, title),
-    div(
-      class = "scroll-layout",
-      .scroll_rail(panels),
-      div(class = "scroll-content",
-          lapply(panels, function(s) .scroll_section_card(s, data)))
-    )
+    .scroll_body(data, title, panels)
   )
+}
+
+# The per-dataset server logic (active view/subset composition + panel wiring).
+# Called flat by scroll_app() and inside a moduleServer() by scroll_multi_app(),
+# so `input`/`output`/`session` carry the right namespace in both.
+.scroll_wire <- function(input, output, session, data, panels) {
+  m <- data$manifest
+  active_view <- reactive(.scroll_nz(input$scroll_view))
+  active_cells <- reactive({
+    base <- .scroll_view_cells(data$cells, m, active_view())
+    .scroll_subset_cells(base, .scroll_nz(input$scroll_subset_col),
+                         input$scroll_subset_val)
+  })
+  observeEvent(input$scroll_subset_col, {
+    col <- .scroll_nz(input$scroll_subset_col)
+    lv <- if (is.null(col)) character(0) else unlist(m$meta[[col]]$levels)
+    updateSelectizeInput(session, "scroll_subset_val", choices = lv,
+                         selected = character(0), server = TRUE)
+  })
+  output$scroll_ncells <- renderText({
+    n <- nrow(active_cells()); tot <- m$n_cells
+    lab <- if (!is.null(active_view())) m$subsets[[active_view()]]$label
+    base <- if (n < tot) sprintf("%s of %s", format(n, big.mark = ","),
+                                 format(tot, big.mark = ",")) else format(tot, big.mark = ",")
+    if (!is.null(lab)) paste0(base, " · ", lab) else base
+  })
+  # Pass `active_view` only to panels that opt in (declare a `view_r` formal),
+  # keeping register_panel()'s 3-arg server contract backward compatible.
+  for (sec in panels) {
+    args <- list(sec$id, data, active_cells)
+    if ("view_r" %in% names(formals(sec$server))) args <- c(args, list(active_view))
+    do.call(sec$server, args)
+  }
 }
 
 .scroll_theme <- function() {
@@ -1265,40 +1307,64 @@ scroll_app <- function(dir = ".") {
   title <- .scroll_nz(data$config$title)
 
   ui <- .scroll_page(data, title, panels)
-  server <- function(input, output, session) {
-    m <- data$manifest
-    # Active subset view (app bar) and the cells every panel operates on: start
-    # from the view's membership, then apply the ad-hoc subset pill on top.
-    active_view <- reactive(.scroll_nz(input$scroll_view))
-    active_cells <- reactive({
-      base <- .scroll_view_cells(data$cells, m, active_view())
-      .scroll_subset_cells(base, .scroll_nz(input$scroll_subset_col),
-                           input$scroll_subset_val)
-    })
-    observeEvent(input$scroll_subset_col, {
-      col <- .scroll_nz(input$scroll_subset_col)
-      lv <- if (is.null(col)) character(0) else unlist(m$meta[[col]]$levels)
-      updateSelectizeInput(session, "scroll_subset_val", choices = lv,
-                           selected = character(0), server = TRUE)
-    })
-    output$scroll_ncells <- renderText({
-      n <- nrow(active_cells()); tot <- m$n_cells
-      lab <- if (!is.null(active_view())) m$subsets[[active_view()]]$label
-      base <- if (n < tot) sprintf("%s of %s", format(n, big.mark = ","),
-                                   format(tot, big.mark = ",")) else format(tot, big.mark = ",")
-      if (!is.null(lab)) paste0(base, " \u00b7 ", lab) else base
-    })
-    # Pass `active_view` only to panels that opt in (declare a `view_r` formal),
-    # keeping register_panel()'s 3-arg server contract backward compatible.
-    for (sec in panels) {
-      args <- list(sec$id, data, active_cells)
-      if ("view_r" %in% names(formals(sec$server))) args <- c(args, list(active_view))
-      do.call(sec$server, args)
-    }
-  }
+  server <- function(input, output, session)
+    .scroll_wire(input, output, session, data, panels)
   # release the query handle's cached datasets when the app stops
   shiny::shinyApp(ui, server, onStart = function() {
     shiny::onStop(function() try(scroll_disconnect(data$con), silent = TRUE))
+  })
+}
+
+#' Build a multi-dataset scroll explorer
+#'
+#' Mounts several built scroll projects behind one app: a tab per dataset, each
+#' with its own app bar, manifest-driven panels, and query handle. Every dataset's
+#' UI is namespaced (via [shiny::NS()]) so the projects coexist without id
+#' collisions; the built-in and custom panels are the same registry for all.
+#'
+#' Custom panels that read baked assets should resolve them from the per-dataset
+#' handle (`data$dir`) rather than a global option, so each tab reads its own
+#' project's files.
+#'
+#' @param projects A named list/vector of built project directories. Names are used
+#'   as tab labels (falling back to each project's `config.yaml` title, then a
+#'   generic label).
+#' @return A `shiny.appobj`.
+#' @export
+scroll_multi_app <- function(projects) {
+  projects <- as.list(projects)
+  if (!length(projects)) stop("scroll_multi_app(): supply at least one project directory.")
+  labels <- names(projects)
+  if (is.null(labels)) labels <- rep("", length(projects))
+  ids <- paste0("ds", seq_along(projects))
+
+  datas  <- lapply(projects, .scroll_load)
+  panels <- .scroll_assemble_panels()
+  titles <- vapply(seq_along(datas), function(i) {
+    .scroll_nz(datas[[i]]$config$title) %||%
+      (if (nzchar(labels[[i]])) labels[[i]] else paste("Dataset", i))
+  }, "")
+  labels <- ifelse(nzchar(labels), labels, titles)
+
+  tabs <- lapply(seq_along(datas), function(i)
+    bslib::nav_panel(labels[[i]],
+      .scroll_body(datas[[i]], titles[[i]], panels, shiny::NS(ids[[i]]))))
+
+  ui <- bslib::page_fluid(
+    theme = .scroll_theme(),
+    tags$head(tags$style(HTML(.scroll_css())), tags$script(HTML(.scroll_spy_js()))),
+    do.call(bslib::navset_tab, tabs)
+  )
+  server <- function(input, output, session) {
+    for (i in seq_along(datas)) local({
+      ii <- i
+      moduleServer(ids[[ii]], function(input, output, session)
+        .scroll_wire(input, output, session, datas[[ii]], panels))
+    })
+  }
+  shiny::shinyApp(ui, server, onStart = function() {
+    shiny::onStop(function()
+      for (d in datas) try(scroll_disconnect(d$con), silent = TRUE))
   })
 }
 
