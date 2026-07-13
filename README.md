@@ -183,7 +183,11 @@ scroll_serve("pbmc3k")           # the new section appears in scroll order
 cells, the control values by id, and the shared handle — `data$manifest`,
 `data$config`, and `data$query1(assay, feature)` / `data$queryN(assay, features)`
 for dequantized expression. Controls are declared with `scroll_input_column()`,
-`scroll_input_levels()`, `scroll_input_gene()`, `scroll_input_numeric/slider/choice/text()`.
+`scroll_input_levels()`, `scroll_input_gene()`, an `scroll_input_assay()` /
+`scroll_input_embedding()` picker, `scroll_input_custom()` for your own widget, and
+`scroll_input_numeric/slider/choice/text()`; wrap any in `scroll_show_when()` for
+conditional visibility. To match the built-ins' look, reuse `scroll_point_layer()`
+and the `scroll_discrete_colors()` / `scroll_continuous_scale()` palettes.
 
 For full control (cross-output state, custom reactivity), `register_panel(id, ui,
 server, …)` takes a raw `ui(id, data)` / `server(id, data, cells_r)` module pair —

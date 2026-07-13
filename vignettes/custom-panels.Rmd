@@ -56,15 +56,65 @@ a blank plot.
 
 | Constructor | Input |
 |-------------|-------|
-| `scroll_input_column(id, label, type)` | pick a metadata column (`"categorical"`/`"numeric"`/`"any"`) |
+| `scroll_input_column(id, label, type, view_aware=)` | pick a metadata column (`"categorical"`/`"numeric"`/`"any"`) |
 | `scroll_input_levels(id, label, from, required=, none=)` | selectize of the levels of the column chosen by control `from` |
 | `scroll_input_gene(id, label, multiple=)` | server-side gene search over the default assay |
+| `scroll_input_assay(id, label)` | pick an assay (auto-hidden on single-assay data) |
+| `scroll_input_embedding(id, label, view_aware=)` | pick a reduction (narrows to the active subset view) |
+| `scroll_input_custom(id, label, ui, bind=)` | your own control — supply a `ui(ns, data)` (+ optional `bind`) |
 | `scroll_input_numeric` / `_slider` / `_choice` / `_text` | the matching Shiny inputs |
 
 `compute = TRUE` (the default) gates redraws behind a **Compute** button — use it
 when the plot is expensive (e.g. runs `scroll_de()`); `compute = FALSE` redraws live.
 A worked, real-world builder panel — a two-contrast concordance scatter — ships at
 `examples/concordance-panel.R`.
+
+### Richer controls
+
+Beyond the basics, three patterns cover most "a variety of options" needs — all
+still declarative, no `moduleServer`:
+
+**Assay + embedding pickers** read straight from the manifest.
+`scroll_input_assay()` renders nothing on a single-assay dataset (its value still
+resolves to the default assay), and `scroll_input_embedding()` follows the app-bar
+**View**: switch to a subset view and it lists that view's sub-embedding.
+
+```{r rich-assay, eval = FALSE}
+register_plot_panel("expr_scatter", label = "Expression scatter", compute = FALSE,
+  controls = list(
+    scroll_input_assay("assay"),
+    scroll_input_embedding("emb"),
+    scroll_input_gene("gene", "Gene", required = TRUE)),
+  plot = function(cells, input, data) {
+    v <- data$query1(input$assay, input$gene)               # dequantized (cell, value)
+    cells$expr <- v$value[match(cells$cell, v$cell)]; cells$expr[is.na(cells$expr)] <- 0
+    ggplot2::ggplot(cells, ggplot2::aes(.data[[paste0(input$emb, "_1")]],
+                                        .data[[paste0(input$emb, "_2")]], colour = expr)) +
+      scroll_point_layer(raster = nrow(cells) > 2e4) +       # fast on screen, vector on export
+      scroll_continuous_scale("viridis", name = input$gene)  # matches FeaturePlot
+  })
+```
+
+**Conditional controls** — wrap any control in `scroll_show_when()` so it appears
+only when another control has a given value (client-side, no redraw):
+
+```{r rich-conditional, eval = FALSE}
+controls = list(
+  scroll_input_choice("engine", "Engine", c("Wilcoxon", "Pseudobulk")),
+  scroll_show_when(                                          # only for Pseudobulk
+    scroll_input_column("rep", "Replicate", "categorical"),
+    control = "engine", equals = "Pseudobulk"))
+```
+
+**Your own control kind** — `scroll_input_custom()` takes a `ui(ns, data)` (and an
+optional `bind(input, session, data)` for server-side wiring), so a bespoke widget
+composes with the declared ones and reaches `plot` as `input$<id>` like any other.
+
+**Reusable look & feel.** So a custom plot matches the built-ins, the same helpers
+they use are exported: `scroll_point_layer()` (rasterizes large scatters on screen,
+stays vector on export), `scroll_discrete_colors()` / `scroll_continuous_scale()`
+(the shared palettes — a level keeps its colour across panels), and
+`scroll_group_labels(df, group, x, y)` (per-group centroid labels).
 
 ## The panel contract (advanced)
 
@@ -89,16 +139,23 @@ Both receive the shared **`data`** handle:
 | `data$query1(assay, feature)` | one gene's expression, as `data.frame(cell, value)` (dequantized; zero cells omitted) |
 | `data$queryN(assay, features)` | many genes at once, as `data.frame(feature, cell, value)` |
 
-Two manifest lookups you'll use constantly:
+Rather than parse the manifest by hand, three exported accessors give you what
+controls need (each takes an optional `view` / `assay` to respect subset views):
 
 ```{r manifest-lookups, eval = FALSE}
-# available embeddings (reductions)
-reductions <- names(data$manifest$embeddings)
+scroll_columns(data, "categorical")     # metadata columns of a type ("numeric"/"any")
+scroll_columns(data, "categorical", view = "tcell")   # scoped to a subset view
+scroll_embeddings(data)                 # reduction names (or of a subset view)
+scroll_features(data, "RNA")            # an assay's features (default assay if omitted)
 
-# categorical metadata columns (for a "group by" control)
-cats <- names(Filter(function(x) identical(x$type, "categorical"),
-                     data$manifest$meta))
+# the raw manifest is still there if you need a level list or a numeric range:
+data$manifest$meta$celltype$levels      # a categorical column's levels
+data$manifest$meta$percent.mt$range     # a numeric column's c(min, max)
 ```
+
+`data$query1(assay, feature)` returns a **sparse** `data.frame(cell, value)` (cells
+with zero expression are omitted) in **dequantized** units — join it back onto
+`cells` and fill missing with 0, as in the Expression scatter above.
 
 ## Step 1 — the plot, as a plain function
 
@@ -250,3 +307,22 @@ knitr::include_graphics("centroid-map.png")
 
 A larger real-world panel — a live QC + hashtag-gating workflow with cross-panel
 state — lives in the package source at `examples/hto-filter/panel.R`.
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Custom panel never appears | `register_*()` was called **after** `scroll_app()`/`scroll_serve()` | Register **before** serving, in the same script (in a deployed app, above `scroll_app(".")`) |
+| Plot area shows *"…returned data.frame, expected a ggplot"* | the `plot` function didn't return a ggplot (e.g. it ends on an assignment, or a missing `+`) | Make the last expression a ggplot object |
+| A level dropdown stays empty, no error | `scroll_input_levels(from = )` names neither a column nor another control (a typo) — scroll warns at the console | Fix `from` to match a control id or a categorical column name |
+| Panel stuck on *"Select …"* | a `required = TRUE` control has no default (or `required` + `none = TRUE`) | Give it a `selected =`, or drop `required`/`none` |
+| Custom panel ignores the app-bar Subset/View | the server used `data$cells` instead of `cells_r()` | Read `cells_r()` (builder `plot` functions already receive the filtered `cells`) |
+| Colours differ from the built-in panels | a hand-picked palette | Use `scroll_discrete_colors()` / `scroll_continuous_scale()` |
+
+### `register_plot_panel()` vs `register_panel()`
+
+Use **`register_plot_panel()`** (the quick way) when your panel is **one plot**
+driven by declared controls — it removes all the Shiny plumbing and the footguns
+above are handled for you. Drop to **`register_panel()`** only when you need
+**multiple outputs** (e.g. a table *and* a plot), **cross-output/session state**, or
+**bespoke reactivity** the builder doesn't express.

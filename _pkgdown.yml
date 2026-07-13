@@ -53,9 +53,20 @@ reference:
   - scroll_pseudobulk_stability
 
 - title: Extend the app
-  desc: Register custom panels using the same module contract as the built-ins.
+  desc: >
+    Register custom panels — declaratively from a plot function plus declared
+    controls, or with the low-level module contract the built-ins use.
   contents:
+  - register_plot_panel
   - register_panel
+  - scroll_input
+  - scroll_show_when
+  - scroll_helpers
+  - scroll_render_plot
+  - scroll_bind_levels
+  - scroll_columns
+  - scroll_embeddings
+  - scroll_features
   - scroll_reset_panels
 
 - title: View cores

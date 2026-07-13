@@ -87,6 +87,18 @@ Eight built-in analysis sections, each with its own fine-grained controls:
   inline error messages, PNG/PDF export, and subset/view awareness. The lower-level
   helpers (`scroll_render_plot()`, `scroll_bind_levels()`, `scroll_columns()`) are
   exported for hand-written panels too.
+* **Richer declarative controls** for `register_plot_panel()`:
+  `scroll_input_assay()` (auto-hidden on single-assay data),
+  `scroll_input_embedding()` and view-aware `scroll_input_column(view_aware=)`
+  (narrow to the active subset view), `scroll_input_custom()` (wrap your own
+  `ui`/`bind`), and `scroll_show_when()` for conditional visibility.
+* **Reusable render + data helpers exported** so custom views match the built-ins:
+  `scroll_point_layer()` (raster-aware scatter), `scroll_discrete_colors()` /
+  `scroll_continuous_scale()` (shared palettes), `scroll_group_labels()`, and the
+  accessors `scroll_columns(view=)`, `scroll_embeddings()`, `scroll_features()`.
+* **Fewer silent failures.** A non-ggplot plot return now shows a clear message; a
+  `scroll_input_levels(from=)` that names no column/control warns; contradictory
+  `required` + `none` warns at construction.
 
 ## Documentation
 

@@ -4,7 +4,15 @@
 \alias{scroll_bind_levels}
 \title{Populate a selectize control from a metadata column's levels}
 \usage{
-scroll_bind_levels(input, session, id, from, data, selected = 1)
+scroll_bind_levels(
+  input,
+  session,
+  id,
+  from,
+  data,
+  selected = 1,
+  control_ids = character()
+)
 }
 \arguments{
 \item{input, session}{The module's \code{input} and \code{session}.}
@@ -17,6 +25,10 @@ scroll_bind_levels(input, session, id, from, data, selected = 1)
 
 \item{selected}{Which levels to preselect: an integer index/vector (e.g. \code{1},
 \code{c(1, 2)}), or \code{"none"} for an empty default.}
+
+\item{control_ids}{Ids of the sibling controls, used only to catch a \code{from}
+that names neither a metadata column nor another control (a common typo);
+the builder passes this automatically.}
 }
 \value{
 Invisibly, \code{NULL}.

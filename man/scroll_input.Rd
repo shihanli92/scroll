@@ -9,9 +9,18 @@
 \alias{scroll_input_slider}
 \alias{scroll_input_choice}
 \alias{scroll_input_text}
+\alias{scroll_input_assay}
+\alias{scroll_input_embedding}
+\alias{scroll_input_custom}
 \title{Declarative controls for \code{\link[=register_plot_panel]{register_plot_panel()}}}
 \usage{
-scroll_input_column(id, label, type = "categorical", selected = 1)
+scroll_input_column(
+  id,
+  label,
+  type = "categorical",
+  selected = 1,
+  view_aware = FALSE
+)
 
 scroll_input_levels(
   id,
@@ -32,6 +41,12 @@ scroll_input_slider(id, label, min, max, value, step = NULL)
 scroll_input_choice(id, label, choices, selected = NULL, inline = TRUE)
 
 scroll_input_text(id, label, placeholder = NULL)
+
+scroll_input_assay(id, label = "Assay")
+
+scroll_input_embedding(id, label = "Embedding", view_aware = TRUE)
+
+scroll_input_custom(id, label, ui, bind = NULL, needs = NULL, required = FALSE)
 }
 \arguments{
 \item{id}{Control id (also the name under which its value reaches \code{plot}'s
@@ -42,6 +57,9 @@ scroll_input_text(id, label, placeholder = NULL)
 \item{type}{For \code{scroll_input_column}: \code{"categorical"}, \code{"numeric"}, or \code{"any"}.}
 
 \item{selected}{Default selection: integer index/vector, or \code{"none"}.}
+
+\item{view_aware}{For \code{scroll_input_column}/\code{scroll_input_embedding}: repopulate
+choices from the active subset view (requires the panel to be view-aware).}
 
 \item{from}{For \code{scroll_input_levels}: a column-picking control's id, or a
 categorical column name.}
@@ -55,6 +73,15 @@ instead of computing.}
 
 \item{choices, value, min, max, step, placeholder, inline}{Passed to the underlying
 Shiny input.}
+
+\item{ui}{For \code{scroll_input_custom}: a \verb{function(ns, data)} returning the
+control's UI (namespace inputs with \code{ns()}).}
+
+\item{bind}{For \code{scroll_input_custom}: an optional
+\verb{function(input, session, data)} wiring server-side behaviour.}
+
+\item{needs}{For \code{scroll_input_custom}: a required column type
+(\code{"categorical"}/\code{"numeric"}) that gates the panel's empty state, or \code{NULL}.}
 }
 \value{
 A control spec (a list) for \code{register_plot_panel(controls = )}.
@@ -64,5 +91,9 @@ Each constructor returns a control spec. \code{scroll_input_column} picks a meta
 column of a type; \code{scroll_input_levels} is a level selector bound (via
 \code{\link[=scroll_bind_levels]{scroll_bind_levels()}}) to the column chosen by another control (\code{from}) or a
 fixed column; \code{scroll_input_gene} is a server-side gene search over the default
-assay; the rest are thin wrappers over the matching Shiny inputs.
+assay; \code{scroll_input_assay} / \code{scroll_input_embedding} pick an assay / reduction
+from the manifest (the embedding narrows to the active subset view when
+\code{view_aware}); \code{scroll_input_custom} wraps your own \code{ui}/\code{bind} as a control; the
+rest are thin wrappers over the matching Shiny inputs. Wrap any of them in
+\code{\link[=scroll_show_when]{scroll_show_when()}} for conditional visibility.
 }

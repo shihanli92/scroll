@@ -4,12 +4,16 @@
 \alias{scroll_columns}
 \title{Metadata columns of a given type}
 \usage{
-scroll_columns(data, type = c("categorical", "numeric", "any"))
+scroll_columns(data, type = c("categorical", "numeric", "any"), view = NULL)
 }
 \arguments{
 \item{data}{A scroll data handle (as passed to a panel \code{ui}/\code{server}).}
 
 \item{type}{\code{"categorical"}, \code{"numeric"}, or \code{"any"}.}
+
+\item{view}{Optional subset-view name; when given, subset-scoped columns are
+restricted to that view (global columns always appear). \code{NULL} (default)
+returns the whole-dataset column set.}
 }
 \value{
 A character vector of column names.
