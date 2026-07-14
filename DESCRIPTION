@@ -5,12 +5,14 @@ Version: 0.0.0.9000
 Authors@R:
     person("Shihan", "Li", email = "shihanli1992@gmail.com", role = c("aut", "cre"))
 Description: Turns a processed Seurat object into a polished, interactive
-    single-cell explorer (a Shiny app with DimPlot, FeaturePlot and DotPlot
-    panels, each with its own controls). A heavy offline build phase extracts
-    lightweight on-disk artifacts (metadata and embeddings as a small Parquet
-    table, expression as a feature-partitioned Parquet store) that the app reads
-    one feature at a time via arrow, so runtime memory stays flat regardless of
-    matrix size.
+    single-cell explorer: a Shiny app of eight analysis panels (DimPlot,
+    FeaturePlot, Biaxial, DotPlot, Violin, Proportions, and live differential
+    expression including replicate-aware pseudobulk), each with its own controls.
+    A heavy offline build phase extracts a compact, sparse on-disk store (cell
+    metadata and embeddings as one Parquet table, expression as a
+    feature-partitioned Parquet store) that the app reads one feature at a time
+    via 'arrow', so runtime memory stays flat regardless of matrix size. A
+    streaming builder assembles multi-million-cell projects one source at a time.
 License: MIT + file LICENSE
 URL: https://github.com/shihanli1992/scroll, https://shihanli1992.github.io/scroll/
 BugReports: https://github.com/shihanli1992/scroll/issues

@@ -13,6 +13,7 @@ articles:
   navbar: ~
   contents:
   - getting-started
+  - large-datasets
   - custom-panels
 
 reference:
@@ -29,6 +30,7 @@ reference:
   desc: Launch or scaffold the runtime explorer; read optional config defaults.
   contents:
   - scroll_app
+  - scroll_multi_app
   - scroll_serve
   - scroll_scaffold_app
   - scroll_config

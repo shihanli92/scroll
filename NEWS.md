@@ -123,5 +123,7 @@ Eight built-in analysis sections, each with its own fine-grained controls:
 
 ## Documentation
 
-* Two vignettes: *Getting started* (Seurat object → running app) and *Writing a
-  custom panel* (a worked centroid-map + minimum-spanning-tree example).
+* Three vignettes: *Getting started* (Seurat object → running app), *Large datasets
+  & streaming builds* (`scroll_build_stream()`, the v2 storage format, and the
+  `quantize`/`counts` tradeoffs), and *Writing a custom panel* (declarative
+  `register_plot_panel()` + richer controls, and the low-level contract).

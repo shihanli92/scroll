@@ -16,14 +16,17 @@ feature at a time via arrow — so runtime memory stays flat regardless of datas
 size. It deploys as a plain `app.R` on an open-source Shiny Server, with no render
 step.
 
-> **Status:** feature-complete for the MVP — the build phase, eight analysis
-> panels (incl. a live DE section and replicate-aware **Pseudobulk DE**),
-> multimodal (multi-assay) support, **subset views** for reprocessed
-> sub-embeddings, per-level **Manual** palettes, PNG/PDF/CSV export, a
-> rasterization/memoization performance pass, and the public `register_panel()`
-> extension point — all wired end-to-end and validated live on pbmc3k.
-> Documentation: [pkgdown site](https://shihanli1992.github.io/scroll/) +
-> two vignettes (`browseVignettes("scroll")`).
+> **Status:** feature-complete for the MVP and validated at scale (a live 4.4M-cell
+> atlas). Includes the two-phase build; eight analysis panels (incl. a live DE section
+> and replicate-aware **Pseudobulk DE**); a compact **v2 storage format** (int32
+> cell-index + float32 + zstd, ~6× smaller than v1 with no precision loss);
+> **`scroll_build_stream()`** for streaming multi-million-cell builds on a laptop;
+> **`scroll_multi_app()`** for several datasets behind one page; multimodal (multi-assay)
+> support; **subset views** for reprocessed sub-embeddings; rich declarative controls
+> (data-derived choices, cascading levels, preferred defaults, palette picker); PNG/PDF/CSV
+> export; a rasterization/memoization performance pass; and the public `register_panel()`
+> extension point. Documentation: [pkgdown site](https://shihanli1992.github.io/scroll/) +
+> three vignettes (`browseVignettes("scroll")`).
 
 ## The two phases
 
@@ -42,12 +45,16 @@ with an arrow query that reads only that feature's Parquet partition.
 
 ## Tutorials
 
-Two vignettes walk through the package (`browseVignettes("scroll")`):
+Three vignettes walk through the package (`browseVignettes("scroll")`):
 
 - **Getting started** — from a Seurat object to a running app:
   `vignette("getting-started", package = "scroll")`.
-- **Writing a custom panel** — extend the app with `register_panel()`, building a
-  worked "centroid map" example: `vignette("custom-panels", package = "scroll")`.
+- **Large datasets & streaming builds** — multi-million-cell projects one source at a
+  time with `scroll_build_stream()`, the storage format, and `quantize`/`counts`
+  tradeoffs: `vignette("large-datasets", package = "scroll")`.
+- **Writing a custom panel** — extend the app declaratively with `register_plot_panel()`
+  (richer controls + reusable helpers) or the low-level `register_panel()`:
+  `vignette("custom-panels", package = "scroll")`.
 
 ## Install
 
@@ -76,6 +83,23 @@ Quantization floors values below ~`max/510` to zero, so fraction-expressing
 stats (dotplot dot size, DE `pct.1`/`pct.2`) slightly under-count very low
 expression — use `quantize = FALSE` when exact fractions matter.
 
+**Storage & precision.** The expression store is compact and sparse, and answers
+single-gene queries in tens of milliseconds even at several million cells, with no lossy
+precision change (`quantize = FALSE`). Add `counts = TRUE` for a raw-counts store (needed
+by Pseudobulk DE; roughly doubles build size). Projects built with an older `scroll` keep
+working un-rebuilt. See `vignette("large-datasets")` for the `quantize`/`counts` tradeoffs.
+
+**Build large datasets (streaming).** For many samples that won't fit in RAM as one
+merged object, `scroll_build_stream()` reads **one source at a time** into a shared
+store — peak memory ~per-source, not per-dataset — and is append-safe (re-run as data
+arrives). It powers multi-million-cell atlases on a laptop:
+
+```r
+scroll_build_stream("atlas", sources = as.list(Sys.glob("data/*.h5ad")),
+  reader = function(f) load_one_sample(f),   # -> a processed Seurat object
+  assays = "RNA", embeddings = "umap", meta_cols = c("sample", "celltype"))
+```
+
 **Multimodal (CITE-seq / multiome).** By default only the object's default assay
 is exported. Pass `assays =` to include more — each becomes its own `expr/<assay>/`
 subtree with an independent dequantization scale:
@@ -103,6 +127,13 @@ title: "PBMC 3k"          # app-bar label
 default_embedding: umap
 default_assay: RNA
 markers: [CD3D, CD8A, MS4A1, CD14, NKG7]   # DotPlot's starting panel
+```
+
+**Multiple datasets.** `scroll_multi_app()` mounts several built projects behind one
+page, each on its own tab (namespaced, independent):
+
+```r
+scroll_multi_app(c("PBMC 3k" = "pbmc3k", "CITE-seq" = "cite"))
 ```
 
 ### Panels (v1)

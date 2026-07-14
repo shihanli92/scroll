@@ -316,16 +316,15 @@ knitr::include_graphics("centroid-map.png")
   panels independent.
 * **Use `cells_r()`**, never `data$cells`, in the server — it is the *active*
   cells reactive, already narrowed by the app-bar View and Subset controls.
-* **Subset-view aware.** Add a fourth `view_r` argument to your server —
-  `server(id, data, cells_r, view_r = shiny::reactive(NULL))` — and `scroll` will
-  pass the active subset-view name, so you can, e.g., restrict the embedding list
-  to that view's sub-embedding. Panels without a `view_r` formal are untouched.
+* **Subset-view aware (optional).** Add a fourth `view_r` argument to your server —
+  `server(id, data, cells_r, view_r = shiny::reactive(NULL))` — to receive the active
+  subset-view name (e.g. to restrict the embedding list to that view's sub-embedding).
 * **Placement:** `after` / `before` name an existing panel id
   (`dimplot`, `featureplot`, `dotplot`, `violin`, `proportions`, `de`, …);
   registering an existing id *replaces* that panel in place.
 * **`scroll_reset_panels()`** clears everything you've registered this session.
 * **Expression:** for a gene-driven panel, call `data$query1(assay, gene)` inside
-  the reactive; it reads a single Parquet partition, so runtime memory stays flat.
+  the reactive — it's optimized for single-gene lookups.
 
 A larger real-world panel — a live QC + hashtag-gating workflow with cross-panel
 state — lives in the package source at `examples/hto-filter/panel.R`.

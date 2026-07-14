@@ -15,12 +15,12 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
 explorer. It has **two phases**:
 
 1. A heavy, one-time **build** (`scroll_build()`) that extracts lightweight
-   on-disk artifacts — cell metadata + embeddings as one small Parquet table, and
-   expression as a feature-partitioned Parquet store.
+   on-disk artifacts — cell metadata + embeddings as one small table, and
+   expression as a compact, sparse store.
 2. A light **runtime** (`scroll_app()` / `scroll_serve()`) — a bslib Shiny app
-   that reads only those artifacts, querying expression **one gene at a time**
-   through arrow. The running app never loads the Seurat object, so runtime
-   memory stays flat regardless of dataset size, and it deploys as a plain `app.R`.
+   that reads only those artifacts, looking up expression one gene at a time. The
+   running app never loads the Seurat object, so runtime memory stays flat
+   regardless of dataset size, and it deploys as a plain `app.R`.
 
 The code chunks below are illustrative (they need a dataset / launch a server), so
 they are not executed when this vignette is rendered.
@@ -52,10 +52,10 @@ scroll_build(obj, "pbmc3k")            # object -> project directory
 
 ```
 pbmc3k/
-  cells.parquet        cell metadata + embeddings (loaded once at runtime)
-  expr/<assay>/feature=*/…   feature-partitioned expression (queried per gene)
+  cells.parquet        cell metadata + embeddings
+  expr/<assay>/        expression data (read at runtime)
   manifest.yaml        the app's index of assays / embeddings / metadata
-  config.yaml          optional defaults (edit to taste)
+  config.yaml          optional display defaults (edit to taste)
   app.R                deployable runtime: scroll_app(".")
 ```
 
@@ -181,6 +181,9 @@ Subset/View, so the panel filters for free.
 
 ## Next
 
-For richer controls (assay/embedding/gene pickers, conditional controls, your own
-control kind), reusable styling helpers, and a troubleshooting guide, see
-`vignette("custom-panels", package = "scroll")`.
+- **Large datasets** — building multi-million-cell projects one source at a time with
+  `scroll_build_stream()`, the storage format, and `quantize`/`counts` tradeoffs:
+  `vignette("large-datasets", package = "scroll")`.
+- **Custom panels** — richer controls (assay/embedding/gene pickers, conditional
+  controls, your own control kind), reusable styling helpers, and a troubleshooting
+  guide: `vignette("custom-panels", package = "scroll")`.
