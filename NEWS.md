@@ -39,7 +39,16 @@ polished, flat-RAM interactive single-cell explorer.
 
 ## Panels
 
-Eight built-in analysis sections, each with its own fine-grained controls:
+Built-in sections **surface only when the project's data supports them** — a panel
+that can't work on a given project simply doesn't appear (rather than showing an
+empty-state message). DimPlot and FeaturePlot are always present; Biaxial needs ≥2
+numeric columns; DotPlot/Violin need a categorical column; Proportions needs ≥2;
+**DE / Pseudobulk require a categorical column with ≥2 levels** (a real contrast),
+and Pseudobulk additionally needs a counts store. So, e.g., a single-region Visium
+slide shows the Spatial, DimPlot, FeaturePlot, DotPlot, Violin and Biaxial panels
+but not DE/Pseudobulk/Proportions, while a multi-region study gets them back.
+
+Each built-in analysis section carries its own fine-grained controls:
 
 * **DimPlot** — embedding coloured by any metadata column.
 * **FeaturePlot** — coloured by a gene's expression **or** a numeric metadata
@@ -51,6 +60,49 @@ Eight built-in analysis sections, each with its own fine-grained controls:
   and a **Volcano**.
 * **Pseudobulk DE** — replicate-aware `edgeR` / `limma-voom` on aggregated
   sample-level counts, with pseudo-replicate modes and optional stability re-runs.
+
+## Multimodal: scATAC
+
+* **`atac_spec()` + `scroll_build(..., atac =)`** ingest a chromatin-accessibility
+  **peaks** assay. Because peaks are just an assay, **FeaturePlot / DotPlot / Violin
+  / DE work on accessibility unchanged**; `atac_spec()` additionally marks the assay
+  `kind: peaks`, parses each peak's chr/start/end from its `chr-start-end` name, and
+  bakes a `peaks.parquet` annotation table (with the nearest gene when a Signac
+  `ChromatinAssay` annotation is present).
+* **Peaks panel** — find a peak **by nearby gene** (when annotation was baked) or
+  **by region** (a text filter over peak names), then colour the embedding by its
+  accessibility. Auto-surfaces only for projects built with an `atac` spec.
+  Validated on the 10x PBMC multiome scATAC dataset.
+
+## Multimodal: spatial
+
+* **`spatial_spec()` + `scroll_build(..., spatial =)`** ingest 10x Visium /
+  imaging-based data. The build extracts `GetTissueCoordinates()` into a `spatial`
+  embedding (image-pixel space, y-oriented for ggplot) and bakes the tissue image
+  to a small raster asset; the manifest records an `images` block and marks the
+  embedding `kind: spatial`. Because coordinates are just an embedding, **DimPlot
+  and FeaturePlot work on spatial data unchanged**.
+* **Spatial panel** — cells/spots in tissue space with a fixed aspect ratio, coloured
+  by a gene or any metadata column, over the tissue image when one was baked.
+  **Drag to zoom into a region, double-click to reset.** Auto-surfaces whenever the
+  project has a spatial embedding — so it also works for **imaging platforms
+  (Xenium / CosMx)** that carry cell centroids but no H&E image (the image toggle is
+  simply hidden). Validated on a 10x Visium mouse-brain section (spots overlay the
+  H&E exactly) and a Xenium-style FOV object.
+
+## Multimodal: VDJ / immune repertoire
+
+* **`vdj_spec()` + `scroll_build(..., vdj =)`** ingest per-cell TCR/BCR metadata.
+  The build bakes a compact `repertoire/` Parquet store (clone table +
+  pre-computed diversity, V/J gene-usage residuals, and tissue correlation) and
+  records a `vdj` block in the manifest. `chain_type` parameterises TCR vs BCR
+  segment names (TRBV/TRAV… vs IGHV/IGKV…); column defaults follow 10x naming.
+* **Four repertoire panels** — *Clone overview* (rank-abundance + expansion
+  composition), *V/J gene usage* (frequency + chi-square residual heatmap),
+  *CDR3 length*, and *Diversity* (Shannon / Simpson / clonality / Gini +
+  tissue correlation). They **auto-surface only for projects built with a
+  `vdj` spec** and are absent otherwise, via a new `when(manifest)` gate on
+  built-in panels — so RNA-only apps are unchanged.
 
 ## Multi-dataset
 

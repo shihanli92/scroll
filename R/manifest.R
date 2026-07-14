@@ -4,11 +4,15 @@
 
 .scroll_write_manifest <- function(outdir, object, assay_info, embeddings, md,
                                    meta_cols, n_cells, quantize, has_counts = FALSE,
-                                   cells = NULL, subsets = NULL) {
+                                   cells = NULL, subsets = NULL, vdj = NULL,
+                                   images = NULL, spatial_embeddings = character(),
+                                   atac = NULL, peaks_assay = character()) {
   assays <- lapply(names(assay_info), function(a) {
     info <- assay_info[[a]]
-    list(max = info$max, n_features = info$n_features,
-         features = as.list(info$features))
+    l <- list(max = info$max, n_features = info$n_features,
+              features = as.list(info$features))
+    if (a %in% peaks_assay) l$kind <- "peaks"        # accessibility, not expression
+    l
   })
   names(assays) <- names(assay_info)
 
@@ -16,8 +20,10 @@
   # embedding covers every cell; a reprocessed-subset embedding covers fewer.
   emb <- lapply(embeddings, function(r) {
     cov <- if (!is.null(cells)) sum(!is.na(cells[[sprintf("%s_1", r)]])) else n_cells
-    list(dims = ncol(SeuratObject::Embeddings(object, reduction = r)),
-         n_covered = as.integer(cov))
+    e <- list(dims = ncol(SeuratObject::Embeddings(object, reduction = r)),
+              n_covered = as.integer(cov))
+    if (r %in% spatial_embeddings) e$kind <- "spatial"   # tissue-map coordinates
+    e
   })
   names(emb) <- embeddings
 
@@ -68,6 +74,9 @@
     names(sm) <- names(subsets)
     manifest$subsets <- sm
   }
+  if (!is.null(vdj)) manifest$vdj <- vdj    # repertoire block -> gates the VDJ panels
+  if (!is.null(images)) manifest$images <- images   # tissue image(s) -> gates the Spatial panel
+  if (!is.null(atac)) manifest$atac <- atac         # peak table -> gates the Peaks panel
   yaml::write_yaml(manifest, file.path(outdir, "manifest.yaml"))
   invisible(manifest)
 }

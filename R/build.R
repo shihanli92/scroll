@@ -32,6 +32,17 @@
 #'   meaningful only within the subset. In the app a subset becomes a **View** that
 #'   restricts every panel to those cells and exposes its embedding + metadata.
 #'   Defaults to any spec attached by [scroll_add_subset()].
+#' @param vdj Optional [vdj_spec()] describing per-cell TCR/BCR columns. When
+#'   supplied, a compact `repertoire/` store (clone table + diversity / gene-usage
+#'   residuals / tissue correlation) is baked and the VDJ panels are enabled.
+#' @param spatial Optional [spatial_spec()] (or `TRUE` for defaults) describing a
+#'   tissue image. When supplied, `GetTissueCoordinates()` is exported as a
+#'   `spatial` embedding, the H&E image is baked as a raster asset, and the Spatial
+#'   panel is enabled.
+#' @param atac Optional [atac_spec()] (or `TRUE` for defaults) naming a peaks assay.
+#'   When supplied, the assay is marked `kind: peaks`, each peak's coordinates are
+#'   parsed from its name, a peak-annotation table (with nearest gene when a Signac
+#'   annotation is available) is baked, and the Peaks panel is enabled.
 #' @param overwrite If `TRUE`, an existing `outdir` is removed first.
 #' @param verbose If `TRUE`, report progress: a step message per phase and a
 #'   progress bar over each assay's feature-partition export (the slow step).
@@ -43,6 +54,7 @@
 scroll_build <- function(object, outdir,
                          assays = NULL, embeddings = NULL, meta_cols = NULL,
                          quantize = TRUE, counts = FALSE, subsets = NULL,
+                         vdj = NULL, spatial = NULL, atac = NULL,
                          overwrite = FALSE, verbose = interactive()) {
   .scroll_need_seurat()
   object <- .scroll_load_object(object)
@@ -53,6 +65,20 @@ scroll_build <- function(object, outdir,
   if (is.null(meta_cols)) meta_cols <- .scroll_infer_meta_cols(md)
   # a spec attached by scroll_add_subset() lives in @misc (survives Seurat ops)
   if (is.null(subsets)) subsets <- SeuratObject::Misc(object, "scroll_subsets")
+
+  # Spatial: extract tissue coordinates into a `spatial` reduction (image-pixel
+  # space) so DimPlot/FeaturePlot/the Spatial panel can plot on it. Injected
+  # before validation so it counts as an exported embedding.
+  spatial_prep <- NULL
+  if (!is.null(spatial)) {
+    if (isTRUE(spatial)) spatial <- spatial_spec()
+    spatial_prep <- .scroll_prepare_spatial(object, spatial)
+    # the reduction key may collide case-insensitively with the assay key
+    # (e.g. `spatial_` vs the `Spatial` assay); harmless — coords are keyed by
+    # the reduction *name*, so silence the Seurat key-rename notice.
+    suppressWarnings(object[[spatial_prep$name]] <- spatial_prep$reduction)
+    embeddings <- union(embeddings, spatial_prep$name)
+  }
 
   .scroll_check_inputs(object, assays, embeddings, meta_cols)
   subsets <- .scroll_normalize_subsets(subsets, embeddings, meta_cols)
@@ -88,11 +114,39 @@ scroll_build <- function(object, outdir,
   # cold queries + fewer inodes.
   .scroll_compact_store(outdir, quantize)
 
+  # --- VDJ repertoire store (optional): bake the clone table + diversity/usage
+  vdj_block <- NULL
+  if (!is.null(vdj)) {
+    .scroll_step(verbose, "Baking VDJ repertoire store...")
+    vdj_block <- .scroll_bake_vdj(md, outdir, vdj)
+  }
+
+  # --- Spatial tissue image (optional): bake the H&E raster asset
+  images_block <- NULL
+  if (!is.null(spatial_prep)) {
+    .scroll_step(verbose, "Baking spatial tissue image...")
+    images_block <- .scroll_write_spatial(outdir, spatial_prep)
+  }
+
+  # --- scATAC peak annotation (optional): parse coords + nearest gene
+  atac_block <- NULL
+  if (!is.null(atac)) {
+    if (isTRUE(atac)) atac <- atac_spec()
+    if (!atac$assay %in% assays)
+      stop("atac: peaks assay '", atac$assay, "' must be listed in `assays=`.", call. = FALSE)
+    .scroll_step(verbose, "Baking scATAC peak table...")
+    atac_block <- .scroll_bake_atac(object, outdir, atac)
+  }
+
   # --- manifest + authored scaffolding
   .scroll_step(verbose, "Writing manifest + app scaffold...")
   .scroll_write_manifest(outdir, object, assay_info, embeddings, md, meta_cols,
                          n_cells = nrow(cells), quantize = quantize,
-                         has_counts = counts, cells = cells, subsets = subsets)
+                         has_counts = counts, cells = cells, subsets = subsets,
+                         vdj = vdj_block, images = images_block,
+                         spatial_embeddings = if (!is.null(spatial_prep)) spatial_prep$name else character(),
+                         atac = atac_block,
+                         peaks_assay = if (!is.null(atac_block)) atac_block$assay else character())
   scroll_scaffold_app(outdir)
 
   message("scroll project built at: ", normalizePath(outdir))

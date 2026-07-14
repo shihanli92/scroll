@@ -20,10 +20,53 @@ count_server <- function(id, data, cells_r = shiny::reactive(data$cells)) {
 test_that("default assembly is the built-ins, numbered by position", {
   scroll_reset_panels()
   p <- scroll:::.scroll_assemble_panels()
-  expect_equal(vapply(p, `[[`, "", "id"),
+  ids <- vapply(p, `[[`, "", "id")
+  # the 8 always-on RNA panels lead, in order; the modality panels (VDJ) follow
+  # and are only *gated out* when a manifest is supplied (see gating test below).
+  expect_equal(ids[1:8],
                c("dimplot", "featureplot", "biaxial", "dotplot", "violin",
                  "proportions", "de", "pseudobulk"))
+  expect_true(all(c("clone_overview", "gene_usage", "cdr3_length", "diversity") %in% ids))
   expect_equal(vapply(p, `[[`, "", "num"), sprintf("%02d", seq_along(p)))
+})
+
+test_that("modality panels are gated out for a manifest without their block", {
+  scroll_reset_panels()
+  rna_man <- scroll_manifest(test_project())          # no vdj block
+  ids <- vapply(scroll:::.scroll_assemble_panels(rna_man), `[[`, "", "id")
+  expect_equal(ids,
+               c("dimplot", "featureplot", "biaxial", "dotplot", "violin",
+                 "proportions", "de", "pseudobulk"))
+})
+
+test_that("built-in panels drop out when the data can't support them", {
+  scroll_reset_panels()
+  ids_of <- function(m) vapply(scroll:::.scroll_assemble_panels(m), `[[`, "", "id")
+
+  # a project whose only categorical column has a single level (e.g. a one-region
+  # spatial slide): no contrast -> DE and Pseudobulk vanish; one categorical ->
+  # Proportions vanishes; DimPlot/FeaturePlot always remain.
+  one_region <- list(
+    scroll_version = "0.0",             # marks this as a single manifest, not a list
+    embeddings = list(spatial = list(dims = 2, kind = "spatial")),
+    assays = list(RNA = list(features = c("g1", "g2"))),
+    meta = list(region = list(type = "categorical", levels = "anterior"),
+                nCount = list(type = "numeric"), nFeature = list(type = "numeric")),
+    has_counts = FALSE,
+    images = list(spatial = list(embedding = "spatial")))
+  ids <- ids_of(one_region)
+  expect_true(all(c("dimplot", "featureplot", "spatial") %in% ids))
+  expect_false(any(c("de", "pseudobulk", "proportions") %in% ids))
+  expect_true("biaxial" %in% ids)        # two numeric columns present
+
+  # add a second, multi-level categorical -> DE returns (a contrast now exists),
+  # Proportions returns (two categoricals); still no counts -> Pseudobulk stays out.
+  two_region <- one_region
+  two_region$meta$region$levels <- c("cortex", "hippocampus")
+  two_region$meta$layer <- list(type = "categorical", levels = c("L1", "L2"))
+  ids2 <- ids_of(two_region)
+  expect_true(all(c("de", "proportions") %in% ids2))
+  expect_false("pseudobulk" %in% ids2)   # gated on has_counts
 })
 
 test_that("register_panel appends a custom panel, and it renders in the page", {

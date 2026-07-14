@@ -21,12 +21,14 @@ step.
 > and replicate-aware **Pseudobulk DE**); a compact **v2 storage format** (int32
 > cell-index + float32 + zstd, ~6× smaller than v1 with no precision loss);
 > **`scroll_build_stream()`** for streaming multi-million-cell builds on a laptop;
-> **`scroll_multi_app()`** for several datasets behind one page; multimodal (multi-assay)
-> support; **subset views** for reprocessed sub-embeddings; rich declarative controls
-> (data-derived choices, cascading levels, preferred defaults, palette picker); PNG/PDF/CSV
-> export; a rasterization/memoization performance pass; and the public `register_panel()`
+> **`scroll_multi_app()`** for several datasets behind one page; multimodal support
+> (multi-assay, per-cell **VDJ / immune repertoire** via `vdj_spec()`, **spatial**
+> tissue-image maps via `spatial_spec()`, and **scATAC** peaks via `atac_spec()`); **subset
+> views** for reprocessed sub-embeddings; rich declarative controls (data-derived choices,
+> cascading levels, preferred defaults, palette picker); PNG/PDF/CSV export; a
+> rasterization/memoization performance pass; and the public `register_panel()`
 > extension point. Documentation: [pkgdown site](https://shihanli1992.github.io/scroll/) +
-> three vignettes (`browseVignettes("scroll")`).
+> four vignettes (`browseVignettes("scroll")`).
 
 ## The two phases
 
@@ -45,7 +47,7 @@ with an arrow query that reads only that feature's Parquet partition.
 
 ## Tutorials
 
-Three vignettes walk through the package (`browseVignettes("scroll")`):
+Four vignettes walk through the package (`browseVignettes("scroll")`):
 
 - **Getting started** — from a Seurat object to a running app:
   `vignette("getting-started", package = "scroll")`.
@@ -55,6 +57,10 @@ Three vignettes walk through the package (`browseVignettes("scroll")`):
 - **Writing a custom panel** — extend the app declaratively with `register_plot_panel()`
   (richer controls + reusable helpers) or the low-level `register_panel()`:
   `vignette("custom-panels", package = "scroll")`.
+- **Multimodal: VDJ, spatial & ATAC** — TCR/BCR repertoire with `vdj_spec()` (four
+  repertoire panels), 10x Visium / imaging with `spatial_spec()` (a tissue-image
+  Spatial panel with zoom), and scATAC peaks with `atac_spec()` (a gene/region peak
+  search): `vignette("multimodal", package = "scroll")`.
 
 ## Install
 

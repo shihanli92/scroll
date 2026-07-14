@@ -37,6 +37,7 @@ Imports:
     yaml
 Suggests:
     SeuratObject,
+    Signac,
     scattermore,
     shinycssloaders,
     ggtree,

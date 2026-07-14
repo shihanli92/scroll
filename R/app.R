@@ -111,6 +111,14 @@
 .scroll_reductions <- function(m) names(m$embeddings)
 .scroll_assays_of <- function(m) names(m$assays)
 .scroll_features_of <- function(m, assay) unlist(m$assays[[assay]]$features)
+
+# Is there a categorical column with >=2 levels, i.e. a grouping a contrast can
+# be built from? DE/Pseudobulk are pointless without one (e.g. a single-region
+# Visium slide has `region` but only one level), so they gate on this.
+.scroll_has_contrast <- function(m) {
+  cats <- .scroll_cat_cols(m)
+  any(vapply(cats, function(c) length(m$meta[[c]]$levels) >= 2, logical(1)))
+}
 .scroll_subset_names <- function(m) names(m$subsets)
 
 # Embeddings usable in a view: whole-dataset shows only full-coverage reductions;
@@ -945,7 +953,7 @@ pseudobulk_de_server <- function(id, data, cells_r = reactive(data$cells)) {
 # The built-in panels, in scroll order. Each entry: display meta + its module's
 # ui/server. Display numbers are assigned at assembly time (see
 # .scroll_assemble_panels), so appended custom panels number correctly.
-.scroll_builtin_panels <- function() list(
+.scroll_builtin_panels <- function() c(list(
   list(id = "dimplot", label = "DimPlot",
        title = "Cells by annotation",
        desc = "The embedding coloured by any cell metadata column.",
@@ -957,28 +965,37 @@ pseudobulk_de_server <- function(id, data, cells_r = reactive(data$cells)) {
   list(id = "biaxial", label = "Biaxial",
        title = "Biaxial signal",
        desc = "Pairwise scatters of numeric columns (e.g. hashtags) coloured by a selection.",
+       when = function(m) length(.scroll_num_cols(m)) >= 2,
        ui = biaxial_ui, server = biaxial_server),
   list(id = "dotplot", label = "DotPlot",
        title = "Marker panel",
        desc = "Mean expression and fraction expressing across groups.",
+       when = function(m) length(.scroll_cat_cols(m)) >= 1,
        ui = dotplot_ui, server = dotplot_server),
   list(id = "violin", label = "Violin",
        title = "Expression distribution",
        desc = "A gene's per-group expression distribution.",
+       when = function(m) length(.scroll_cat_cols(m)) >= 1,
        ui = violin_ui, server = violin_server),
   list(id = "proportions", label = "Proportions",
        title = "Composition",
        desc = "Stacked composition of one annotation within another.",
+       when = function(m) length(.scroll_cat_cols(m)) >= 2,
        ui = proportions_ui, server = proportions_server),
   list(id = "de", label = "DE",
        title = "Differential expression",
        desc = "Wilcoxon markers for a contrast (live via presto): ranked table + volcano.",
+       when = .scroll_has_contrast,
        ui = de_ui, server = de_server),
   list(id = "pseudobulk", label = "Pseudobulk DE",
        title = "Pseudobulk differential expression",
        desc = "Aggregate cells into pseudobulk samples and test with edgeR/limma-voom.",
+       when = function(m) isTRUE(m$has_counts) && .scroll_has_contrast(m),
        ui = pseudobulk_de_ui, server = pseudobulk_de_server)
-)
+),
+  # Modality panels: each carries a `when(manifest)` predicate and only surfaces
+  # for projects whose manifest has the matching block (see .scroll_assemble_panels).
+  .scroll_vdj_panels(), .scroll_spatial_panels(), .scroll_atac_panels())
 
 # Mutable registry of user-added panels (session-global, like knitr's engines).
 .scroll_registry <- new.env(parent = emptyenv())
@@ -1072,7 +1089,7 @@ scroll_reset_panels <- function() {
 # display number by position. A registered id matching an existing panel replaces
 # it in place; otherwise it is inserted before `before`, else after `after`, else
 # appended.
-.scroll_assemble_panels <- function() {
+.scroll_assemble_panels <- function(manifests = NULL) {
   panels <- .scroll_builtin_panels()
   for (spec in .scroll_registry$panels) {
     ids <- vapply(panels, `[[`, "", "id")
@@ -1085,6 +1102,17 @@ scroll_reset_panels <- function() {
     } else {
       panels <- c(panels, list(spec))
     }
+  }
+  # Modality gating: a panel may declare `when = function(manifest)`; keep it only
+  # if some supplied manifest satisfies it (so e.g. VDJ panels appear only for
+  # projects built with `vdj=`). `manifests` is one manifest or a list of them
+  # (scroll_multi_app); NULL leaves every panel in (used by tests).
+  if (!is.null(manifests)) {
+    if (!is.null(manifests$scroll_version)) manifests <- list(manifests)
+    keep <- vapply(panels, function(p) is.null(p$when) ||
+      any(vapply(manifests, function(m) isTRUE(tryCatch(p$when(m), error = function(e) FALSE)),
+                 logical(1))), logical(1))
+    panels <- panels[keep]
   }
   for (i in seq_along(panels)) panels[[i]]$num <- sprintf("%02d", i)
   panels
@@ -1278,7 +1306,7 @@ scroll_reset_panels <- function() {
     lab <- if (!is.null(active_view())) m$subsets[[active_view()]]$label
     base <- if (n < tot) sprintf("%s of %s", format(n, big.mark = ","),
                                  format(tot, big.mark = ",")) else format(tot, big.mark = ",")
-    if (!is.null(lab)) paste0(base, " · ", lab) else base
+    if (!is.null(lab)) paste0(base, " \u00b7 ", lab) else base
   })
   # Pass `active_view` only to panels that opt in (declare a `view_r` formal),
   # keeping register_panel()'s 3-arg server contract backward compatible.
@@ -1308,7 +1336,7 @@ scroll_reset_panels <- function() {
 #' @export
 scroll_app <- function(dir = ".") {
   data <- .scroll_load(dir)
-  panels <- .scroll_assemble_panels()
+  panels <- .scroll_assemble_panels(data$manifest)
   title <- .scroll_nz(data$config$title)
 
   ui <- .scroll_page(data, title, panels)
@@ -1344,7 +1372,7 @@ scroll_multi_app <- function(projects) {
   ids <- paste0("ds", seq_along(projects))
 
   datas  <- lapply(projects, .scroll_load)
-  panels <- .scroll_assemble_panels()
+  panels <- .scroll_assemble_panels(lapply(datas, function(d) d$manifest))
   titles <- vapply(seq_along(datas), function(i) {
     .scroll_nz(datas[[i]]$config$title) %||%
       (if (nzchar(labels[[i]])) labels[[i]] else paste("Dataset", i))

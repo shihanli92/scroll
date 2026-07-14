@@ -441,6 +441,16 @@ register_plot_panel <- function(id, plot, controls = list(), label = id, title =
         !all(vapply(controls, function(c) is.list(c) && !is.null(c$ui), logical(1)))))
     stop("`controls` must be a list of scroll_input_*() specs.", call. = FALSE)
 
+  us <- .scroll_plot_panel_uiserver(plot, controls, compute)
+  register_panel(id, us$ui, us$server, label = label, title = title, desc = desc,
+                 after = after, before = before)
+}
+
+# Build the (ui, server) pair for a declarative plot panel from a plot function +
+# control specs. Shared by register_plot_panel() and the built-in modality panels
+# (VDJ/spatial/ATAC), so those get the same control population / error surfacing /
+# Compute gate / downloads without re-implementing the module.
+.scroll_plot_panel_uiserver <- function(plot, controls, compute = TRUE) {
   ui <- function(id, data) {
     ns <- NS(id)
     miss <- .scroll_panel_missing(controls, data)
@@ -482,8 +492,7 @@ register_plot_panel <- function(id, plot, controls = list(), label = id, title =
     })
   }
 
-  register_panel(id, ui, server, label = label, title = title, desc = desc,
-                 after = after, before = before)
+  list(ui = ui, server = server)
 }
 
 # ---- Reusable render helpers (parity with the built-in panels) ---------------

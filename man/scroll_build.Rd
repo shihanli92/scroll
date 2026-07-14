@@ -13,6 +13,9 @@ scroll_build(
   quantize = TRUE,
   counts = FALSE,
   subsets = NULL,
+  vdj = NULL,
+  spatial = NULL,
+  atac = NULL,
   overwrite = FALSE,
   verbose = interactive()
 )
@@ -47,6 +50,20 @@ cells with non-\code{NA} coordinates in it); \code{meta} names metadata columns 
 meaningful only within the subset. In the app a subset becomes a \strong{View} that
 restricts every panel to those cells and exposes its embedding + metadata.
 Defaults to any spec attached by \code{\link[=scroll_add_subset]{scroll_add_subset()}}.}
+
+\item{vdj}{Optional \code{\link[=vdj_spec]{vdj_spec()}} describing per-cell TCR/BCR columns. When
+supplied, a compact \verb{repertoire/} store (clone table + diversity / gene-usage
+residuals / tissue correlation) is baked and the VDJ panels are enabled.}
+
+\item{spatial}{Optional \code{\link[=spatial_spec]{spatial_spec()}} (or \code{TRUE} for defaults) describing a
+tissue image. When supplied, \code{GetTissueCoordinates()} is exported as a
+\code{spatial} embedding, the H&E image is baked as a raster asset, and the Spatial
+panel is enabled.}
+
+\item{atac}{Optional \code{\link[=atac_spec]{atac_spec()}} (or \code{TRUE} for defaults) naming a peaks assay.
+When supplied, the assay is marked \code{kind: peaks}, each peak's coordinates are
+parsed from its name, a peak-annotation table (with nearest gene when a Signac
+annotation is available) is baked, and the Peaks panel is enabled.}
 
 \item{overwrite}{If \code{TRUE}, an existing \code{outdir} is removed first.}
 
