@@ -1101,7 +1101,12 @@ scroll_reset_panels <- function() {
 # display number by position. A registered id matching an existing panel replaces
 # it in place; otherwise it is inserted before `before`, else after `after`, else
 # appended.
-.scroll_assemble_panels <- function(manifests = NULL) {
+#
+# `include` / `exclude` are the config-driven panel override (config.yaml `panels:` /
+# `exclude_panels:`): `include` shows exactly those ids in that order and *bypasses*
+# the `when` gate (an explicit request wins); `exclude` drops ids afterwards. Unknown
+# ids warn but don't error. When `include` is NULL the usual `when` gating applies.
+.scroll_assemble_panels <- function(manifests = NULL, include = NULL, exclude = NULL) {
   panels <- .scroll_builtin_panels()
   for (spec in .scroll_registry$panels) {
     ids <- vapply(panels, `[[`, "", "id")
@@ -1115,19 +1120,39 @@ scroll_reset_panels <- function() {
       panels <- c(panels, list(spec))
     }
   }
-  # Modality gating: a panel may declare `when = function(manifest)`; keep it only
-  # if some supplied manifest satisfies it (so e.g. VDJ panels appear only for
-  # projects built with `vdj=`). `manifests` is one manifest or a list of them
-  # (scroll_multi_app); NULL leaves every panel in (used by tests).
-  if (!is.null(manifests)) {
+  ids_all <- vapply(panels, `[[`, "", "id")
+  if (!is.null(include)) {
+    # explicit allowlist: exactly these, in this order, gate bypassed
+    include <- as.character(include)
+    .scroll_warn_panel_ids(include, ids_all, "panels")
+    panels <- panels[stats::na.omit(match(include[include %in% ids_all], ids_all))]
+  } else if (!is.null(manifests)) {
+    # Modality gating: a panel may declare `when = function(manifest)`; keep it only
+    # if some supplied manifest satisfies it (so e.g. VDJ panels appear only for
+    # projects built with `vdj=`). `manifests` is one manifest or a list of them
+    # (scroll_multi_app); NULL leaves every panel in (used by tests).
     if (!is.null(manifests$scroll_version)) manifests <- list(manifests)
     keep <- vapply(panels, function(p) is.null(p$when) ||
       any(vapply(manifests, function(m) isTRUE(tryCatch(p$when(m), error = function(e) FALSE)),
                  logical(1))), logical(1))
     panels <- panels[keep]
   }
+  if (!is.null(exclude)) {
+    exclude <- as.character(exclude)
+    .scroll_warn_panel_ids(exclude, ids_all, "exclude_panels")
+    ids_now <- vapply(panels, `[[`, "", "id")
+    panels <- panels[!ids_now %in% exclude]
+  }
   for (i in seq_along(panels)) panels[[i]]$num <- sprintf("%02d", i)
   panels
+}
+
+# Warn (non-fatally) about panel ids in a config override that match no known panel.
+.scroll_warn_panel_ids <- function(requested, known, key) {
+  unknown <- setdiff(requested, known)
+  if (length(unknown))
+    warning(sprintf("scroll: unknown panel id(s) in `%s`: %s", key,
+                    paste(unknown, collapse = ", ")), call. = FALSE)
 }
 
 .scroll_group <- function(title, ...) {
@@ -1352,7 +1377,9 @@ scroll_reset_panels <- function() {
 #' @export
 scroll_app <- function(dir = ".") {
   data <- .scroll_load(dir)
-  panels <- .scroll_assemble_panels(data$manifest)
+  # config.yaml `panels:` / `exclude_panels:` override the automatic gating
+  panels <- .scroll_assemble_panels(data$manifest, include = data$config$panels,
+                                    exclude = data$config$exclude_panels)
   title <- .scroll_nz(data$config$title)
 
   ui <- .scroll_page(data, title, panels)
@@ -1374,6 +1401,10 @@ scroll_app <- function(dir = ".") {
 #' Custom panels that read baked assets should resolve them from the per-dataset
 #' handle (`data$dir`) rather than a global option, so each tab reads its own
 #' project's files.
+#'
+#' The `config.yaml` panel override (`panels:` / `exclude_panels:`) is honoured by
+#' [scroll_app()]; here the tab panel list is shared, so the panels are the gated
+#' union across all mounted projects.
 #'
 #' @param projects A named list/vector of built project directories. Names are used
 #'   as tab labels (falling back to each project's `config.yaml` title, then a

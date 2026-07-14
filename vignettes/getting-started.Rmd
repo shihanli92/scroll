@@ -83,7 +83,14 @@ brand: "My Lab"           # replaces the "scroll" wordmark
 default_embedding: umap
 default_assay: RNA
 markers: [CD3D, CD8A, MS4A1, CD14, NKG7]   # DotPlot's starting gene panel
+panels: [dimplot, featureplot, dotplot]    # optional: show exactly these, in order
+exclude_panels: [pseudobulk]               # optional: hide specific sections
 ```
+
+Sections otherwise appear only when the data supports them (e.g. DE needs a
+≥2-level grouping). `panels:` is an allowlist that shows exactly those sections in
+order (overriding that automatic gating); `exclude_panels:` hides specific ones.
+Both are also settable at build time via `scroll_build(panels = , exclude_panels = )`.
 
 ## 3. Explore
 

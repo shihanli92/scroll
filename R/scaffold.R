@@ -10,9 +10,14 @@
 #' be regenerated. Existing files are not overwritten.
 #'
 #' @param dir A built scroll project directory (must contain `manifest.yaml`).
+#' @param panels Optional character vector of panel ids to show **exactly**, in this
+#'   order, overriding the automatic data-driven gating (written to `config.yaml` as
+#'   `panels:`). `NULL` (default) leaves the automatic behaviour.
+#' @param exclude_panels Optional character vector of panel ids to hide (written as
+#'   `exclude_panels:`); applied after gating / the `panels` allowlist.
 #' @return `dir`, invisibly.
 #' @export
-scroll_scaffold_app <- function(dir) {
+scroll_scaffold_app <- function(dir, panels = NULL, exclude_panels = NULL) {
   man <- scroll_manifest(dir)
   assay <- man$default_assay
   features <- unlist(man$assays[[assay]]$features)
@@ -24,6 +29,8 @@ scroll_scaffold_app <- function(dir) {
     default_embedding = man$default_embedding,
     markers = as.list(.scroll_pick_features(features))
   )
+  if (!is.null(panels)) config$panels <- as.list(as.character(panels))
+  if (!is.null(exclude_panels)) config$exclude_panels <- as.list(as.character(exclude_panels))
   cfg_path <- file.path(dir, "config.yaml")
   if (!file.exists(cfg_path)) yaml::write_yaml(config, cfg_path)
 

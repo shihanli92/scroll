@@ -16,6 +16,8 @@ scroll_build(
   vdj = NULL,
   spatial = NULL,
   atac = NULL,
+  panels = NULL,
+  exclude_panels = NULL,
   overwrite = FALSE,
   verbose = interactive()
 )
@@ -64,6 +66,14 @@ panel is enabled.}
 When supplied, the assay is marked \code{kind: peaks}, each peak's coordinates are
 parsed from its name, a peak-annotation table (with nearest gene when a Signac
 annotation is available) is baked, and the Peaks panel is enabled.}
+
+\item{panels}{Optional character vector of panel ids to show \strong{exactly}, in this
+order — an explicit override of the automatic data-driven gating (e.g.
+\code{c("dimplot", "featureplot", "spatial")}). Written to \code{config.yaml} as \verb{panels:}
+and also hand-editable there. \code{NULL} (default) keeps the automatic behaviour.}
+
+\item{exclude_panels}{Optional character vector of panel ids to hide (e.g.
+\code{c("de", "pseudobulk")}); applied after gating / the \code{panels} allowlist.}
 
 \item{overwrite}{If \code{TRUE}, an existing \code{outdir} is removed first.}
 

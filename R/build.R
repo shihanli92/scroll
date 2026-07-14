@@ -40,6 +40,12 @@
 #'   When supplied, the assay is marked `kind: peaks`, each peak's coordinates are
 #'   parsed from its name, a peak-annotation table (with nearest gene when a Signac
 #'   annotation is available) is baked, and the Peaks panel is enabled.
+#' @param panels Optional character vector of panel ids to show **exactly**, in this
+#'   order — an explicit override of the automatic data-driven gating (e.g.
+#'   `c("dimplot", "featureplot", "spatial")`). Written to `config.yaml` as `panels:`
+#'   and also hand-editable there. `NULL` (default) keeps the automatic behaviour.
+#' @param exclude_panels Optional character vector of panel ids to hide (e.g.
+#'   `c("de", "pseudobulk")`); applied after gating / the `panels` allowlist.
 #' @param overwrite If `TRUE`, an existing `outdir` is removed first.
 #' @param verbose If `TRUE`, report progress: a step message per phase and a
 #'   progress bar over each assay's feature-partition export (the slow step).
@@ -52,7 +58,12 @@ scroll_build <- function(object, outdir,
                          assays = NULL, embeddings = NULL, meta_cols = NULL,
                          quantize = TRUE, counts = FALSE, subsets = NULL,
                          vdj = NULL, spatial = NULL, atac = NULL,
+                         panels = NULL, exclude_panels = NULL,
                          overwrite = FALSE, verbose = interactive()) {
+  if (!is.null(panels) && !is.character(panels))
+    stop("`panels` must be a character vector of panel ids, or NULL.", call. = FALSE)
+  if (!is.null(exclude_panels) && !is.character(exclude_panels))
+    stop("`exclude_panels` must be a character vector of panel ids, or NULL.", call. = FALSE)
   .scroll_need_seurat()
   object <- .scroll_load_object(object)
 
@@ -143,7 +154,7 @@ scroll_build <- function(object, outdir,
                          spatial_embeddings = if (!is.null(spatial_prep)) spatial_prep$name else character(),
                          atac = atac_block,
                          peaks_assay = if (!is.null(atac_block)) atac_block$assay else character())
-  scroll_scaffold_app(outdir)
+  scroll_scaffold_app(outdir, panels = panels, exclude_panels = exclude_panels)
 
   message("scroll project built at: ", normalizePath(outdir))
   invisible(outdir)

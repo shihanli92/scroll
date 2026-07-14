@@ -24,4 +24,8 @@ collisions; the built-in and custom panels are the same registry for all.
 Custom panels that read baked assets should resolve them from the per-dataset
 handle (\code{data$dir}) rather than a global option, so each tab reads its own
 project's files.
+
+The \code{config.yaml} panel override (\verb{panels:} / \verb{exclude_panels:}) is honoured by
+\code{\link[=scroll_app]{scroll_app()}}; here the tab panel list is shared, so the panels are the gated
+union across all mounted projects.
 }

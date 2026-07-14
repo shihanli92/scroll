@@ -48,6 +48,11 @@ and Pseudobulk additionally needs a counts store. So, e.g., a single-region Visi
 slide shows the Spatial, DimPlot, FeaturePlot, DotPlot, Violin and Biaxial panels
 but not DE/Pseudobulk/Proportions, while a multi-region study gets them back.
 
+For explicit control, `scroll_build(panels = c(...))` (or a `panels:` list in
+`config.yaml`) shows **exactly** those sections in that order, overriding the automatic
+gating; `exclude_panels` / `exclude_panels:` hides specific sections. `config.yaml` is
+hand-editable, so the panel set can be changed without rebuilding.
+
 Each built-in analysis section carries its own fine-grained controls:
 
 * **DimPlot** — embedding coloured by any metadata column.

@@ -4,10 +4,17 @@
 \alias{scroll_scaffold_app}
 \title{Scaffold the runtime app into a project}
 \usage{
-scroll_scaffold_app(dir)
+scroll_scaffold_app(dir, panels = NULL, exclude_panels = NULL)
 }
 \arguments{
 \item{dir}{A built scroll project directory (must contain \code{manifest.yaml}).}
+
+\item{panels}{Optional character vector of panel ids to show \strong{exactly}, in this
+order, overriding the automatic data-driven gating (written to \code{config.yaml} as
+\verb{panels:}). \code{NULL} (default) leaves the automatic behaviour.}
+
+\item{exclude_panels}{Optional character vector of panel ids to hide (written as
+\verb{exclude_panels:}); applied after gating / the \code{panels} allowlist.}
 }
 \value{
 \code{dir}, invisibly.

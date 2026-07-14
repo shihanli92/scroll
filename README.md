@@ -133,7 +133,15 @@ title: "PBMC 3k"          # app-bar label
 default_embedding: umap
 default_assay: RNA
 markers: [CD3D, CD8A, MS4A1, CD14, NKG7]   # DotPlot's starting panel
+panels: [dimplot, featureplot, dotplot]    # optional: show exactly these, in order
+exclude_panels: [pseudobulk]               # optional: hide specific sections
 ```
+
+By default each section appears only when the data supports it (e.g. DE needs a
+≥2-level grouping). To take explicit control, set `panels:` (an allowlist that shows
+exactly those sections, in order, overriding the automatic gating) or
+`exclude_panels:` (a denylist) — either in `config.yaml` (no rebuild needed) or via
+`scroll_build(..., panels = , exclude_panels = )`.
 
 **Multiple datasets.** `scroll_multi_app()` mounts several built projects behind one
 page, each on its own tab (namespaced, independent):
