@@ -46,9 +46,7 @@ test_that("scroll_query_feature matches a direct partition read (and repeats ide
 test_that("scroll_aggregate_counts sums a many-to-many mapping correctly", {
   dir <- test_project()                                       # built with counts = TRUE
   con <- scroll_connect(dir); on.exit(scroll_disconnect(con))
-  cells <- as.data.frame(arrow::read_parquet(file.path(dir, "cells.parquet")))$cell
-  c1 <- cells[1]; c2 <- cells[2]
-  mapping <- data.frame(cell = c(c1, c2, c1), psample = c("A", "A", "B"))  # c1 in A and B
+  mapping <- data.frame(cell = c(1L, 2L, 1L), psample = c("A", "A", "B"))  # v2 int index; c1 in A and B
   agg <- scroll_aggregate_counts(con, "RNA", mapping)
   expect_true(all(c("feature", "psample", "count") %in% names(agg)))
 
@@ -76,7 +74,9 @@ test_that("dequantized values match the source matrix within the quant bound", {
   hit <- scroll_query_feature(con, "RNA", "MS4A1")
   hit$value <- scroll_dequantize(hit$value, man, "RNA")
 
-  expect_setequal(hit$cell, names(truth))
-  m <- merge(hit, data.frame(cell = names(truth), truth = as.numeric(truth)), by = "cell")
+  bc <- colnames(obj)[hit$cell]                # v2 int index -> barcode (matrix col order)
+  expect_setequal(bc, names(truth))
+  m <- merge(data.frame(cell = bc, value = hit$value),
+             data.frame(cell = names(truth), truth = as.numeric(truth)), by = "cell")
   expect_lt(max(abs(m$value - m$truth)), man$assays$RNA$max / 255 + 1e-9)
 })

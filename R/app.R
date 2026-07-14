@@ -9,10 +9,15 @@
 .scroll_load <- function(dir) {
   con <- scroll_connect(dir)
   manifest <- scroll_manifest(dir)
+  cells <- as.data.frame(arrow::read_parquet(file.path(dir, "cells.parquet")))
+  # `.gidx` is the canonical global row-index a v2 expr store joins on; it rides
+  # along on subset/filtered cells so joins stay correct under the app-bar filter.
+  cells$.gidx <- seq_len(nrow(cells))
   d <- list(
     dir = normalizePath(dir),
-    cells = as.data.frame(arrow::read_parquet(file.path(dir, "cells.parquet"))),
+    cells = cells,
     manifest = manifest,
+    cell_index = isTRUE(manifest$cell_index),   # TRUE for v2 stores (int cell key)
     config = scroll_config(dir),
     con = con
   )
@@ -1353,7 +1358,9 @@ scroll_multi_app <- function(projects) {
   ui <- bslib::page_fluid(
     theme = .scroll_theme(),
     tags$head(tags$style(HTML(.scroll_css())), tags$script(HTML(.scroll_spy_js()))),
-    do.call(bslib::navset_tab, tabs)
+    # .scroll-multi lets the CSS pin the dataset tab strip and drop each dataset's
+    # app bar + rail below it, so the dataset selector stays visible while scrolling.
+    div(class = "scroll-multi", do.call(bslib::navset_tab, tabs))
   )
   server <- function(input, output, session) {
     for (i in seq_along(datas)) local({

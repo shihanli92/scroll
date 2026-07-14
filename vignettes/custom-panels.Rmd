@@ -110,6 +110,28 @@ controls = list(
 optional `bind(input, session, data)` for server-side wiring), so a bespoke widget
 composes with the declared ones and reaches `plot` as `input$<id>` like any other.
 
+**Data-derived choices** — when a control's options come from a *baked asset* or the
+data rather than the manifest, pass a function. `scroll_input_choice(choices =
+function(data))` computes its list at render time, and `scroll_input_levels(choices =
+function(input, data), watch = c(...))` recomputes its levels whenever a watched
+control changes — letting one control cascade off another over your own data:
+
+```{r dynamic-choices, eval = FALSE}
+controls = list(
+  # options discovered from a file the build wrote next to the project
+  scroll_input_choice("subset", "Subset",
+    choices = function(data) tools::file_path_sans_ext(
+      list.files(file.path(data$dir, "subsets"), pattern = "\\.rds$"))),
+  # levels recomputed from the chosen subset's baked table
+  scroll_input_levels("groups", "Groups", none = TRUE, watch = "subset",
+    choices = function(input, data) {
+      d <- readRDS(file.path(data$dir, "subsets", paste0(input$subset, ".rds")))
+      unique(d$group)
+    }),
+  scroll_input_column("call", "Antigen call", prefer = c("antigen_call", "antigen")),
+  scroll_input_palette("pal", "Palette", "continuous"))
+```
+
 **Reusable look & feel.** So a custom plot matches the built-ins, the same helpers
 they use are exported: `scroll_point_layer()` (rasterizes large scatters on screen,
 stays vector on export), `scroll_discrete_colors()` / `scroll_continuous_scale()`

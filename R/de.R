@@ -46,17 +46,21 @@ scroll_de <- function(data, assay, group_col, ident1, ident2 = NULL, min_pct = 0
     keep <- in1 | in2                       # in1 wins if a level is in both
     labels <- ifelse(in1, "group1", "group2")
   }
-  ccells <- cells$cell[keep]
+  # `bc` = barcodes (matrix dimnames); `key` = the store's cell key used to query +
+  # join (v2 int global index / v1 barcode). `.gidx` rides on the cells handle.
+  gidx <- if (!is.null(cells$.gidx)) cells$.gidx else seq_len(nrow(cells))
+  bc  <- cells$cell[keep]
+  key <- if (isTRUE(data$manifest$cell_index)) gidx[keep] else bc
   labels <- labels[keep]
   if (sum(labels == "group1") < 3 || sum(labels != "group1") < 3)
     stop("Each side of the contrast needs at least 3 cells.", call. = FALSE)
 
-  long <- scroll_query_cells(data$con, assay, ccells)
+  long <- scroll_query_cells(data$con, assay, key)
   long$value <- scroll_dequantize(long$value, data$manifest, assay)
   feats <- .scroll_features_of(data$manifest, assay)
   X <- Matrix::sparseMatrix(
-    i = match(long$feature, feats), j = match(long$cell, ccells), x = long$value,
-    dims = c(length(feats), length(ccells)), dimnames = list(feats, ccells))
+    i = match(long$feature, feats), j = match(long$cell, key), x = long$value,
+    dims = c(length(feats), length(bc)), dimnames = list(feats, bc))
 
   res <- presto::wilcoxauc(X, labels)
   res <- res[res$group == "group1", , drop = FALSE]

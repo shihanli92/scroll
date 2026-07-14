@@ -1,7 +1,7 @@
 test_that("scroll_query_cells returns all features for the given cells", {
   dir <- test_project()
   con <- scroll_connect(dir); on.exit(scroll_disconnect(con))
-  cells <- as.data.frame(arrow::read_parquet(file.path(dir, "cells.parquet")))$cell[1:20]
+  cells <- 1:20                                # v2 store: cell = int32 global row index
   hit <- scroll_query_cells(con, "RNA", cells)
   expect_true(all(c("feature", "cell", "value") %in% names(hit)))
   expect_true(all(hit$cell %in% cells))

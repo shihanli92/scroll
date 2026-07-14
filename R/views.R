@@ -100,11 +100,18 @@
   cells[!is.na(cells$.x) & !is.na(cells$.y), , drop = FALSE]
 }
 
-# Expression vector aligned to a cells table, zero-filled for absent cells.
+# Expression vector aligned to a cells table, zero-filled for absent cells. Store-
+# agnostic: a v2 query result keys `cell` on the integer global row-index (matched
+# to `cells$.gidx`), a v1 result on the barcode string (matched to `cells$cell`).
+# A cell absent from `values` => 0 (the store is sparse). Positional int match is
+# faster than the old string-hash join and also correct under app-bar subsets.
 .scroll_expr_vector <- function(cells, values) {
-  expr <- stats::setNames(rep(0, nrow(cells)), cells$cell)
-  if (!is.null(values) && nrow(values) > 0) expr[values$cell] <- values$value
-  as.numeric(expr[cells$cell])
+  if (is.null(values) || !nrow(values)) return(rep(0, nrow(cells)))
+  key <- if (is.character(values$cell)) cells$cell
+         else if (!is.null(cells$.gidx)) cells$.gidx else seq_len(nrow(cells))
+  expr <- values$value[match(key, values$cell)]
+  expr[is.na(expr)] <- 0
+  as.numeric(expr)
 }
 
 # A scatter point layer that rasterizes on screen for speed but stays a true
@@ -280,7 +287,6 @@ view_feature_plot <- function(cells, params, values = NULL, state = list()) {
 # rather than on every palette/dot-size change.
 .scroll_dotplot_assemble <- function(cells, features, group_by, expr_long,
                                      scale = FALSE, cluster = "off") {
-  grp <- stats::setNames(as.character(cells[[group_by]]), cells$cell)
   ng <- table(as.character(cells[[group_by]]))          # cells per group
   groups <- names(ng)
 
@@ -289,7 +295,11 @@ view_feature_plot <- function(cells, params, values = NULL, state = list()) {
                       KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE)
   if (!is.null(expr_long) && nrow(expr_long) > 0) {
     e <- expr_long
-    e$group <- grp[e$cell]
+    # map each expr row to its cell's group via the store's cell key (v2 int .gidx
+    # / v1 barcode), matched against the active cells.
+    key <- if (is.character(e$cell)) cells$cell
+           else if (!is.null(cells$.gidx)) cells$.gidx else seq_len(nrow(cells))
+    e$group <- as.character(cells[[group_by]])[match(e$cell, key)]
     e <- e[!is.na(e$group), , drop = FALSE]
     s_sum <- stats::aggregate(value ~ feature + group, e, sum)
     s_pos <- stats::aggregate(value ~ feature + group, e,

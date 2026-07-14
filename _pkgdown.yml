@@ -22,6 +22,7 @@ reference:
     reprocessed sub-embeddings as linked views.
   contents:
   - scroll_build
+  - scroll_build_stream
   - scroll_add_subset
 
 - title: Run the app

@@ -153,6 +153,66 @@ test_that("scroll_show_when wraps a control in a conditionalPanel", {
   expect_match(h, "Pseudobulk")
 })
 
+test_that("scroll_input_choice accepts data-derived choices and picks a widget", {
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  # a function(data) -> choices computed at UI time, rendered as a selectize (not radio)
+  ctl <- scroll_input_choice("k", "K", choices = function(d) scroll_columns(d, "categorical"))
+  h <- as.character(ctl$ui(shiny::NS("p"), data))
+  expect_no_match(h, "type=\"radio\"")                       # a dropdown, not radioButtons
+  expect_match(h, "celltype")
+  # a short static list stays radio (back-compat)
+  hr <- as.character(scroll_input_choice("v", "V", c("A", "B"))$ui(shiny::NS("p"), data))
+  expect_match(hr, "type=\"radio\"")
+  # a long static list auto-upgrades to a dropdown
+  hl <- as.character(scroll_input_choice("f", "F", as.character(1:20))$ui(shiny::NS("p"), data))
+  expect_no_match(hl, "type=\"radio\"")
+})
+
+test_that("scroll_input_levels(choices=, watch=) recomputes from the data on a watched change", {
+  on.exit(scroll_reset_panels()); scroll_reset_panels()
+  # levels come from whichever categorical column the `col` control names (like the
+  # baked-asset panels, but here reading data$cells so the fixture suffices)
+  register_plot_panel("lv", compute = FALSE,
+    controls = list(
+      scroll_input_column("col", "Column", "categorical"),
+      scroll_input_levels("lev", "Levels", watch = "col", none = TRUE,
+        choices = function(input, data) unique(data$cells[[input$col]]))),
+    plot = function(cells, input, data)
+      ggplot2::ggplot(cells[cells[[input$col]] %in% input$lev, , drop = FALSE],
+                      ggplot2::aes(.data[[input$col]])) + ggplot2::geom_bar())
+  p <- Filter(function(x) identical(x$id, "lv"), scroll:::.scroll_assemble_panels())[[1]]
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con), add = TRUE)
+  shiny::testServer(p$server, args = list(data = data), {
+    session$setInputs(col = "celltype")                       # watched change -> repopulate levels
+    session$setInputs(lev = c("T", "B"))
+    expect_error(force(output$plot), NA)                      # renders with derived levels
+  })
+})
+
+test_that("scroll_input_column(prefer=) defaults to the preferred column when present", {
+  data <- scroll:::.scroll_load(test_project())      # categorical: condition, celltype
+  on.exit(scroll_disconnect(data$con))
+  h1 <- as.character(scroll_input_column("x", "X", "categorical",
+                                         prefer = c("celltype", "condition"))$ui(shiny::NS("p"), data))
+  expect_match(h1, "value=\"celltype\"[^>]*selected")        # celltype preselected
+  # absent preference falls back to the first column
+  h2 <- as.character(scroll_input_column("x", "X", "categorical",
+                                         prefer = "nope")$ui(shiny::NS("p"), data))
+  expect_no_match(h2, "value=\"nope\"")
+})
+
+test_that("scroll_input_palette lists the right palette names per type", {
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  hd <- as.character(scroll_input_palette("pd", "Pal", "discrete")$ui(shiny::NS("p"), data))
+  expect_match(hd, "Tableau 10")
+  hc <- as.character(scroll_input_palette("pc", "Pal", "continuous")$ui(shiny::NS("p"), data))
+  expect_match(hc, "viridis")
+  expect_match(hc, "RdBu")
+})
+
 test_that("scroll_input_custom wraps an author-supplied ui/bind", {
   ctl <- scroll_input_custom("mine", "Mine",
     ui = function(ns, data) shiny::textInput(ns("mine"), "Mine"))

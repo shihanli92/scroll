@@ -113,7 +113,11 @@ scroll_pseudobulk_de <- function(data, assay, aggregate_cols, ident1, ident2 = N
 
   rep_vals <- if (!is.null(replicate_col) && replicate_col %in% names(cells))
                 as.character(cells[[replicate_col]]) else NA_character_
-  df <- data.frame(cell = cells$cell, combo = combo, grp = grp, rep = rep_vals,
+  # `cell` here is the store's cell key that scroll_aggregate_counts joins on:
+  # the int32 global index for a v2 store, the barcode string for v1.
+  cell_key <- if (isTRUE(data$manifest$cell_index))
+                (if (!is.null(cells$.gidx)) cells$.gidx else seq_len(nrow(cells))) else cells$cell
+  df <- data.frame(cell = cell_key, combo = combo, grp = grp, rep = rep_vals,
                    stringsAsFactors = FALSE)
   df <- df[!is.na(df$combo) & !is.na(df$grp), , drop = FALSE]
   if (!nrow(df)) stop("No cells match the selected groups.", call. = FALSE)

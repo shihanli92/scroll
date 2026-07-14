@@ -13,9 +13,14 @@
    HORIZONTAL bar changes content height, either of which fires window 'resize',
    which re-renders every fluid-width plotOutput, which nudges the size back --
    an endless self-triggering loop. Reserve the vertical gutter always, and never
-   show a page-level horizontal bar (wide plots scroll inside .scroll-plot). */
+   show a page-level horizontal bar (wide plots scroll inside .scroll-plot).
+   NOTE: the horizontal clip lives on <html> only. Putting overflow-x:hidden on
+   <body> too forces body's computed overflow-y to `auto`, turning body into its
+   own scroll container -- which breaks position:sticky on the app bar and section
+   rail (they anchor to the scrolling body box instead of the viewport, so they
+   scroll away). <html> already clips horizontal overflow for the whole page. */
 html{overflow-x:hidden; overflow-y:scroll; scrollbar-gutter:stable;}
-body{background:var(--sc-ground); color:var(--sc-ink); overflow-x:hidden;
+body{background:var(--sc-ground); color:var(--sc-ink);
   font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
   -webkit-font-smoothing:antialiased;}
 .container-fluid{padding:0;}
@@ -75,6 +80,15 @@ body{background:var(--sc-ground); color:var(--sc-ink); overflow-x:hidden;
 .scroll-rail-item.active .scroll-rail-num{color:var(--sc-accent);}
 .scroll-rail-foot{margin-top:14px; padding:0 12px; font-size:11px; color:var(--sc-faint);
   font-family:ui-monospace,monospace;}
+
+/* Multi-dataset (scroll_multi_app): pin the dataset tab strip at the very top and
+   drop each dataset's sticky app bar + section rail below it, so the dataset
+   selector is always reachable (not just at the top of the scroll). */
+.scroll-multi .nav-tabs{position:sticky; top:0; z-index:1001; margin:0;
+  padding:6px 20px 0; background:rgba(251,252,253,.92);
+  backdrop-filter:saturate(1.4) blur(8px); border-bottom:1px solid var(--sc-line);}
+.scroll-multi .scroll-appbar{top:43px;}
+.scroll-multi .scroll-rail{top:123px;}
 
 /* sections */
 .scroll-content{display:flex; flex-direction:column; gap:28px;}

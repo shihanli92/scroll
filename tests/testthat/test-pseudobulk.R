@@ -10,14 +10,13 @@ test_that("counts store is written and recorded when counts = TRUE", {
 test_that("scroll_aggregate_counts sums counts per pseudobulk sample", {
   dir <- test_project()
   con <- scroll_connect(dir); on.exit(scroll_disconnect(con))
-  cells <- as.data.frame(arrow::read_parquet(file.path(dir, "cells.parquet")))$cell
-  mapping <- data.frame(cell = cells[1:20], psample = rep(c("A", "B"), each = 10))
+  mapping <- data.frame(cell = 1:20, psample = rep(c("A", "B"), each = 10))  # v2 int cell index
   agg <- scroll_aggregate_counts(con, "RNA", mapping)
   expect_setequal(names(agg), c("feature", "psample", "count"))
   expect_setequal(unique(agg$psample), c("A", "B"))
   # cross-check one gene's summed count against the raw store
   raw <- as.data.frame(arrow::read_parquet(file.path(dir, "counts", "RNA.parquet")))
-  truth <- sum(raw$value[raw$feature == "CD3D" & raw$cell %in% cells[1:10]])
+  truth <- sum(raw$value[raw$feature == "CD3D" & raw$cell %in% 1:10])
   got <- agg$count[agg$feature == "CD3D" & agg$psample == "A"]
   expect_equal(if (length(got)) got else 0, truth)
 })

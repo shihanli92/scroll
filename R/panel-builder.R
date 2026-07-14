@@ -157,24 +157,35 @@ scroll_render_plot <- function(output, id, fun, event = NULL, placeholder = NULL
 #' @param id Control id (also the name under which its value reaches `plot`'s
 #'   `input`).
 #' @param label Control label.
-#' @param type For `scroll_input_column`: `"categorical"`, `"numeric"`, or `"any"`.
+#' @param type For `scroll_input_column`: `"categorical"`, `"numeric"`, or `"any"`;
+#'   for `scroll_input_palette`: `"discrete"` or `"continuous"`.
 #' @param from For `scroll_input_levels`: a column-picking control's id, or a
-#'   categorical column name.
+#'   categorical column name. Supply either `from` or `choices`.
 #' @param multiple Allow multiple selections.
 #' @param required If `TRUE`, an empty value shows a "Select <label>." message
 #'   instead of computing.
 #' @param none If `TRUE`, the level selector defaults to empty (e.g. a "vs. rest").
-#' @param selected Default selection: integer index/vector, or `"none"`.
+#' @param selected Default selection: integer index/vector, or `"none"`. For
+#'   `scroll_input_palette`, a palette name.
 #' @param view_aware For `scroll_input_column`/`scroll_input_embedding`: repopulate
 #'   choices from the active subset view (requires the panel to be view-aware).
+#' @param prefer For `scroll_input_column`: one or more column names to default-select
+#'   when present (first match wins), falling back to `selected` otherwise.
+#' @param widget For `scroll_input_choice`: `"radio"`, `"select"`, or `"auto"`
+#'   (radio for a short static list, a selectize dropdown otherwise).
+#' @param watch For `scroll_input_levels` with a `choices` function: control ids whose
+#'   change repopulates the levels (empty = populate once at start-up).
 #' @param ui For `scroll_input_custom`: a `function(ns, data)` returning the
 #'   control's UI (namespace inputs with `ns()`).
 #' @param bind For `scroll_input_custom`: an optional
 #'   `function(input, session, data)` wiring server-side behaviour.
 #' @param needs For `scroll_input_custom`: a required column type
 #'   (`"categorical"`/`"numeric"`) that gates the panel's empty state, or `NULL`.
-#' @param choices,value,min,max,step,placeholder,inline Passed to the underlying
-#'   Shiny input.
+#' @param choices For most inputs a static vector; `scroll_input_choice` also accepts
+#'   a `function(data)` and `scroll_input_levels` a `function(input, data)`, both
+#'   evaluated to derive choices from the data handle (e.g. a baked asset under
+#'   `data$dir`).
+#' @param value,min,max,step,placeholder,inline Passed to the underlying Shiny input.
 #' @return A control spec (a list) for `register_plot_panel(controls = )`.
 #' @name scroll_input
 NULL
@@ -182,8 +193,11 @@ NULL
 #' @rdname scroll_input
 #' @export
 scroll_input_column <- function(id, label, type = "categorical", selected = 1,
-                                view_aware = FALSE) {
-  pick <- function(cols) cols[min(selected, length(cols))]
+                                view_aware = FALSE, prefer = NULL) {
+  pick <- function(cols) {
+    if (!is.null(prefer)) { p <- intersect(prefer, cols); if (length(p)) return(p[[1]]) }
+    cols[min(selected, length(cols))]
+  }
   list(kind = "column", id = id, label = label, required = FALSE, needs = type,
        ui = function(ns, data) {
          cols <- scroll_columns(data, type)
@@ -202,22 +216,44 @@ scroll_input_column <- function(id, label, type = "categorical", selected = 1,
 
 #' @rdname scroll_input
 #' @export
-scroll_input_levels <- function(id, label, from, multiple = TRUE, required = FALSE,
-                                none = FALSE, selected = 1) {
+scroll_input_levels <- function(id, label, from = NULL, choices = NULL, watch = NULL,
+                                multiple = TRUE, required = FALSE, none = FALSE, selected = 1) {
   if (isTRUE(required) && isTRUE(none))
     warning(sprintf(paste0("scroll_input_levels('%s'): required = TRUE with none = TRUE ",
                            "defaults to an empty selection, so the panel stays blocked ",
                            "until the user picks a level."), id), call. = FALSE)
+  if (is.null(from) && is.null(choices))
+    stop("scroll_input_levels(): supply either `from` (a column/control) or `choices` (a function).",
+         call. = FALSE)
   sel <- if (none) "none" else selected
+  pick <- function(lv) {
+    if (identical(sel, "none") || !length(lv)) character(0)
+    else if (is.numeric(sel)) lv[sel[sel <= length(lv)]]
+    else intersect(as.character(sel), lv)
+  }
   list(kind = "levels", id = id, label = label, required = required, needs = NULL,
        from = from,
        ui = function(ns, data)
          selectizeInput(ns(id), label, choices = NULL, multiple = multiple,
                         options = list(plugins = list("remove_button"),
-                                       placeholder = if (none) "rest / none" else NULL)),
-       bind = function(input, session, data, control_ids = character())
-         scroll_bind_levels(input, session, id, from, data, selected = sel,
-                            control_ids = control_ids))
+                                       placeholder = if (none) "rest / none" else "all")),
+       # `choices` (a function(input, data)) takes precedence over `from`; `watch` names
+       # the control ids whose change repopulates the levels (empty = populate once).
+       bind = if (!is.null(choices))
+         function(input, session, data, control_ids = character()) {
+           repop <- function() {
+             lv <- tryCatch(as.character(choices(input, data)), error = function(e) character(0))
+             lv <- sort(unique(lv[!is.na(lv) & nzchar(lv)]))
+             updateSelectizeInput(session, id, choices = lv, selected = pick(lv))
+           }
+           if (length(watch))
+             observeEvent(lapply(watch, function(w) input[[w]]), repop(), ignoreNULL = FALSE)
+           else repop()
+         }
+       else
+         function(input, session, data, control_ids = character())
+           scroll_bind_levels(input, session, id, from, data, selected = sel,
+                              control_ids = control_ids))
 }
 
 #' @rdname scroll_input
@@ -248,11 +284,24 @@ scroll_input_slider <- function(id, label, min, max, value, step = NULL)
 
 #' @rdname scroll_input
 #' @export
-scroll_input_choice <- function(id, label, choices, selected = NULL, inline = TRUE)
+scroll_input_choice <- function(id, label, choices, selected = NULL, inline = TRUE,
+                                multiple = FALSE, widget = c("auto", "radio", "select")) {
+  widget <- match.arg(widget)
   list(kind = "choice", id = id, label = label, required = FALSE, needs = NULL,
-       ui = function(ns, data) radioButtons(ns(id), label, choices,
-                                            selected = selected %||% choices[[1]], inline = inline),
+       ui = function(ns, data) {
+         ch <- if (is.function(choices)) choices(data) else choices    # data-derived choices
+         w  <- if (widget != "auto") widget
+               else if (is.function(choices) || isTRUE(multiple) || length(ch) > 8) "select"
+               else "radio"
+         sel <- selected %||% (if (length(ch)) ch[[1]] else NULL)
+         if (identical(w, "radio"))
+           radioButtons(ns(id), label, ch, selected = sel, inline = inline)
+         else
+           selectizeInput(ns(id), label, ch, selected = sel, multiple = multiple,
+                          options = if (isTRUE(multiple)) list(plugins = list("remove_button")) else list())
+       },
        bind = function(input, session, data) NULL)
+}
 
 #' @rdname scroll_input
 #' @export
@@ -260,6 +309,20 @@ scroll_input_text <- function(id, label, placeholder = NULL)
   list(kind = "text", id = id, label = label, required = FALSE, needs = NULL,
        ui = function(ns, data) textInput(ns(id), label, placeholder = placeholder),
        bind = function(input, session, data) NULL)
+
+#' @rdname scroll_input
+#' @export
+scroll_input_palette <- function(id, label = "Palette",
+                                 type = c("discrete", "continuous"), selected = NULL) {
+  type <- match.arg(type)
+  list(kind = "palette", id = id, label = label, required = FALSE, needs = NULL,
+       ui = function(ns, data) {
+         pals <- if (type == "discrete") names(.scroll_discrete_palettes)
+                 else .scroll_continuous_palettes
+         selectInput(ns(id), label, pals, selected = selected %||% pals[[1]])
+       },
+       bind = function(input, session, data) NULL)
+}
 
 #' @rdname scroll_input
 #' @export

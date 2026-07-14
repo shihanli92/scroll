@@ -3,6 +3,21 @@
 First development release. `scroll` turns a processed Seurat object into a
 polished, flat-RAM interactive single-cell explorer.
 
+## Storage format v2 + streaming builds
+
+* **Leaner store (v2).** The expression store now keys `cell` on an **int32 global
+  row-index** into `cells.parquet` (not the repeated barcode string), stores
+  unquantized values as **float32** (not float64; ~lossless), compresses with
+  **zstd**, and **compacts** to one part-file per feature. On a 4.4M-cell atlas this
+  cut the store ~3× with no lossy precision change and faster cold queries. The
+  runtime join became simpler and faster (positional integer indexing). Older v1
+  (string-cell) stores keep working — a manifest flag (`cell_index`) selects the read
+  path, so existing projects need no rebuild.
+* **`scroll_build_stream()`** — build one project from many sources *one at a time*,
+  so peak memory stays ~per-source instead of loading the whole dataset. Idempotent
+  and append-safe (re-run as data arrives). Powers multi-million-cell atlases on a
+  laptop.
+
 ## Architecture
 
 * **Two phases.** A heavy offline `scroll_build()` extracts lightweight on-disk
@@ -99,6 +114,12 @@ Eight built-in analysis sections, each with its own fine-grained controls:
 * **Fewer silent failures.** A non-ggplot plot return now shows a clear message; a
   `scroll_input_levels(from=)` that names no column/control warns; contradictory
   `required` + `none` warns at construction.
+* **Data-derived choices.** Controls can now compute options from the data handle
+  instead of only the manifest: `scroll_input_choice(choices = function(data))` and
+  `scroll_input_levels(choices = function(input, data), watch = c(...))` populate from
+  e.g. a baked asset under `data$dir`, recomputing when a watched control changes.
+  `scroll_input_column(prefer=)` sets a preferred default column, and
+  `scroll_input_palette()` offers the built-in discrete/continuous palette names.
 
 ## Documentation
 

@@ -71,7 +71,7 @@ scroll_build <- function(object, outdir,
   .scroll_step(verbose, "Extracting cell metadata + embeddings...")
   cells <- .scroll_extract_cells(object, md, meta_cols, embeddings)
   .scroll_check_subset_coverage(subsets, cells)
-  arrow::write_parquet(cells, file.path(outdir, "cells.parquet"))
+  arrow::write_parquet(cells, file.path(outdir, "cells.parquet"), compression = "zstd")
 
   # --- expr/<assay>/: long, feature-partitioned expression (+ optional counts)
   assay_info <- list()
@@ -82,6 +82,11 @@ scroll_build <- function(object, outdir,
       .scroll_export_counts(object, a, outdir)
     }
   }
+
+  # --- compact each feature= partition to a single part-file (one build writes ~1
+  # part/gene already; matters for streaming/appended stores). Fewer files => faster
+  # cold queries + fewer inodes.
+  .scroll_compact_store(outdir, quantize)
 
   # --- manifest + authored scaffolding
   .scroll_step(verbose, "Writing manifest + app scaffold...")
@@ -175,14 +180,17 @@ scroll_build <- function(object, outdir,
 # thousands of) partitions; batching also keeps peak memory and open file handles
 # bounded. Each feature lands in exactly one batch, so every partition holds one
 # part file, identical in content to a single write.
-.scroll_export_assay <- function(object, assay, outdir, quantize, verbose = FALSE) {
+.scroll_export_assay <- function(object, assay, outdir, quantize, verbose = FALSE,
+                                 offset = 0L) {
+  # `offset` shifts the (1-based) local cell index onto a GLOBAL row index so a
+  # streaming builder can append one source at a time into a shared store
+  # (scroll_build uses offset = 0: local index == global index).
   mat <- SeuratObject::GetAssayData(object, assay = assay, layer = "data")
   if (is.null(mat) || nrow(mat) == 0 || length(mat@x) == 0)
     stop("Assay '", assay, "' has an empty `data` layer; normalize the object ",
          "before building.", call. = FALSE)
 
   feats <- rownames(mat)
-  cell_names <- colnames(mat)
   .scroll_warn_unsafe_features(feats)
   nfeat <- length(feats)
   .scroll_step(verbose, sprintf("Exporting assay '%s' (%s features)...",
@@ -199,9 +207,12 @@ scroll_build <- function(object, outdir,
   fi <- trip$i[o]; cj <- trip$j[o]; vv <- value[o]
   bnd <- c(0L, cumsum(tabulate(fi, nbins = nfeat)))   # feature f rows: (bnd[f]+1):bnd[f+1]
 
-  dest <- file.path(outdir, "expr", assay)
-  sch  <- arrow::schema(feature = arrow::utf8(), cell = arrow::utf8(),
-                        value = arrow::uint8())
+  dest  <- file.path(outdir, "expr", assay)
+  # v2 store: `cell` is the int32 global row-index into cells.parquet (not the
+  # barcode string), and unquantized values are float32 (not float64) -- both
+  # lossless size wins. Quantized values stay uint8.
+  vtype <- if (quantize) arrow::uint8() else arrow::float32()
+  sch   <- arrow::schema(feature = arrow::utf8(), cell = arrow::int32(), value = vtype)
   bsize  <- max(256L, ceiling(nfeat / 40))            # ~40 bar ticks at most
   starts <- seq.int(1L, nfeat, by = bsize)
   pb <- if (isTRUE(verbose)) utils::txtProgressBar(min = 0, max = length(starts), style = 3)
@@ -213,13 +224,12 @@ scroll_build <- function(object, outdir,
     if (r1 >= r0) {                                    # some features here are nonzero
       idx <- r0:r1
       tbl <- arrow::as_arrow_table(data.frame(
-        feature = feats[fi[idx]], cell = cell_names[cj[idx]], value = vv[idx],
-        stringsAsFactors = FALSE))
-      if (quantize) tbl <- tbl$cast(sch)
+        feature = feats[fi[idx]], cell = offset + cj[idx], value = vv[idx],  # global cell index
+        stringsAsFactors = FALSE))$cast(sch)
       arrow::write_dataset(
         tbl, dest, partitioning = "feature", format = "parquet",
         basename_template = sprintf("part-%d-{i}.parquet", bi),
-        max_partitions = (hi - lo + 1L) + 1L)
+        max_partitions = (hi - lo + 1L) + 1L, compression = "zstd")
     }
     if (!is.null(pb)) utils::setTxtProgressBar(pb, bi)
   }
@@ -236,13 +246,35 @@ scroll_build <- function(object, outdir,
   if (is.null(mat) || nrow(mat) == 0 || length(mat@x) == 0)
     stop("Assay '", assay, "' has an empty `counts` layer; cannot export counts ",
          "for pseudobulk.", call. = FALSE)
-  feats <- rownames(mat); cell_names <- colnames(mat)
+  feats <- rownames(mat)
   trip <- Matrix::summary(mat)             # i (feature), j (cell), x (count)
-  df <- data.frame(feature = feats[trip$i], cell = cell_names[trip$j],
+  df <- data.frame(feature = feats[trip$i], cell = trip$j,          # int32 cell-index (v2)
                    value = as.integer(round(trip$x)), stringsAsFactors = FALSE)
   tbl <- arrow::as_arrow_table(df)$cast(arrow::schema(
-    feature = arrow::utf8(), cell = arrow::utf8(), value = arrow::int32()))
-  arrow::write_parquet(tbl, file.path(outdir, "counts", paste0(assay, ".parquet")))
+    feature = arrow::utf8(), cell = arrow::int32(), value = arrow::int32()))
+  arrow::write_parquet(tbl, file.path(outdir, "counts", paste0(assay, ".parquet")),
+                       compression = "zstd")
+  invisible(NULL)
+}
+
+# Compact each expr/<assay>/feature=<gene>/ that has >1 part-file into a single
+# zstd part-file, preserving the int32/float32(uint8) schema. A gene's nonzeros are
+# small, so this reads one partition at a time (flat memory). No-op for partitions
+# already holding a single file (the common single-object build).
+.scroll_compact_store <- function(outdir, quantize) {
+  vtype <- if (quantize) arrow::uint8() else arrow::float32()
+  sch <- arrow::schema(cell = arrow::int32(), value = vtype)   # feature is the dir key
+  root <- file.path(outdir, "expr")
+  for (adir in list.dirs(root, recursive = FALSE)) {
+    for (fdir in list.dirs(adir, recursive = FALSE)) {
+      parts <- list.files(fdir, pattern = "\\.parquet$", full.names = TRUE)
+      if (length(parts) <= 1L) next
+      tab <- dplyr::collect(arrow::open_dataset(fdir))          # (cell, value) in RAM
+      unlink(parts)
+      arrow::write_parquet(arrow::as_arrow_table(tab)$cast(sch),
+                           file.path(fdir, "part-0.parquet"), compression = "zstd")
+    }
+  }
   invisible(NULL)
 }
 

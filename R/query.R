@@ -152,7 +152,9 @@ scroll_aggregate_counts <- function(con, assay, mapping) {
          call. = FALSE)
   if (!nrow(mapping))
     return(data.frame(feature = character(), psample = character(), count = numeric()))
-  map <- data.frame(cell = as.character(mapping$cell),
+  # keep `cell` in its native type (v2 int32 index / v1 barcode string) so the
+  # join matches the counts store's `cell` column type.
+  map <- data.frame(cell = mapping$cell,
                     psample = as.character(mapping$psample),
                     stringsAsFactors = FALSE)
   ds <- arrow::open_dataset(path)

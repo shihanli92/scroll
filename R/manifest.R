@@ -47,6 +47,8 @@
 
   manifest <- list(
     scroll_version = as.character(utils::packageVersion("scroll")),
+    store_version = 2L,          # v2: expr `cell` is an int32 global row-index
+    cell_index = TRUE,           # (v1 stores lack this -> string-barcode read path)
     n_cells = n_cells,
     quantize = quantize,
     has_counts = has_counts,

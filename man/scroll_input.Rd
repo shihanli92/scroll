@@ -9,6 +9,7 @@
 \alias{scroll_input_slider}
 \alias{scroll_input_choice}
 \alias{scroll_input_text}
+\alias{scroll_input_palette}
 \alias{scroll_input_assay}
 \alias{scroll_input_embedding}
 \alias{scroll_input_custom}
@@ -19,13 +20,16 @@ scroll_input_column(
   label,
   type = "categorical",
   selected = 1,
-  view_aware = FALSE
+  view_aware = FALSE,
+  prefer = NULL
 )
 
 scroll_input_levels(
   id,
   label,
-  from,
+  from = NULL,
+  choices = NULL,
+  watch = NULL,
   multiple = TRUE,
   required = FALSE,
   none = FALSE,
@@ -38,9 +42,24 @@ scroll_input_numeric(id, label, value, min = NA, max = NA, step = NA)
 
 scroll_input_slider(id, label, min, max, value, step = NULL)
 
-scroll_input_choice(id, label, choices, selected = NULL, inline = TRUE)
+scroll_input_choice(
+  id,
+  label,
+  choices,
+  selected = NULL,
+  inline = TRUE,
+  multiple = FALSE,
+  widget = c("auto", "radio", "select")
+)
 
 scroll_input_text(id, label, placeholder = NULL)
+
+scroll_input_palette(
+  id,
+  label = "Palette",
+  type = c("discrete", "continuous"),
+  selected = NULL
+)
 
 scroll_input_assay(id, label = "Assay")
 
@@ -54,15 +73,28 @@ scroll_input_custom(id, label, ui, bind = NULL, needs = NULL, required = FALSE)
 
 \item{label}{Control label.}
 
-\item{type}{For \code{scroll_input_column}: \code{"categorical"}, \code{"numeric"}, or \code{"any"}.}
+\item{type}{For \code{scroll_input_column}: \code{"categorical"}, \code{"numeric"}, or \code{"any"};
+for \code{scroll_input_palette}: \code{"discrete"} or \code{"continuous"}.}
 
-\item{selected}{Default selection: integer index/vector, or \code{"none"}.}
+\item{selected}{Default selection: integer index/vector, or \code{"none"}. For
+\code{scroll_input_palette}, a palette name.}
 
 \item{view_aware}{For \code{scroll_input_column}/\code{scroll_input_embedding}: repopulate
 choices from the active subset view (requires the panel to be view-aware).}
 
+\item{prefer}{For \code{scroll_input_column}: one or more column names to default-select
+when present (first match wins), falling back to \code{selected} otherwise.}
+
 \item{from}{For \code{scroll_input_levels}: a column-picking control's id, or a
-categorical column name.}
+categorical column name. Supply either \code{from} or \code{choices}.}
+
+\item{choices}{For most inputs a static vector; \code{scroll_input_choice} also accepts
+a \verb{function(data)} and \code{scroll_input_levels} a \verb{function(input, data)}, both
+evaluated to derive choices from the data handle (e.g. a baked asset under
+\code{data$dir}).}
+
+\item{watch}{For \code{scroll_input_levels} with a \code{choices} function: control ids whose
+change repopulates the levels (empty = populate once at start-up).}
 
 \item{multiple}{Allow multiple selections.}
 
@@ -71,8 +103,10 @@ instead of computing.}
 
 \item{none}{If \code{TRUE}, the level selector defaults to empty (e.g. a "vs. rest").}
 
-\item{choices, value, min, max, step, placeholder, inline}{Passed to the underlying
-Shiny input.}
+\item{value, min, max, step, placeholder, inline}{Passed to the underlying Shiny input.}
+
+\item{widget}{For \code{scroll_input_choice}: \code{"radio"}, \code{"select"}, or \code{"auto"}
+(radio for a short static list, a selectize dropdown otherwise).}
 
 \item{ui}{For \code{scroll_input_custom}: a \verb{function(ns, data)} returning the
 control's UI (namespace inputs with \code{ns()}).}

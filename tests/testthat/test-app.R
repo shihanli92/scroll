@@ -120,4 +120,9 @@ test_that("base CSS suppresses scrollbar-toggle resize loops (both axes)", {
   # (devicePixelRatio 2) sub-pixel ResizeObserver re-render loop.
   expect_match(css, "\\.scroll-plot\\{[^}]*min-width:0")
   expect_match(css, "round\\(down, 100%, 1px\\)")
+  # The horizontal clip must live on <html> only. overflow-x:hidden on <body>
+  # forces its computed overflow-y to `auto`, making body a scroll container that
+  # breaks position:sticky on the app bar + section rail (they scroll away).
+  expect_no_match(css, "body\\{[^}]*overflow-x")
+  expect_match(css, "\\.scroll-rail\\{position:sticky")
 })
