@@ -198,11 +198,8 @@ vdj_spec <- function(chain_type = c("TCR", "BCR"), group_col, clone_col = NULL,
 
 # ---- runtime: read the baked store ------------------------------------------
 
-.scroll_vdj_read <- function(data, f) {
-  p <- file.path(data$dir, "repertoire", f)
-  if (!file.exists(p)) return(NULL)
-  tryCatch(as.data.frame(arrow::read_parquet(p)), error = function(e) NULL)
-}
+.scroll_vdj_read <- function(data, f)
+  .scroll_read_asset(file.path(data$dir, "repertoire", f), "parquet")
 # categorical rep_cells columns available to split/colour by
 .scroll_vdj_split_cols <- function(data) {
   rc <- .scroll_vdj_read(data, "rep_cells.parquet"); if (is.null(rc)) return(character())
@@ -211,8 +208,6 @@ vdj_spec <- function(chain_type = c("TCR", "BCR"), group_col, clone_col = NULL,
   cand <- setdiff(cand, unlist(data$manifest$vdj$segments))
   cand[vapply(cand, function(c) is.character(rc[[c]]) && any(!is.na(rc[[c]])), logical(1))]
 }
-.scroll_vdj_levels <- function(rc, col) if (col %in% names(rc))
-  sort(unique(stats::na.omit(as.character(rc[[col]])))) else character()
 
 # ---- the four panels --------------------------------------------------------
 
@@ -220,8 +215,7 @@ vdj_spec <- function(chain_type = c("TCR", "BCR"), group_col, clone_col = NULL,
 .scroll_vdj_panels <- function() {
   gate <- function(m) !is.null(m$vdj)
   mk <- function(id, label, title, desc, controls, plot)
-    c(list(id = id, label = label, title = title, desc = desc, when = gate),
-      .scroll_plot_panel_uiserver(plot, controls, compute = FALSE))
+    .scroll_gated_panel(id, label, title, desc, gate, controls, plot)
 
   clone_overview <- mk("clone_overview", "Clone overview", "Clonal expansion overview",
     "Rank-abundance of clone sizes and expansion-category composition (clone-level).",

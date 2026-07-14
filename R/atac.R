@@ -98,9 +98,7 @@ atac_spec <- function(assay = "peaks", nearest_gene = TRUE) {
 .scroll_atac_read <- function(data) {
   blk <- data$manifest$atac
   if (is.null(blk) || is.null(blk$file)) return(NULL)
-  p <- file.path(data$dir, blk$file)
-  if (!file.exists(p)) return(NULL)
-  tryCatch(as.data.frame(arrow::read_parquet(p)), error = function(e) NULL)
+  .scroll_read_asset(file.path(data$dir, blk$file), "parquet")
 }
 
 # ---- the Peaks panel --------------------------------------------------------
@@ -172,8 +170,7 @@ atac_spec <- function(assay = "peaks", nearest_gene = TRUE) {
                      panel.grid.minor = ggplot2::element_blank())
   }
 
-  us <- .scroll_plot_panel_uiserver(plot, controls, compute = FALSE)
-  list(c(list(id = "peaks", label = "Peaks", title = "Chromatin accessibility",
-              desc = "Find a peak near a gene and colour the embedding by its accessibility.",
-              when = gate), us))
+  list(.scroll_gated_panel("peaks", "Peaks", "Chromatin accessibility",
+    "Find a peak near a gene and colour the embedding by its accessibility.",
+    gate, controls, plot))
 }

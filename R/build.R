@@ -3,11 +3,8 @@
 #' Reads a processed Seurat object exactly once and emits a self-contained
 #' project directory of lightweight on-disk artifacts: a small Parquet table of
 #' cell metadata + embeddings (`cells.parquet`), a feature-partitioned Parquet
-#' store of expression (`expr/<assay>/`), a `manifest.yaml`, and authored
-#' scaffolding (`config.yaml`, `story.qmd`). The running app never touches the
-#' object again.
-#'
-#' This is the Phase 1 walking skeleton: it wires a single assay end to end.
+#' store of expression (`expr/<assay>/`), a `manifest.yaml`, and app scaffolding
+#' (`config.yaml`, `app.R`). The running app never touches the object again.
 #'
 #' @param object A processed Seurat object, or a path to an `.rds` file.
 #' @param outdir Output project directory (created if missing).
@@ -90,7 +87,6 @@ scroll_build <- function(object, outdir,
            call. = FALSE)
   }
   dir.create(file.path(outdir, "expr"), recursive = TRUE, showWarnings = FALSE)
-  dir.create(file.path(outdir, "de"), showWarnings = FALSE)
   if (counts) dir.create(file.path(outdir, "counts"), showWarnings = FALSE)
 
   # --- cells.parquet: metadata + all embeddings, the only globally-loaded file

@@ -5,6 +5,18 @@
 
 # --- data handle --------------------------------------------------------------
 
+# Read a baked side-car asset (repertoire table, tissue raster, peak table) from a
+# project, returning NULL if it is absent or unreadable. Shared by the modality
+# accessors (.scroll_vdj_read / .scroll_spatial_image / .scroll_atac_read).
+.scroll_read_asset <- function(path, format = c("parquet", "rds")) {
+  format <- match.arg(format)
+  if (!file.exists(path)) return(NULL)
+  tryCatch(
+    if (format == "rds") readRDS(path)
+    else as.data.frame(arrow::read_parquet(path)),
+    error = function(e) NULL)
+}
+
 # Load the artifacts once (shared across sessions of one app process).
 .scroll_load <- function(dir) {
   con <- scroll_connect(dir)
@@ -1181,8 +1193,12 @@ scroll_reset_panels <- function() {
 # free by doing the same.
 .scroll_aspect_input <- function(ns) sliderInput(ns("aspect"), "Aspect ratio", 0.4, 3, 1, 0.1)
 
-# Placeholder body for a panel that can't run on this dataset (e.g. no
-# categorical grouping column) — avoids a hard `cats[[1]]` crash at UI build.
+# Placeholder body for a panel that can't run on this dataset (e.g. no categorical
+# grouping column) — avoids a hard `cats[[1]]` crash at UI build. This is the second
+# of two gating layers: a panel's `when` predicate drops it from the whole app when
+# NO mounted dataset supports it, while this inline guard covers the per-dataset case
+# in scroll_multi_app (a panel kept because another tab supports it must still render
+# a friendly message for a tab that doesn't).
 .scroll_empty_panel <- function(msg)
   div(class = "scroll-panel", tags$p(class = "scroll-desc", msg))
 

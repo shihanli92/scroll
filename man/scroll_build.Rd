@@ -79,10 +79,6 @@ force progress in a non-interactive session.}
 Reads a processed Seurat object exactly once and emits a self-contained
 project directory of lightweight on-disk artifacts: a small Parquet table of
 cell metadata + embeddings (\code{cells.parquet}), a feature-partitioned Parquet
-store of expression (\verb{expr/<assay>/}), a \code{manifest.yaml}, and authored
-scaffolding (\code{config.yaml}, \code{story.qmd}). The running app never touches the
-object again.
-}
-\details{
-This is the Phase 1 walking skeleton: it wires a single assay end to end.
+store of expression (\verb{expr/<assay>/}), a \code{manifest.yaml}, and app scaffolding
+(\code{config.yaml}, \code{app.R}). The running app never touches the object again.
 }

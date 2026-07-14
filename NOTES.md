@@ -19,15 +19,13 @@ top-3 blockers + documented the quantization caveat). Items below were
   document the expected footprint.
 - **Priority:** medium (matters only at scale).
 
-### 2. Vestigial precomputed-DE path
-- **Where:** `build.R` creates an empty `de/` dir; `view_de_table()` +
-  `render_view()`'s `de_table` branch + `.scroll_read_de()` exist but are
-  **unreachable from the app** (the DE panel uses live `scroll_de`). Exercised
-  only by direct unit tests.
-- **Options:** (a) wire it — let the DE panel offer a "Precomputed contrast"
-  source that reads `de/<contrast>.parquet`; or (b) remove the dead path to
-  reduce confusion.
-- **Priority:** low (cleanliness).
+### 2. `de_table` view / dispatch is app-unreachable (kept as public API)
+- **Where:** `view_de_table()` + `render_view()`'s `de_table` branch. The DE
+  panel uses live `scroll_de` instead, so these are reached only by unit tests.
+- **Status:** the empty `de/` build dir was removed (nothing wrote/read it). The
+  remaining `view_de_table` / `de_table` dispatch is part of the **exported**
+  `render_view()` grammar, so it stays as public API rather than dead code.
+- **Priority:** low (a future precomputed-DE source could reuse it).
 
 ### 3. `logFC` labeling is a mean-difference, not literal log2FC
 - **Where:** `scroll_de()` output column `logFC`; `view_volcano()` axis label and

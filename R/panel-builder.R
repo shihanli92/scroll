@@ -495,6 +495,13 @@ register_plot_panel <- function(id, plot, controls = list(), label = id, title =
   list(ui = ui, server = server)
 }
 
+# A built-in modality panel spec built from the declarative builder and gated on a
+# manifest predicate (see .scroll_assemble_panels). Used by the VDJ and ATAC panels;
+# the spatial panel is hand-written instead because it owns brush-zoom state.
+.scroll_gated_panel <- function(id, label, title, desc, when, controls, plot)
+  c(list(id = id, label = label, title = title, desc = desc, when = when),
+    .scroll_plot_panel_uiserver(plot, controls, compute = FALSE))
+
 # ---- Reusable render helpers (parity with the built-in panels) ---------------
 
 #' Reusable plotting helpers for custom views

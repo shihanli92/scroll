@@ -6,8 +6,9 @@
 # space, y-flipped for ggplot) and bakes the H&E array to a small raster asset;
 # the manifest records an `images` block and marks the embedding `kind: spatial`.
 # A built-in Spatial panel then draws points over the tissue image with a fixed
-# aspect ratio. RNA-only / non-spatial projects are unaffected (the panel is gated
-# on the manifest images block, like the VDJ panels).
+# aspect ratio. It is gated on a spatial *embedding* existing (not the image), so it
+# also serves imaging platforms (Xenium/CosMx) that have centroids but no H&E raster;
+# RNA-only / non-spatial projects never show it.
 
 #' Describe a dataset's spatial image + coordinates for `scroll_build()`
 #'
@@ -126,9 +127,7 @@ spatial_spec <- function(image = NULL, name = "spatial", image_asset = TRUE) {
 .scroll_spatial_image <- function(data, embedding) {
   blk <- data$manifest$images[[embedding]]
   if (is.null(blk) || is.null(blk$file)) return(NULL)
-  p <- file.path(data$dir, blk$file)
-  if (!file.exists(p)) return(NULL)
-  tryCatch(readRDS(p), error = function(e) NULL)
+  .scroll_read_asset(file.path(data$dir, blk$file), "rds")
 }
 
 # The spatial embeddings declared in a manifest (marked kind: spatial).
