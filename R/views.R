@@ -419,7 +419,9 @@ view_dotplot <- function(cells, params, expr_long, state = list(), assembly = NU
 #' Violin: a feature's per-group distribution
 #'
 #' @param cells The cells data.frame.
-#' @param params List with `feature`, `group_by`, optionally `assay`.
+#' @param params List with `group_by`, and a value source: either `feature`
+#'   (+ optional `assay`, queried into `values`) or `value_col` (a numeric
+#'   metadata column plotted directly).
 #' @param values A data.frame(cell, value) for the feature, or `NULL`.
 #' @param state Optional toggle state (`palette`, `jitter`, `legend`;
 #'   `split_by` overrides `group_by`).
@@ -431,7 +433,11 @@ view_violin <- function(cells, params, values = NULL, state = list()) {
     stop("violin needs a valid `group_by` metadata column.", call. = FALSE)
   df <- data.frame(cell = cells$cell, group = as.character(cells[[group_by]]),
                    stringsAsFactors = FALSE)
-  df$expr <- .scroll_expr_vector(cells, values)
+  # value axis: a numeric metadata column (params$value_col) or a queried feature
+  df$expr <- if (!is.null(params$value_col))
+               suppressWarnings(as.numeric(cells[[params$value_col]]))
+             else .scroll_expr_vector(cells, values)
+  df <- df[!is.na(df$expr) & !is.na(df$group), , drop = FALSE]
   cols <- .scroll_group_colors(df$group, state)
   p <- ggplot2::ggplot(df, ggplot2::aes(x = .data$group, y = .data$expr,
                                         fill = .data$group)) +
@@ -476,7 +482,8 @@ view_violin <- function(cells, params, values = NULL, state = list()) {
 #' @param cells The cells data.frame.
 #' @param params List with `features` (>= 2 numeric metadata column names) and
 #'   `color_by` (a categorical metadata column).
-#' @param state Optional (`palette`, `point_size`, `alpha`, `legend`, `aspect`).
+#' @param state Optional (`palette`, `point_size`, `alpha`, `legend`, `aspect`,
+#'   `ncol`/`nrow` = facet grid). Facets default to square (`aspect` = 1).
 #' @param df Optional precomputed pair data.frame (as the Shiny app supplies); when
 #'   given, `cells`/`params` are not re-expanded.
 #' @return A ggplot (facet per column pair).
@@ -484,16 +491,19 @@ view_violin <- function(cells, params, values = NULL, state = list()) {
 view_biaxial <- function(cells, params, state = list(), df = NULL) {
   if (is.null(df)) df <- .scroll_biaxial_df(cells, params)
   cols <- .scroll_group_colors(df$.col, state)
+  pos_int <- function(x) if (!is.null(x) && length(x) == 1 && is.finite(x) && x >= 1) as.integer(x) else NULL
+  nc <- pos_int(state$ncol); nr <- pos_int(state$nrow)
   p <- ggplot2::ggplot(df, ggplot2::aes(.data$.x, .data$.y, color = .data$.col)) +
     .scroll_point_layer(size = state$point_size %||% 0.5, alpha = state$alpha %||% 0.6,
                         raster = isTRUE(state$raster)) +
-    ggplot2::facet_wrap(~ pair, scales = "free") +
+    ggplot2::facet_wrap(~ pair, scales = "free", ncol = nc, nrow = nr) +
     ggplot2::scale_color_manual(values = cols) +
     ggplot2::labs(x = NULL, y = NULL, color = params$color_by) +
     ggplot2::guides(color = ggplot2::guide_legend(
       override.aes = list(size = 2, alpha = 1))) +
     .scroll_box_theme(.scroll_opt(params, state, "legend", TRUE))
-  .scroll_apply_aspect(p, state$aspect %||% 1)
+  # each facet defaults to SQUARE (aspect.ratio = 1); state$aspect overrides
+  p + ggplot2::theme(aspect.ratio = state$aspect %||% 1)
 }
 
 #' Stacked composition of one categorical within another

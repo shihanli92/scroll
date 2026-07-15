@@ -3,17 +3,28 @@
 violin_ui <- function(id, data) {
   ns <- NS(id)
   m <- data$manifest
-  assays <- .scroll_assays_of(m); cats <- .scroll_cat_cols(m)
+  assays <- .scroll_assays_of(m); cats <- .scroll_cat_cols(m); nums <- .scroll_num_cols(m)
   if (!length(cats)) return(.scroll_empty_panel("Needs a categorical metadata column (none found)."))
+  # bare control id: conditionalPanel(ns = ns) prepends the module prefix itself
+  when <- function(val) sprintf("input['%s'] == '%s'", "source", val)
   bslib::layout_columns(
     col_widths = c(3, 9), class = "scroll-panel",
     div(
       class = "scroll-controls",
-      .scroll_group("Feature",
-        selectizeInput(ns("feature"), "Gene", choices = NULL, multiple = FALSE,
-                       options = list(placeholder = "Search a gene...", maxOptions = 50)),
-        if (length(assays) > 1)
-          selectInput(ns("assay"), "Assay", assays, selected = m$default_assay)),
+      .scroll_group("Value",
+        if (length(nums))
+          radioButtons(ns("source"), NULL, c("Gene", "Metadata"), inline = TRUE)
+        else NULL,
+        conditionalPanel(
+          if (length(nums)) when("Gene") else "true", ns = ns,
+          selectizeInput(ns("feature"), "Gene", choices = NULL, multiple = FALSE,
+                         options = list(placeholder = "Search a gene...", maxOptions = 50)),
+          if (length(assays) > 1)
+            selectInput(ns("assay"), "Assay", assays, selected = m$default_assay)),
+        if (length(nums))
+          conditionalPanel(when("Metadata"), ns = ns,
+            selectInput(ns("metacol"), "Numeric column",
+                        stats::setNames(nums, nums), selected = nums[[1]]))),
       .scroll_group("Grouping",
         selectInput(ns("group"), "Group by", stats::setNames(cats, cats), selected = cats[[1]])),
       .scroll_group("Appearance",
@@ -48,13 +59,22 @@ violin_server <- function(id, data, cells_r = reactive(data$cells),
     manual_colors <- reactive(
       if (identical(input$palette, "Manual")) .scroll_manual_colors(input, lvl_r()))
     # DATA reactive: cells + query (cosmetic changes no longer re-hit the store).
+    # A numeric metadata column (source = "Metadata") plots directly; otherwise a
+    # queried feature.
     data_r <- reactive({
       req(input$group)
-      feat <- .scroll_nz(input$feature)
-      validate(need(!is.null(feat), "Search for a gene to plot its distribution."))
       cells <- cells_r()
-      list(cells = cells, feature = feat, group_by = input$group,
-           values = data$query1(assay(), feat))
+      if (identical(input$source, "Metadata")) {
+        col <- .scroll_nz(input$metacol)
+        validate(need(!is.null(col), "Pick a numeric metadata column."))
+        list(cells = cells, feature = col, group_by = input$group,
+             values = NULL, value_col = col)
+      } else {
+        feat <- .scroll_nz(input$feature)
+        validate(need(!is.null(feat), "Search for a gene to plot its distribution."))
+        list(cells = cells, feature = feat, group_by = input$group,
+             values = data$query1(assay(), feat), value_col = NULL)
+      }
     })
     cosmetic_r <- .scroll_cosmetic(reactive(
       list(palette = input$palette, jitter = isTRUE(input$jitter),
@@ -62,7 +82,8 @@ violin_server <- function(id, data, cells_r = reactive(data$cells),
            manual_colors = manual_colors())))
     plot_r <- reactive({
       d <- data_r()
-      view_violin(d$cells, list(feature = d$feature, group_by = d$group_by),
+      view_violin(d$cells, list(feature = d$feature, group_by = d$group_by,
+                                value_col = d$value_col),
                   d$values, cosmetic_r())
     })
     output$plot <- renderPlot(plot_r())

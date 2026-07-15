@@ -9,7 +9,9 @@ view_violin(cells, params, values = NULL, state = list())
 \arguments{
 \item{cells}{The cells data.frame.}
 
-\item{params}{List with \code{feature}, \code{group_by}, optionally \code{assay}.}
+\item{params}{List with \code{group_by}, and a value source: either \code{feature}
+(+ optional \code{assay}, queried into \code{values}) or \code{value_col} (a numeric
+metadata column plotted directly).}
 
 \item{values}{A data.frame(cell, value) for the feature, or \code{NULL}.}
 

@@ -3,6 +3,26 @@
 First development release. `scroll` turns a processed Seurat object into a
 polished, flat-RAM interactive single-cell explorer.
 
+## Incremental updates
+
+* **`scroll_update(dir, object, embeddings =, meta_cols =, subsets =)`** adds or
+  replaces reductions / metadata / subset views on an **already-built** project by
+  rewriting only `cells.parquet` + `manifest.yaml`, aligned to the existing cells by
+  barcode. The feature-partitioned `expr/` and `counts/` stores are left
+  byte-identical, so appending a reduction is seconds rather than a full
+  `scroll_build()` re-export (measured: ~2s vs ~8min to add a column to a 47k-cell,
+  794MB project). Arguments mirror `scroll_build()`, so the same object flows through.
+
+## Panels
+
+* **Violin** and the ridge view can plot a **numeric metadata column** as the value
+  axis (not just a queried feature), via a Gene/Metadata source toggle.
+* **Biaxial** can put **genes on the axes** (query 2+ genes from any assay) in
+  addition to numeric metadata columns; facets now default to **square** and gain
+  **facet-columns / facet-rows** layout controls.
+* Fixed a `conditionalPanel` namespacing bug that hid the source-dependent pickers
+  (gene vs metadata) in the Violin, Biaxial, and Spatial panels.
+
 ## Storage format v2 + streaming builds
 
 * **Leaner store (v2).** The expression store now keys `cell` on an **int32 global

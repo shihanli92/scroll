@@ -12,7 +12,8 @@ view_biaxial(cells, params, state = list(), df = NULL)
 \item{params}{List with \code{features} (>= 2 numeric metadata column names) and
 \code{color_by} (a categorical metadata column).}
 
-\item{state}{Optional (\code{palette}, \code{point_size}, \code{alpha}, \code{legend}, \code{aspect}).}
+\item{state}{Optional (\code{palette}, \code{point_size}, \code{alpha}, \code{legend}, \code{aspect},
+\code{ncol}/\code{nrow} = facet grid). Facets default to square (\code{aspect} = 1).}
 
 \item{df}{Optional precomputed pair data.frame (as the Shiny app supplies); when
 given, \code{cells}/\code{params} are not re-expanded.}

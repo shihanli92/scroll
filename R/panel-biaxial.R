@@ -16,14 +16,24 @@ biaxial_ui <- function(id, data) {
   if (!length(cats))
     return(.scroll_empty_panel("Needs a categorical column to colour by (none found)."))
   color_default <- if ("hto" %in% cats) "hto" else cats[[1]]
+  assays <- .scroll_assays_of(m)
+  # bare control id: conditionalPanel(ns = ns) prepends the module prefix itself
+  when <- function(v) sprintf("input['%s'] == '%s'", "source", v)
   bslib::layout_columns(
     col_widths = c(3, 9), class = "scroll-panel",
     div(
       class = "scroll-controls",
       .scroll_group("Axes",
-        selectizeInput(ns("features"), "Numeric columns", choices = nums,
-                       selected = .scroll_default_biaxial(nums), multiple = TRUE,
-                       options = list(placeholder = "Pick 2+ numeric columns"))),
+        radioButtons(ns("source"), NULL, c("Metadata", "Genes"), inline = TRUE),
+        conditionalPanel(when("Metadata"), ns = ns,
+          selectizeInput(ns("features"), "Numeric columns", choices = nums,
+                         selected = .scroll_default_biaxial(nums), multiple = TRUE,
+                         options = list(placeholder = "Pick 2+ numeric columns"))),
+        conditionalPanel(when("Genes"), ns = ns,
+          if (length(assays) > 1)
+            selectInput(ns("gassay"), "Assay", assays, selected = m$default_assay),
+          selectizeInput(ns("genes"), "Genes", choices = NULL, multiple = TRUE,
+                         options = list(placeholder = "Pick 2+ genes", maxOptions = 50)))),
       .scroll_group("Colour",
         selectInput(ns("colorby"), "Colour by", stats::setNames(cats, cats),
                     selected = color_default)),
@@ -34,7 +44,9 @@ biaxial_ui <- function(id, data) {
         sliderInput(ns("alpha"), "Opacity", 0.1, 1, 0.6, 0.05),
         bslib::input_switch(ns("legend"), "Legend", TRUE),
         bslib::input_switch(ns("raster"), "Rasterize (fast)", TRUE)),
-      .scroll_group("Layout", .scroll_aspect_input(ns))
+      .scroll_group("Layout", .scroll_aspect_input(ns),
+        numericInput(ns("ncol"), "Facet columns (blank = auto)", value = NA, min = 1, step = 1),
+        numericInput(ns("nrow"), "Facet rows (blank = auto)", value = NA, min = 1, step = 1))
     ),
     .scroll_plot_area(ns, "460px")
   )
@@ -51,19 +63,36 @@ biaxial_server <- function(id, data, cells_r = reactive(data$cells),
       if (identical(input$palette, "Manual")) .scroll_manual_ui(session$ns, lvl_r()))
     manual_colors <- reactive(
       if (identical(input$palette, "Manual")) .scroll_manual_colors(input, lvl_r()))
+    gassay <- reactive(input$gassay %||% m$default_assay)
+    # repopulate the gene list for the active assay (Genes mode)
+    observeEvent(gassay(), {
+      feats <- .scroll_features_of(m, gassay())
+      cur <- isolate(input$genes)
+      updateSelectizeInput(session, "genes", choices = feats, server = TRUE,
+                           selected = cur[cur %in% feats])
+    })
     # DATA reactive: build the (potentially large) pairwise long df once; cosmetic
-    # drags no longer re-expand it. `params` is carried for the colour label.
+    # drags no longer re-expand it. Axes are either numeric metadata columns or
+    # queried genes (attached to `cells` as columns, then paired like any numeric).
     data_r <- reactive({
       req(input$colorby)
-      feats <- input$features
-      validate(need(length(feats) >= 2, "Pick at least two numeric columns."))
+      cells <- cells_r()
+      if (identical(input$source, "Genes")) {
+        genes <- input$genes
+        validate(need(length(genes) >= 2, "Pick at least two genes."))
+        for (g in genes) cells[[g]] <- .scroll_expr_vector(cells, data$query1(gassay(), g))
+        feats <- genes
+      } else {
+        feats <- input$features
+        validate(need(length(feats) >= 2, "Pick at least two numeric columns."))
+      }
       params <- list(features = feats, color_by = input$colorby)
-      list(params = params, df = .scroll_biaxial_df(cells_r(), params))
+      list(params = params, df = .scroll_biaxial_df(cells, params))
     })
     cosmetic_r <- .scroll_cosmetic(reactive(
       list(palette = input$palette, point_size = input$size,
            alpha = input$alpha, legend = isTRUE(input$legend), aspect = input$aspect,
-           manual_colors = manual_colors())))
+           ncol = input$ncol, nrow = input$nrow, manual_colors = manual_colors())))
     build <- function(raster) {
       d <- data_r(); st <- cosmetic_r(); st$raster <- raster
       view_biaxial(NULL, d$params, st, df = d$df)

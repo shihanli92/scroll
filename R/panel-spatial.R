@@ -72,10 +72,10 @@ spatial_ui <- function(id, data) {
   meta_cols <- c(.scroll_cat_cols(m), .scroll_num_cols(m))
   ctl <- list(
     radioButtons(ns("mode"), "Colour by", c("Gene", "Metadata"), inline = TRUE),
-    conditionalPanel(sprintf("input['%s'] == 'Gene'", ns("mode")), ns = ns,
+    conditionalPanel("input['mode'] == 'Gene'", ns = ns,
       selectizeInput(ns("gene"), "Gene", choices = NULL,
                      options = list(placeholder = "type a gene", maxOptions = 50))),
-    conditionalPanel(sprintf("input['%s'] == 'Metadata'", ns("mode")), ns = ns,
+    conditionalPanel("input['mode'] == 'Metadata'", ns = ns,
       selectInput(ns("meta"), "Metadata", meta_cols)),
     sliderInput(ns("size"), "Spot size", 0.2, 4, 1.4, 0.2),
     if (has_img) checkboxInput(ns("image"), "Show tissue image", TRUE),
