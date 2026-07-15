@@ -297,23 +297,40 @@ scroll_reset_panels <- function() {
   )
 }
 
-# The per-dataset server logic (active view/subset composition + panel wiring).
-# Called flat by scroll_app() and inside a moduleServer() by scroll_multi_app(),
-# so `input`/`output`/`session` carry the right namespace in both.
+# The per-dataset server logic, composed from four focused steps. Called flat by
+# scroll_app() and inside a moduleServer() by scroll_multi_app(), so
+# `input`/`output`/`session` carry the right namespace in both.
 .scroll_wire <- function(input, output, session, data, panels) {
-  m <- data$manifest
   active_view <- reactive(.scroll_nz(input$scroll_view))
-  active_cells <- reactive({
+  active_cells <- .scroll_active_cells(input, data, active_view)
+  .scroll_bind_subset_control(input, session, data$manifest)
+  .scroll_render_ncells(output, data$manifest, active_cells, active_view)
+  .scroll_mount_panels(data, panels, active_cells, active_view)
+}
+
+# The active cell set as a reactive: the selected subset view, then narrowed by the
+# app-bar categorical filter.
+.scroll_active_cells <- function(input, data, active_view) {
+  m <- data$manifest
+  reactive({
     base <- .scroll_view_cells(data$cells, m, active_view())
     .scroll_subset_cells(base, .scroll_nz(input$scroll_subset_col),
                          input$scroll_subset_val)
   })
+}
+
+# Repopulate the app-bar subset-value selectize when its column changes.
+.scroll_bind_subset_control <- function(input, session, m) {
   observeEvent(input$scroll_subset_col, {
     col <- .scroll_nz(input$scroll_subset_col)
     lv <- if (is.null(col)) character(0) else unlist(m$meta[[col]]$levels)
     updateSelectizeInput(session, "scroll_subset_val", choices = lv,
                          selected = character(0), server = TRUE)
   })
+}
+
+# The app-bar "N of total [ \u00b7 view]" cell-count readout.
+.scroll_render_ncells <- function(output, m, active_cells, active_view) {
   output$scroll_ncells <- renderText({
     n <- nrow(active_cells()); tot <- m$n_cells
     lab <- if (!is.null(active_view())) m$subsets[[active_view()]]$label
@@ -321,8 +338,11 @@ scroll_reset_panels <- function() {
                                  format(tot, big.mark = ",")) else format(tot, big.mark = ",")
     if (!is.null(lab)) paste0(base, " \u00b7 ", lab) else base
   })
-  # Pass `active_view` only to panels that opt in (declare a `view_r` formal),
-  # keeping register_panel()'s 3-arg server contract backward compatible.
+}
+
+# Mount each panel's server, threading `active_view` only to panels that declare a
+# `view_r` formal (keeping register_panel()'s 3-arg server contract compatible).
+.scroll_mount_panels <- function(data, panels, active_cells, active_view) {
   for (sec in panels) {
     args <- list(sec$id, data, active_cells)
     if ("view_r" %in% names(formals(sec$server))) args <- c(args, list(active_view))

@@ -30,31 +30,32 @@
     config = scroll_config(dir),
     con = con
   )
-  # bound query helpers that dequantize to normalized units, memoized by an LRU
+  # bound query helpers that dequantize to normalized units, memoized by one LRU
   # so cosmetic re-renders, the vector-export path, and re-selecting a recent gene
   # never re-hit the store.
   cache <- .scroll_lru(256L)
-  d$query1 <- function(assay, feature) {
-    key <- paste0("1|", assay, "|", feature)
-    hit <- cache$get(key)
-    if (is.null(hit)) {
-      hit <- scroll_query_feature(con, assay, feature)
-      if (nrow(hit)) hit$value <- scroll_dequantize(hit$value, manifest, assay)
-      cache$set(key, hit)
-    }
-    hit
-  }
-  d$queryN <- function(assay, features) {
-    key <- paste0("N|", assay, "|", paste(sort(unique(features)), collapse = ","))
-    hit <- cache$get(key)
-    if (is.null(hit)) {
-      hit <- scroll_query_features(con, assay, features)
-      if (nrow(hit)) hit$value <- scroll_dequantize(hit$value, manifest, assay)
-      cache$set(key, hit)
-    }
-    hit
-  }
+  d$query1 <- .scroll_cached_query(cache, manifest, "1",
+                                   function(a, f) scroll_query_feature(con, a, f))
+  d$queryN <- .scroll_cached_query(cache, manifest, "N",
+                                   function(a, f) scroll_query_features(con, a, f))
   d
+}
+
+# One dequantizing, LRU-cached query closure. `prefix` ("1"/"N") disambiguates the
+# single- vs multi-feature cache keys; `run(assay, features)` does the store read.
+# For a single feature `sort(unique(.))` is a no-op, so both closures share one key
+# scheme.
+.scroll_cached_query <- function(cache, manifest, prefix, run) {
+  function(assay, features) {
+    key <- paste0(prefix, "|", assay, "|", paste(sort(unique(features)), collapse = ","))
+    hit <- cache$get(key)
+    if (is.null(hit)) {
+      hit <- run(assay, features)
+      if (nrow(hit)) hit$value <- scroll_dequantize(hit$value, manifest, assay)
+      cache$set(key, hit)
+    }
+    hit
+  }
 }
 
 # A bounded LRU over query results keyed by a string. Bounded so a long session
