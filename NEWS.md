@@ -39,7 +39,7 @@ polished, flat-RAM interactive single-cell explorer.
 
 ## Panels
 
-Built-in sections **surface only when the project's data supports them** — a panel
+Built-in panels **surface only when the project's data supports them** — a panel
 that can't work on a given project simply doesn't appear (rather than showing an
 empty-state message). DimPlot and FeaturePlot are always present; Biaxial needs ≥2
 numeric columns; DotPlot/Violin need a categorical column; Proportions needs ≥2;
@@ -49,11 +49,11 @@ slide shows the Spatial, DimPlot, FeaturePlot, DotPlot, Violin and Biaxial panel
 but not DE/Pseudobulk/Proportions, while a multi-region study gets them back.
 
 For explicit control, `scroll_build(panels = c(...))` (or a `panels:` list in
-`config.yaml`) shows **exactly** those sections in that order, overriding the automatic
-gating; `exclude_panels` / `exclude_panels:` hides specific sections. `config.yaml` is
+`config.yaml`) shows **exactly** those panels in that order, overriding the automatic
+gating; `exclude_panels` / `exclude_panels:` hides specific panels. `config.yaml` is
 hand-editable, so the panel set can be changed without rebuilding.
 
-Each built-in analysis section carries its own fine-grained controls:
+Each built-in analysis panel carries its own fine-grained controls:
 
 * **DimPlot** — embedding coloured by any metadata column.
 * **FeaturePlot** — coloured by a gene's expression **or** a numeric metadata
@@ -149,7 +149,7 @@ Each built-in analysis section carries its own fine-grained controls:
 
 ## Extend
 
-* `register_panel(id, ui, server, ...)` adds a section to every app built
+* `register_panel(id, ui, server, ...)` adds a panel to every app built
   afterwards, using the same module contract as the built-ins;
   `scroll_reset_panels()` clears custom registrations.
 * `register_plot_panel(id, plot, controls, ...)` is a declarative wrapper: describe

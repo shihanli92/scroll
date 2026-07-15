@@ -1,10 +1,10 @@
-# The runtime: a polished bslib explorer with one scrolling section per analysis
+# The runtime: a polished bslib explorer with one scrolling panel per analysis
 # type, each with its own controls. The app never loads the Seurat object -- it
 # reads the built artifacts (cells.parquet once globally; expression one feature
 # at a time via arrow), so runtime RAM stays flat.
 
 
-# --- section registry + shell -------------------------------------------------
+# --- panel registry + shell ---------------------------------------------------
 
 # The built-in panels, in scroll order. Each entry: display meta + its module's
 # ui/server. Display numbers are assigned at assembly time (see
@@ -79,7 +79,7 @@
 #' with [scroll_reset_panels()].
 #'
 #' @param id Unique panel id: a letter followed by letters, digits, or
-#'   underscores. Used as the section anchor and the Shiny module namespace.
+#'   underscores. Used as the panel anchor and the Shiny module namespace.
 #' @param ui,server The panel's UI and server functions (see contract above).
 #' @param label Short rail label (defaults to `id`).
 #' @param title,desc Section heading and one-line description.
@@ -262,9 +262,9 @@ scroll_reset_panels <- function() {
   )
 }
 
-.scroll_section_card <- function(sec, data, ns = identity) {
+.scroll_panel_card <- function(sec, data, ns = identity) {
   bslib::card(
-    id = ns(sec$id), class = "scroll-section", full_screen = FALSE,
+    id = ns(sec$id), class = "scroll-panel-card", full_screen = FALSE,
     bslib::card_header(
       div(class = "scroll-eyebrow",
           span(class = "scroll-num", sec$num), span(class = "scroll-kicker", sec$label)),
@@ -274,7 +274,7 @@ scroll_reset_panels <- function() {
   )
 }
 
-# The per-dataset body (app bar + rail + section cards), with every id passed
+# The per-dataset body (app bar + rail + panel cards), with every id passed
 # through `ns` so multiple datasets can coexist in one page (see scroll_multi_app).
 # Does NOT include page_fluid/theme/head -- those wrap it once at the page level.
 .scroll_body <- function(data, title, panels, ns = identity) {
@@ -284,7 +284,7 @@ scroll_reset_panels <- function() {
       class = "scroll-layout",
       .scroll_rail(panels, ns),
       div(class = "scroll-content",
-          lapply(panels, function(s) .scroll_section_card(s, data, ns)))
+          lapply(panels, function(s) .scroll_panel_card(s, data, ns)))
     )
   )
 }

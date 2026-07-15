@@ -39,7 +39,7 @@ scroll_scaffold_app <- function(dir, panels = NULL, exclude_panels = NULL) {
     writeLines(c(
       "library(scroll)",
       "",
-      "# Add custom sections here with register_panel(id, ui, server, ...)",
+      "# Add custom panels here with register_panel(id, ui, server, ...)",
       "# before scroll_app(); see ?register_panel.",
       "",
       "scroll_app(\".\")"), app_path)

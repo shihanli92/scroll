@@ -17,7 +17,7 @@ size. It deploys as a plain `app.R` on an open-source Shiny Server, with no rend
 step.
 
 > **Status:** feature-complete for the MVP and validated at scale (a live 4.4M-cell
-> atlas). Includes the two-phase build; eight analysis panels (incl. a live DE section
+> atlas). Includes the two-phase build; eight analysis panels (incl. a live DE panel
 > and replicate-aware **Pseudobulk DE**); a compact **v2 storage format** (int32
 > cell-index + float32 + zstd, ~6× smaller than v1 with no precision loss);
 > **`scroll_build_stream()`** for streaming multi-million-cell builds on a laptop;
@@ -134,12 +134,12 @@ default_embedding: umap
 default_assay: RNA
 markers: [CD3D, CD8A, MS4A1, CD14, NKG7]   # DotPlot's starting panel
 panels: [dimplot, featureplot, dotplot]    # optional: show exactly these, in order
-exclude_panels: [pseudobulk]               # optional: hide specific sections
+exclude_panels: [pseudobulk]               # optional: hide specific panels
 ```
 
-By default each section appears only when the data supports it (e.g. DE needs a
+By default each panel appears only when the data supports it (e.g. DE needs a
 ≥2-level grouping). To take explicit control, set `panels:` (an allowlist that shows
-exactly those sections, in order, overriding the automatic gating) or
+exactly those panels, in order, overriding the automatic gating) or
 `exclude_panels:` (a denylist) — either in `config.yaml` (no rebuild needed) or via
 `scroll_build(..., panels = , exclude_panels = )`.
 
@@ -212,7 +212,7 @@ reprocessing itself happens in your own Seurat pipeline, outside `scroll`.)
 
 The panel list is an extension point. The quickest way is `register_plot_panel()` —
 declare the controls and one plot function, and scroll builds the whole Shiny
-section (UI, control population, a Compute gate, inline error messages, PNG/PDF
+panel (UI, control population, a Compute gate, inline error messages, PNG/PDF
 export, and app-bar subset/view awareness):
 
 ```r
@@ -221,7 +221,7 @@ register_plot_panel("counts", label = "Counts", title = "Cells per group",
   controls = list(scroll_input_column("grp", "Group", "categorical")),
   plot = function(cells, input, data)
     ggplot2::ggplot(cells, ggplot2::aes(.data[[input$grp]])) + ggplot2::geom_bar())
-scroll_serve("pbmc3k")           # the new section appears in scroll order
+scroll_serve("pbmc3k")           # the new panel appears in scroll order
 ```
 
 `plot = function(cells, input, data)` receives the **active** (subset/view-filtered)

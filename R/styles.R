@@ -1,6 +1,6 @@
 # App chrome: the design system as inline CSS (self-contained -- no external
 # fonts or assets, so it works offline on a Shiny Server) plus a small
-# scroll-spy that highlights the active section in the rail.
+# scroll-spy that highlights the active panel in the rail.
 
 .scroll_css <- function() "
 :root{
@@ -16,7 +16,7 @@
    show a page-level horizontal bar (wide plots scroll inside .scroll-plot).
    NOTE: the horizontal clip lives on <html> only. Putting overflow-x:hidden on
    <body> too forces body's computed overflow-y to `auto`, turning body into its
-   own scroll container -- which breaks position:sticky on the app bar and section
+   own scroll container -- which breaks position:sticky on the app bar and panel
    rail (they anchor to the scrolling body box instead of the viewport, so they
    scroll away). <html> already clips horizontal overflow for the whole page. */
 html{overflow-x:hidden; overflow-y:scroll; scrollbar-gutter:stable;}
@@ -82,7 +82,7 @@ body{background:var(--sc-ground); color:var(--sc-ink);
   font-family:ui-monospace,monospace;}
 
 /* Multi-dataset (scroll_multi_app): pin the dataset tab strip at the very top and
-   drop each dataset's sticky app bar + section rail below it, so the dataset
+   drop each dataset's sticky app bar + panel rail below it, so the dataset
    selector is always reachable (not just at the top of the scroll). */
 .scroll-multi .nav-tabs{position:sticky; top:0; z-index:1001; margin:0;
   padding:6px 20px 0; background:rgba(251,252,253,.92);
@@ -90,11 +90,11 @@ body{background:var(--sc-ground); color:var(--sc-ink);
 .scroll-multi .scroll-appbar{top:43px;}
 .scroll-multi .scroll-rail{top:123px;}
 
-/* sections */
+/* panels */
 .scroll-content{display:flex; flex-direction:column; gap:28px;}
-.scroll-section{scroll-margin-top:84px; border:1px solid var(--sc-line); border-radius:12px;
+.scroll-panel-card{scroll-margin-top:84px; border:1px solid var(--sc-line); border-radius:12px;
   background:var(--sc-card); box-shadow:0 6px 20px -12px rgba(17,24,38,.18); overflow:hidden;}
-.scroll-section>.card-header{background:var(--sc-card); border-bottom:1px solid var(--sc-line-2); padding:18px 22px;}
+.scroll-panel-card>.card-header{background:var(--sc-card); border-bottom:1px solid var(--sc-line-2); padding:18px 22px;}
 .scroll-eyebrow{display:flex; align-items:center; gap:10px;}
 .scroll-num{font-family:ui-monospace,monospace; font-size:12px; font-weight:600; color:var(--sc-accent);
   background:var(--sc-wash); padding:2px 7px; border-radius:6px;}
@@ -148,7 +148,7 @@ body{background:var(--sc-ground); color:var(--sc-ink);
 (function(){
   function spy(){
     var items=document.querySelectorAll('.scroll-rail-item');
-    var secs=document.querySelectorAll('.scroll-section');
+    var secs=document.querySelectorAll('.scroll-panel-card');
     if(!secs.length) return;
     var io=new IntersectionObserver(function(es){
       es.forEach(function(e){ if(e.isIntersecting){

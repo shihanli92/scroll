@@ -93,7 +93,7 @@ Serve as usual — the repertoire panels are added automatically:
 scroll_serve("projects/tcell")
 ```
 
-Four panels surface below the RNA sections:
+Four panels surface below the RNA panels:
 
 * **Clone overview** — clone-size **rank-abundance** curves and an
   **expansion-category** composition bar (Single / Small / Medium / Large /

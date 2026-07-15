@@ -654,7 +654,7 @@ scroll_view_kind <- function(view_type) {
   if (identical(view_type, "de_table")) "table" else "plot"
 }
 
-#' Dispatch a section's view to its renderer
+#' Dispatch a panel's view to its renderer
 #'
 #' The single entry point the app calls. `ctx` carries `cells`, `params`,
 #' `state` (toggles), and whatever payload the view needs (`feature_values`,

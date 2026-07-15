@@ -17,7 +17,7 @@ register_panel(
 }
 \arguments{
 \item{id}{Unique panel id: a letter followed by letters, digits, or
-underscores. Used as the section anchor and the Shiny module namespace.}
+underscores. Used as the panel anchor and the Shiny module namespace.}
 
 \item{ui, server}{The panel's UI and server functions (see contract above).}
 

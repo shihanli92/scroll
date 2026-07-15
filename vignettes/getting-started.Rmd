@@ -84,11 +84,11 @@ default_embedding: umap
 default_assay: RNA
 markers: [CD3D, CD8A, MS4A1, CD14, NKG7]   # DotPlot's starting gene panel
 panels: [dimplot, featureplot, dotplot]    # optional: show exactly these, in order
-exclude_panels: [pseudobulk]               # optional: hide specific sections
+exclude_panels: [pseudobulk]               # optional: hide specific panels
 ```
 
-Sections otherwise appear only when the data supports them (e.g. DE needs a
-≥2-level grouping). `panels:` is an allowlist that shows exactly those sections in
+Panels otherwise appear only when the data supports them (e.g. DE needs a
+≥2-level grouping). `panels:` is an allowlist that shows exactly those panels in
 order (overriding that automatic gating); `exclude_panels:` hides specific ones.
 Both are also settable at build time via `scroll_build(panels = , exclude_panels = )`.
 
@@ -100,7 +100,7 @@ Run it locally:
 scroll_serve("pbmc3k")                 # opens the app in your browser
 ```
 
-The app is a scrolling page of analysis sections, each with its own controls:
+The app is a scrolling page of analysis panels, each with its own controls:
 
 * **DimPlot** — the embedding coloured by any metadata column.
 * **FeaturePlot** — coloured by a gene's expression, or by a numeric metadata
@@ -160,7 +160,7 @@ scroll_disconnect(con)
 
 ## 7. Your first custom panel (5 minutes)
 
-Any analysis you can write as *a function returning a `ggplot`* becomes a section,
+Any analysis you can write as *a function returning a `ggplot`* becomes a panel,
 with no Shiny code. `register_plot_panel()` takes a list of declared controls and a
 `plot(cells, input, data)` function; scroll builds the whole module (UI, downloads,
 error messages, subset/view awareness). This panel adds a **Group by** dropdown and
@@ -178,7 +178,7 @@ register_plot_panel("counts",
     ggplot2::ggplot(cells, ggplot2::aes(.data[[input$grp]])) +
       ggplot2::geom_bar() + ggplot2::labs(x = NULL, y = "cells"))
 
-scroll_serve("pbmc3k")            # the section appears after DimPlot
+scroll_serve("pbmc3k")            # the panel appears after DimPlot
 ```
 
 Two rules cover the common mistakes: **register before you serve** (in a deployed

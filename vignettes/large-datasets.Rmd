@@ -142,5 +142,5 @@ scroll_disconnect(con)
 ## See also
 
 - `vignette("getting-started", package = "scroll")` — the basic build → serve → deploy flow.
-- `vignette("custom-panels", package = "scroll")` — adding your own analysis sections.
+- `vignette("custom-panels", package = "scroll")` — adding your own analysis panels.
 - `?scroll_build_stream`, `?scroll_build`, `?scroll_query_feature`.

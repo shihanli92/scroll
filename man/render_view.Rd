@@ -2,7 +2,7 @@
 % Please edit documentation in R/views.R
 \name{render_view}
 \alias{render_view}
-\title{Dispatch a section's view to its renderer}
+\title{Dispatch a panel's view to its renderer}
 \usage{
 render_view(view_type, ctx)
 }

@@ -43,7 +43,7 @@ register_plot_panel("centroids",
                  x = paste0(emb, "_1"), y = paste0(emb, "_2"))
   })
 
-scroll_serve("pbmc3k")            # the section appears after DimPlot
+scroll_serve("pbmc3k")            # the panel appears after DimPlot
 ```
 
 That's the whole panel — no `moduleServer`, no `renderPlot`, no download handlers.
@@ -285,7 +285,7 @@ centroid_server <- function(id, data, cells_r = shiny::reactive(data$cells)) {
 ## Step 3 — register and serve
 
 Register the panel *before* `scroll_app()`/`scroll_serve()`. `after = "dimplot"`
-places it right after the DimPlot section (use `before =` or an existing `id` to
+places it right after the DimPlot panel (use `before =` or an existing `id` to
 replace a built-in; omit both to append).
 
 ```{r register, eval = FALSE}
@@ -297,16 +297,16 @@ register_panel("centroids", centroid_ui, centroid_server,
                desc = "Median position of each group, linked by a minimum spanning tree.",
                after = "dimplot")
 
-scroll_serve("pbmc3k")      # the new section appears in scroll order
+scroll_serve("pbmc3k")      # the new panel appears in scroll order
 ```
 
 In a deployed app, put the panel code and the `register_panel()` call in the
 project's `app.R`, above `scroll_app(".")`.
 
-The registered section appears in scroll order (here after DimPlot), controls on
+The registered panel appears in scroll order (here after DimPlot), controls on
 the left and the centroid map on the right:
 
-```{r screenshot, echo = FALSE, out.width = "100%", fig.cap = "The Centroid map section in a running app (pbmc3k demo): each cell type's median UMAP position, linked by a minimum spanning tree, over a faint cell scatter."}
+```{r screenshot, echo = FALSE, out.width = "100%", fig.cap = "The Centroid map panel in a running app (pbmc3k demo): each cell type's median UMAP position, linked by a minimum spanning tree, over a faint cell scatter."}
 knitr::include_graphics("centroid-map.png")
 ```
 
