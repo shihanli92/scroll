@@ -264,5 +264,6 @@ scroll_disconnect(con)
 | `R/panel-helpers.R` | control-choice + plot-toolbar helpers shared across the built-in panels |
 | `R/panel-<view>.R` | one file per built-in view (`panel-dimplot.R`, `panel-de.R`, …) |
 | `R/panel-builder.R` | `register_plot_panel()` + `scroll_input_*` declarative controls |
-| `R/vdj.R` / `R/spatial.R` / `R/atac.R` | multimodal builds + their panels |
+| `R/vdj.R` / `R/spatial.R` / `R/atac.R` | multimodal `*_spec()` + build-time bake logic |
+| `R/panel-vdj.R` / `R/panel-spatial.R` / `R/panel-atac.R` | the matching multimodal panels |
 | `R/styles.R` | the bslib app's design-system CSS + scroll-spy |
