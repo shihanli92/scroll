@@ -1,0 +1,211 @@
+# Helpers shared across the built-in panels (R/panel-*.R): manifest-derived
+# control choices (categorical/numeric columns, embeddings, colour-by, view
+# scoping), the manual palette picker, cosmetic-debounce + rasterization, and the
+# per-plot toolbar / download / empty-state scaffolding.
+
+.scroll_nz <- function(x) if (is.null(x) || !length(x) || !nzchar(x)) NULL else x
+
+# Debounce a reactive snapshot of cosmetic inputs so a slider drag coalesces into
+# one redraw (~120 ms after the last move) instead of one render per tick. Pass a
+# `reactive({...})` (constructed at the call site so input dependencies are
+# tracked). Data inputs are kept out of this reactive so a gene change stays
+# immediate.
+.scroll_cosmetic <- function(r, millis = 120) shiny::debounce(r, millis)
+
+# Above this many plotted points, rasterize the scatter on screen (kept below the
+# small test project's n so tests/direct view calls stay vector).
+.scroll_raster_threshold <- 15000L
+
+# Whether to rasterize on screen: the per-panel toggle (default on) AND the point
+# count exceeding the threshold. With the toggle off, points stay vector even on
+# large datasets (slower, but exact/zoomable).
+.scroll_use_raster <- function(on, n) isTRUE(on %||% TRUE) && n > .scroll_raster_threshold
+
+# --- manifest-derived control choices -----------------------------------------
+
+# Metadata columns split by whether they belong to a subset view. A column's
+# `$scope` (set at build time) names its owning subset; unscoped columns are
+# global. The plain `.scroll_cat_cols`/`.scroll_num_cols` return global columns
+# only, so subset-scoped columns never leak into whole-dataset selectors; the
+# `_view_` variants add back the active subset's scoped columns.
+.scroll_scope_of <- function(m, col) m$meta[[col]]$scope
+.scroll_col_in_view <- function(m, col, view) {
+  sc <- .scroll_scope_of(m, col)
+  is.null(sc) || identical(sc, view)
+}
+.scroll_cat_cols <- function(m, view = NULL) {
+  cols <- names(Filter(function(x) identical(x$type, "categorical"), m$meta))
+  cols[vapply(cols, function(c) .scroll_col_in_view(m, c, view), logical(1))]
+}
+.scroll_num_cols <- function(m, view = NULL) {
+  cols <- names(Filter(function(x) identical(x$type, "numeric"), m$meta))
+  cols[vapply(cols, function(c) .scroll_col_in_view(m, c, view), logical(1))]
+}
+.scroll_reductions <- function(m) names(m$embeddings)
+.scroll_assays_of <- function(m) names(m$assays)
+.scroll_features_of <- function(m, assay) unlist(m$assays[[assay]]$features)
+
+# Is there a categorical column with >=2 levels, i.e. a grouping a contrast can
+# be built from? DE/Pseudobulk are pointless without one (e.g. a single-region
+# Visium slide has `region` but only one level), so they gate on this.
+.scroll_has_contrast <- function(m) {
+  cats <- .scroll_cat_cols(m)
+  any(vapply(cats, function(c) length(m$meta[[c]]$levels) >= 2, logical(1)))
+}
+.scroll_subset_names <- function(m) names(m$subsets)
+
+# Embeddings usable in a view: whole-dataset shows only full-coverage reductions;
+# a subset view shows that subset's (partial) embeddings. Old manifests without
+# `n_covered` treat every embedding as full (back-compatible).
+.scroll_global_embeddings <- function(m) {
+  rn <- names(m$embeddings)
+  rn[vapply(rn, function(r) {
+    nc <- m$embeddings[[r]]$n_covered
+    is.null(nc) || nc >= m$n_cells
+  }, logical(1))]
+}
+.scroll_view_embeddings <- function(m, view = NULL) {
+  if (is.null(view) || is.null(m$subsets[[view]])) return(.scroll_global_embeddings(m))
+  as.character(unlist(m$subsets[[view]]$embeddings))
+}
+
+# Restrict cells to a subset view (members = non-NA primary-embedding coords).
+.scroll_view_cells <- function(cells, m, view) {
+  if (is.null(view) || is.null(m$subsets[[view]])) return(cells)
+  col <- sprintf("%s_1", m$subsets[[view]]$primary_embedding)
+  if (!col %in% names(cells)) return(cells)
+  cells[!is.na(cells[[col]]), , drop = FALSE]
+}
+
+.scroll_colorby_choices <- function(m, view = NULL) {
+  ch <- list()
+  cats <- .scroll_cat_cols(m, view); nums <- .scroll_num_cols(m, view)
+  if (length(cats)) ch[["Cell annotations"]] <- as.list(stats::setNames(cats, cats))
+  if (length(nums)) ch[["Numeric / QC"]] <- as.list(stats::setNames(nums, nums))
+  ch
+}
+
+# Refresh a panel's categorical `selectInput`s when the active view changes so
+# subset-scoped columns appear only inside their subset view. `prepend` is a
+# leading choice map (e.g. c("None" = "")); the current selection is preserved
+# when still valid, else falls back to `default` (or the prepend value).
+.scroll_bind_view_cats <- function(input, session, view_r, m, ids,
+                                    prepend = NULL, default = NULL) {
+  observeEvent(view_r(), {
+    cats <- .scroll_cat_cols(m, view_r())
+    for (id in ids) {
+      cur <- input[[id]]
+      sel <- if (!is.null(cur) && cur %in% cats) cur
+             else if (!is.null(default) && default %in% cats) default
+             else if (!is.null(prepend)) unname(prepend)[[1]]
+             else if (length(cats)) cats[[1]] else NULL
+      updateSelectInput(session, id,
+                        choices = c(prepend, stats::setNames(cats, cats)),
+                        selected = sel)
+    }
+  }, ignoreNULL = FALSE)
+}
+
+.scroll_default <- function(data, key, fallback) {
+  data$config[[key]] %||% data$manifest[[key]] %||% fallback
+}
+
+# Per-level colour pickers for the "Manual" palette, shared by the categorical
+# panels. `.scroll_manual_ui` builds colourInputs (ids col_1..col_n) seeded from
+# the Tableau-10 defaults; `.scroll_manual_colors` reads them back into a named
+# vector (NULL until set). A panel wires them by: adding "Manual" to its palette
+# choices, a `uiOutput(ns("manual"))`, and passing `manual_colors` into the view
+# state (which `.scroll_group_colors` honours when palette == "Manual").
+.scroll_manual_ui <- function(ns, levels) {
+  defaults <- .scroll_discrete_colors(levels, "Tableau 10")
+  # compact circular swatches that wrap into rows (rather than tall full-width
+  # inputs), so many levels stay manageable; the level name is a caption + title.
+  div(class = "scroll-manual-grid",
+    lapply(seq_along(levels), function(i)
+      div(class = "scroll-swatch", title = levels[i],
+        colourpicker::colourInput(ns(paste0("col_", i)), label = NULL,
+                                  value = defaults[[levels[i]]],
+                                  showColour = "both", closeOnClick = TRUE),
+        span(class = "scroll-swatch-label", levels[i]))))
+}
+.scroll_manual_colors <- function(input, levels) {
+  vals <- lapply(seq_along(levels), function(i) input[[paste0("col_", i)]])
+  names(vals) <- levels
+  vals <- vals[!vapply(vals, is.null, logical(1))]
+  if (length(vals)) unlist(vals) else NULL
+}
+# Categorical palette choices including the Manual option.
+.scroll_cat_palettes <- function() c(names(.scroll_discrete_palettes), "Manual")
+
+.scroll_group <- function(title, ...) {
+  div(class = "scroll-cgroup", div(class = "scroll-cgroup-h", title), ...)
+}
+
+# --- per-plot export ----------------------------------------------------------
+
+# A compact download button for a plot/table toolbar.
+.scroll_dl_button <- function(id, label)
+  downloadButton(id, label, class = "btn-sm scroll-dl", icon = shiny::icon("download"))
+
+# Wrap an output in a loading spinner when shinycssloaders is available (a
+# guarded Suggests dep); otherwise return the output unchanged.
+.scroll_spin <- function(tag) {
+  if (requireNamespace("shinycssloaders", quietly = TRUE))
+    shinycssloaders::withSpinner(tag, type = 6, color = "#2563A8", size = 0.6,
+                                 proxy.height = "260px")
+  else tag
+}
+
+# Standard plot area: a small toolbar (PNG + PDF download) above the plot output.
+.scroll_plot_area <- function(ns, height = "460px")
+  div(class = "scroll-plot",
+      div(class = "scroll-plot-bar",
+          .scroll_dl_button(ns("png"), "PNG"),
+          .scroll_dl_button(ns("pdf"), "PDF")),
+      .scroll_spin(plotOutput(ns("plot"), height = height)))
+
+# Image downloadHandler for a plot reactive, raster (PNG) or vector (PDF). Uses
+# a device + print() (not ggsave) so it renders both bare ggplots and the
+# DotPlot's aplot composite, which ggsave() rejects as a non-ggplot.
+.scroll_img_handler <- function(plot_r, name, format = c("png", "pdf")) {
+  format <- match.arg(format)
+  downloadHandler(
+    filename = function() name,
+    content = function(file) {
+      if (format == "pdf") grDevices::pdf(file, width = 8, height = 6, bg = "white")
+      else grDevices::png(file, width = 8, height = 6, units = "in", res = 150, bg = "white")
+      on.exit(grDevices::dev.off())
+      print(plot_r())
+    })
+}
+
+# Register the standard PNG + PDF download outputs (ids "png"/"pdf") for a plot
+# reactive on a module's `output`. Filenames stem from the panel id.
+.scroll_plot_downloads <- function(output, plot_r, id) {
+  output$png <- .scroll_img_handler(plot_r, paste0("scroll_", id, ".png"), "png")
+  output$pdf <- .scroll_img_handler(plot_r, paste0("scroll_", id, ".pdf"), "pdf")
+  invisible()
+}
+
+# CSV downloadHandler for a data.frame reactive.
+.scroll_csv_handler <- function(df_r, name)
+  downloadHandler(
+    filename = function() name,
+    content = function(file) utils::write.csv(df_r(), file, row.names = FALSE))
+
+# Shared aspect-ratio control, applied uniformly as a rendered-height multiplier
+# (works for every panel including the aplot dendrogram composite, where
+# theme(aspect.ratio) would detach the trees). Every panel adds the input and
+# sets its renderPlot height via .scroll_plot_height(); future panels get it for
+# free by doing the same.
+.scroll_aspect_input <- function(ns) sliderInput(ns("aspect"), "Aspect ratio", 0.4, 3, 1, 0.1)
+
+# Placeholder body for a panel that can't run on this dataset (e.g. no categorical
+# grouping column) — avoids a hard `cats[[1]]` crash at UI build. This is the second
+# of two gating layers: a panel's `when` predicate drops it from the whole app when
+# NO mounted dataset supports it, while this inline guard covers the per-dataset case
+# in scroll_multi_app (a panel kept because another tab supports it must still render
+# a friendly message for a tab that doesn't).
+.scroll_empty_panel <- function(msg)
+  div(class = "scroll-panel", tags$p(class = "scroll-desc", msg))
+

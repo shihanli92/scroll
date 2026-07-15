@@ -184,3 +184,9 @@ Each built-in analysis section carries its own fine-grained controls:
   & streaming builds* (`scroll_build_stream()`, the v2 storage format, and the
   `quantize`/`counts` tradeoffs), and *Writing a custom panel* (declarative
   `register_plot_panel()` + richer controls, and the low-level contract).
+
+## Internal
+
+* Split the monolithic `R/app.R` into one file per built-in view (`R/panel-<view>.R`),
+  plus `R/panel-helpers.R` (shared panel helpers) and `R/data-handle.R` (the runtime data
+  handle). Pure reorganization — no behaviour change.

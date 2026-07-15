@@ -259,5 +259,10 @@ scroll_disconnect(con)
 | `R/manifest.R` / `R/scaffold.R` | manifest + `app.R`/`config.yaml` scaffolding |
 | `R/query.R` | arrow query handle + `scroll_query_feature()` / `scroll_query_features()` |
 | `R/views.R` | plot cores: `view_umap_colorby`, `view_feature_plot`, `view_dotplot`, … |
-| `R/app.R` | `scroll_app()`, `scroll_serve()`, the panel modules |
+| `R/app.R` | `scroll_app()` / `scroll_multi_app()` / `scroll_serve()`, the app shell + panel registry |
+| `R/data-handle.R` | the runtime data handle: `.scroll_load()` + LRU-cached feature queries |
+| `R/panel-helpers.R` | control-choice + plot-toolbar helpers shared across the built-in panels |
+| `R/panel-<view>.R` | one file per built-in view (`panel-dimplot.R`, `panel-de.R`, …) |
+| `R/panel-builder.R` | `register_plot_panel()` + `scroll_input_*` declarative controls |
+| `R/vdj.R` / `R/spatial.R` / `R/atac.R` | multimodal builds + their panels |
 | `R/styles.R` | the bslib app's design-system CSS + scroll-spy |
