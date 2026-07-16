@@ -131,7 +131,9 @@ scroll_pseudobulk_de <- function(data, assay, aggregate_cols, ident1, ident2 = N
          call. = FALSE)
 
   agg <- scroll_aggregate_counts(data$con, assay, mapping[, c("cell", "psample")])
-  feats <- .scroll_features_of(data$manifest, assay)
+  # store's own feature names (encoding-robust; the manifest yaml can mangle a
+  # non-ASCII feature name into an escaped form that would not match() the store).
+  feats <- sort(unique(agg$feature))
   ps <- samp$psample
   M <- matrix(0L, nrow = length(feats), ncol = length(ps), dimnames = list(feats, ps))
   M[cbind(match(agg$feature, feats), match(agg$psample, ps))] <- as.integer(agg$count)

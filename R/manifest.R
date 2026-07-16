@@ -77,7 +77,10 @@
   if (!is.null(vdj)) manifest$vdj <- vdj    # repertoire block -> gates the VDJ panels
   if (!is.null(images)) manifest$images <- images   # tissue image(s) -> gates the Spatial panel
   if (!is.null(atac)) manifest$atac <- atac         # peak table -> gates the Peaks panel
-  yaml::write_yaml(manifest, file.path(outdir, "manifest.yaml"))
+  # unicode = TRUE so non-ASCII feature names (e.g. an antibody with a Greek
+  # letter) round-trip as UTF-8 instead of being escaped to an ASCII `<U+XXXX>`
+  # form that would no longer match the store's feature column.
+  yaml::write_yaml(manifest, file.path(outdir, "manifest.yaml"), unicode = TRUE)
   invisible(manifest)
 }
 

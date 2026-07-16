@@ -19,6 +19,17 @@ polished, flat-RAM interactive single-cell explorer.
   in results and slightly faster (its whole-store scan opens far fewer files);
   pseudobulk uses the separate single-file counts store and is untouched.
 
+## Fixes
+
+* **Non-ASCII feature names.** A feature whose name contains a non-ASCII character
+  (e.g. an antibody like `FcεRIa`) broke DE and pseudobulk with `'i' and 'j' must
+  not contain NA`, and silently returned no data in FeaturePlot/DotPlot: `yaml`
+  escaped the name in the manifest (`Fc<U+03B5>RIa`) so it no longer matched the
+  store's UTF-8 feature column. `scroll_de()` / `scroll_pseudobulk_de()` now index
+  on the store's own feature names (encoding-robust; no rebuild needed), and the
+  manifest is written with `unicode = TRUE` so names round-trip as UTF-8 (fixes the
+  query/label path on rebuild).
+
 ## Incremental updates
 
 * **`scroll_update(dir, object, embeddings =, meta_cols =, subsets =)`** adds or

@@ -57,7 +57,12 @@ scroll_de <- function(data, assay, group_col, ident1, ident2 = NULL, min_pct = 0
 
   long <- scroll_query_cells(data$con, assay, key)
   long$value <- scroll_dequantize(long$value, data$manifest, assay)
-  feats <- .scroll_features_of(data$manifest, assay)
+  # index rows by the store's OWN feature names, not the manifest list: yaml can
+  # mangle a non-ASCII feature name (e.g. an antibody with a Greek letter) into an
+  # escaped ASCII form, so a manifest-vs-store match() would return NA and fail the
+  # matrix build. Genes with zero expression across the contrast are absent here and
+  # carry no DE signal, so restricting to expressed features is also correct.
+  feats <- sort(unique(long$feature))
   X <- Matrix::sparseMatrix(
     i = match(long$feature, feats), j = match(long$cell, key), x = long$value,
     dims = c(length(feats), length(bc)), dimnames = list(feats, bc))
