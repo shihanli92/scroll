@@ -20,10 +20,13 @@ test_that("manifest records assays, embeddings, and defaults", {
   expect_equal(man$embeddings$umap$dims, 2)
 })
 
-test_that("feature partitions exist for exported features", {
+test_that("expr store is first-letter bucket-partitioned and features query", {
   dir <- test_project()
   parts <- list.files(file.path(dir, "expr", "RNA"))
-  expect_true("feature=MS4A1" %in% parts)
+  expect_true(all(grepl("^bucket=", parts)))     # v3 layout: partition by 1st char
+  expect_true("bucket=M" %in% parts)             # MS4A1 -> bucket M
+  con <- scroll_connect(dir); on.exit(scroll_disconnect(con))
+  expect_gt(nrow(scroll_query_feature(con, "RNA", "MS4A1")), 0)
 })
 
 # A minimal object where one gene's only nonzero data value sits below the

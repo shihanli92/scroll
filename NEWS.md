@@ -3,6 +3,22 @@
 First development release. `scroll` turns a processed Seurat object into a
 polished, flat-RAM interactive single-cell explorer.
 
+## Expression store: first-letter bucketing
+
+* The expression store now partitions by the feature's **case-folded first
+  character** (`expr/<assay>/bucket=<char>/`) instead of one directory per feature.
+  On a 32k-gene store that is **~36 directories instead of ~25,600**, which removes
+  the arrow Dataset-open crawl that dominated cold queries and could stall a server
+  (fewer inodes / file descriptors), and — because rows are sorted by `feature`
+  within each bucket — compresses **~1.8x smaller** with **no loss** (a single-gene
+  lookup still reads little via Parquet row-group pruning; benchmarked *faster* than
+  per-feature). Case is folded (so `Cd8a` and `ccdc198` share bucket `C`) because
+  case-insensitive filesystems collide `C`/`c` directories. The runtime query layer
+  is unchanged and reads old per-feature stores and new bucketed stores alike, so
+  existing projects keep working un-rebuilt. Differential expression is unaffected
+  in results and slightly faster (its whole-store scan opens far fewer files);
+  pseudobulk uses the separate single-file counts store and is untouched.
+
 ## Incremental updates
 
 * **`scroll_update(dir, object, embeddings =, meta_cols =, subsets =)`** adds or
