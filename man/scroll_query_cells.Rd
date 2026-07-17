@@ -4,7 +4,7 @@
 \alias{scroll_query_cells}
 \title{Query all features for a set of cells}
 \usage{
-scroll_query_cells(con, assay, cells)
+scroll_query_cells(con, assay, cells, dict = FALSE)
 }
 \arguments{
 \item{con}{A handle from \code{\link[=scroll_connect]{scroll_connect()}}.}
@@ -12,6 +12,12 @@ scroll_query_cells(con, assay, cells)
 \item{assay}{Assay name.}
 
 \item{cells}{Character vector of cell ids.}
+
+\item{dict}{If \code{TRUE}, return the \code{feature} column dictionary-encoded (an R
+factor) instead of a character vector. arrow builds the dictionary during the
+scan, so downstream \code{unique()}/\code{match()} over the tens of millions of repeated
+gene names become cheap integer ops — a large speedup when reconstructing a
+DE contrast's matrix. The factor's levels are the store's own feature names.}
 }
 \value{
 A data.frame with columns \code{feature}, \code{cell}, \code{value}.

@@ -110,14 +110,24 @@ scroll_query_features <- function(con, assay, features) {
 #' @param con A handle from [scroll_connect()].
 #' @param assay Assay name.
 #' @param cells Character vector of cell ids.
+#' @param dict If `TRUE`, return the `feature` column dictionary-encoded (an R
+#'   factor) instead of a character vector. arrow builds the dictionary during the
+#'   scan, so downstream `unique()`/`match()` over the tens of millions of repeated
+#'   gene names become cheap integer ops — a large speedup when reconstructing a
+#'   DE contrast's matrix. The factor's levels are the store's own feature names.
 #' @return A data.frame with columns `feature`, `cell`, `value`.
 #' @export
-scroll_query_cells <- function(con, assay, cells) {
+scroll_query_cells <- function(con, assay, cells, dict = FALSE) {
   if (length(cells) == 0)
-    return(data.frame(feature = character(), cell = character(), value = numeric()))
+    return(data.frame(feature = if (dict) factor() else character(),
+                      cell = character(), value = numeric()))
   ds <- .scroll_dataset(con, assay)
-  out <- dplyr::collect(dplyr::select(
-    dplyr::filter(ds, .data$cell %in% !!cells), "feature", "cell", "value"))
+  q  <- dplyr::filter(ds, .data$cell %in% !!cells)
+  if (dict)
+    q <- dplyr::mutate(q, feature = arrow::cast(
+      .data$feature, arrow::dictionary(index_type = arrow::int32(),
+                                       value_type = arrow::utf8())))
+  out <- dplyr::collect(dplyr::select(q, "feature", "cell", "value"))
   as.data.frame(out, stringsAsFactors = FALSE)
 }
 

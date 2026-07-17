@@ -55,16 +55,19 @@ scroll_de <- function(data, assay, group_col, ident1, ident2 = NULL, min_pct = 0
   if (sum(labels == "group1") < 3 || sum(labels != "group1") < 3)
     stop("Each side of the contrast needs at least 3 cells.", call. = FALSE)
 
-  long <- scroll_query_cells(data$con, assay, key)
+  # dict = TRUE returns `feature` dictionary-encoded (a factor): its levels are the
+  # store's OWN feature names and as.integer() gives the matrix row index directly.
+  # This avoids sort(unique()) + match() over the tens of millions of repeated
+  # gene-name strings (the dominant cost of a large DE) — arrow builds the
+  # dictionary during the scan. Indexing by the store's names (not the manifest
+  # list) also stays correct when yaml has mangled a non-ASCII feature name, and
+  # zero-expression genes are absent here so restricting to expressed features is
+  # correct too.
+  long <- scroll_query_cells(data$con, assay, key, dict = TRUE)
   long$value <- scroll_dequantize(long$value, data$manifest, assay)
-  # index rows by the store's OWN feature names, not the manifest list: yaml can
-  # mangle a non-ASCII feature name (e.g. an antibody with a Greek letter) into an
-  # escaped ASCII form, so a manifest-vs-store match() would return NA and fail the
-  # matrix build. Genes with zero expression across the contrast are absent here and
-  # carry no DE signal, so restricting to expressed features is also correct.
-  feats <- sort(unique(long$feature))
+  feats <- levels(long$feature)
   X <- Matrix::sparseMatrix(
-    i = match(long$feature, feats), j = match(long$cell, key), x = long$value,
+    i = as.integer(long$feature), j = match(long$cell, key), x = long$value,
     dims = c(length(feats), length(bc)), dimnames = list(feats, bc))
 
   res <- presto::wilcoxauc(X, labels)
