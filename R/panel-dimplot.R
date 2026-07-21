@@ -39,7 +39,7 @@ dimplot_server <- function(id, data, cells_r = reactive(data$cells),
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     is_cat <- reactive(identical(m$meta[[input$colorby]]$type, "categorical"))
-    levels_of <- reactive(if (is_cat()) unlist(m$meta[[input$colorby]]$levels) else character(0))
+    levels_of <- reactive(if (is_cat()) .scroll_meta_levels(data, input$colorby) else character(0))
 
     # When the active view changes: restrict reductions to that view's embeddings
     # (subset views default to the primary sub-embedding) and add the subset's

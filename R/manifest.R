@@ -2,11 +2,49 @@
 # produced: assays + feature namespaces, embeddings + dims, metadata columns +
 # levels, and the defaults a fresh dataset needs to render itself.
 
+# Cap on how many distinct values of a categorical column are cached as `levels:`
+# in the manifest. Above it, the manifest stores only `n_levels` and the runtime
+# recomputes the level set from `cells.parquet` on demand (see
+# `.scroll_meta_levels`). Keeps the manifest small + hand-editable for
+# high-cardinality columns (clone ids, barcodes). Also the auto-inference cutoff
+# in `.scroll_infer_meta_cols` for whether to surface a column at all.
+.SCROLL_MAX_LEVELS <- 200L
+
+# Build one manifest `meta` entry for a metadata column. Categorical columns
+# always record `n_levels`; the `levels` list is cached only when it fits under
+# `max_levels` (else it is recomputed at runtime). NA is dropped (a missing
+# category is never a level).
+.scroll_meta_entry <- function(v, max_levels = .SCROLL_MAX_LEVELS) {
+  if (is.factor(v) || is.character(v) || is.logical(v)) {
+    lv <- sort(unique(as.character(v)))          # sort() drops NA by default
+    entry <- list(type = "categorical", n_levels = length(lv))
+    if (length(lv) <= max_levels) entry$levels <- as.list(lv)
+    entry
+  } else {
+    list(type = "numeric",
+         range = list(min = min(v, na.rm = TRUE), max = max(v, na.rm = TRUE)))
+  }
+}
+
+# One-line note naming the categorical columns whose levels were left uncached.
+.scroll_report_trimmed <- function(meta) {
+  tr <- vapply(meta, function(e) identical(e$type, "categorical") && is.null(e$levels),
+               logical(1))
+  if (!any(tr)) return(invisible())
+  nm <- names(meta)[tr]
+  message("scroll: omitted cached levels for high-cardinality column(s) ",
+          "(recomputed at runtime): ",
+          paste0(nm, " (", vapply(meta[tr], function(e) e$n_levels, integer(1)), ")",
+                 collapse = ", "),
+          ". Raise max_levels to cache them.")
+}
+
 .scroll_write_manifest <- function(outdir, object, assay_info, embeddings, md,
                                    meta_cols, n_cells, quantize, has_counts = FALSE,
                                    cells = NULL, subsets = NULL, vdj = NULL,
                                    images = NULL, spatial_embeddings = character(),
-                                   atac = NULL, peaks_assay = character()) {
+                                   atac = NULL, peaks_assay = character(),
+                                   max_levels = .SCROLL_MAX_LEVELS) {
   assays <- lapply(names(assay_info), function(a) {
     info <- assay_info[[a]]
     l <- list(max = info$max, n_features = info$n_features,
@@ -39,17 +77,12 @@
     v <- md[[col]]
     sc <- if (col %in% names(scope_map)) scope_map[[col]] else NULL
     if (!is.null(sc) && !is.null(member[[sc]])) v <- v[member[[sc]]]
-    if (is.factor(v) || is.character(v) || is.logical(v)) {
-      entry <- list(type = "categorical",
-                    levels = as.list(sort(unique(as.character(v)))))
-    } else {
-      entry <- list(type = "numeric",
-                    range = list(min = min(v, na.rm = TRUE), max = max(v, na.rm = TRUE)))
-    }
+    entry <- .scroll_meta_entry(v, max_levels)
     if (!is.null(sc)) entry$scope <- sc
     entry
   })
   names(meta) <- meta_cols
+  .scroll_report_trimmed(meta)
 
   manifest <- list(
     scroll_version = as.character(utils::packageVersion("scroll")),

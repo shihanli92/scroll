@@ -19,6 +19,17 @@ polished, flat-RAM interactive single-cell explorer.
   in results and slightly faster (its whole-store scan opens far fewer files);
   pseudobulk uses the separate single-file counts store and is untouched.
 
+## Manifest: cap cached levels for high-cardinality columns
+
+* `manifest.yaml` no longer inlines **every** distinct value of a categorical column
+  as a `levels:` list. Above `scroll_build(max_levels = 200)` (new argument, also on
+  `scroll_update()`) a column records only its `n_levels` count; the app recomputes
+  the level set from `cells.parquet` on demand. This keeps the manifest small and
+  hand-editable when a build carries a clone id / barcode / sample id with thousands
+  of values — those columns still export and stay fully usable everywhere (Color-by,
+  Violin, DE gating). Manual per-level colour pickers now fall back to a note above
+  30 levels instead of rendering a wall of widgets.
+
 ## Fixes
 
 * **Non-ASCII feature names.** A feature whose name contains a non-ASCII character

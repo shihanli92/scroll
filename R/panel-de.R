@@ -57,7 +57,7 @@ de_server <- function(id, data, cells_r = reactive(data$cells),
     .scroll_bind_view_cats(input, session, view_r, m, "group")
 
     observeEvent(input$group, {
-      lv <- unlist(m$meta[[input$group]]$levels)
+      lv <- .scroll_meta_levels(data, input$group)
       updateSelectizeInput(session, "ident1", choices = lv, selected = lv[[1]])
       updateSelectizeInput(session, "ident2", choices = lv, selected = character(0))
     })

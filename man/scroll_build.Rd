@@ -18,6 +18,7 @@ scroll_build(
   atac = NULL,
   panels = NULL,
   exclude_panels = NULL,
+  max_levels = .SCROLL_MAX_LEVELS,
   overwrite = FALSE,
   verbose = interactive()
 )
@@ -74,6 +75,13 @@ and also hand-editable there. \code{NULL} (default) keeps the automatic behaviou
 
 \item{exclude_panels}{Optional character vector of panel ids to hide (e.g.
 \code{c("de", "pseudobulk")}); applied after gating / the \code{panels} allowlist.}
+
+\item{max_levels}{Cap on how many distinct values of a categorical column are
+cached as a \verb{levels:} list in \code{manifest.yaml}. Columns above the cap (e.g. a
+clone id or barcode with thousands of values) still export normally and stay
+fully usable — the manifest just records their \code{n_levels} count and the app
+recomputes the level set from \code{cells.parquet} when a control needs it. Keeps
+the manifest small and hand-editable. Defaults to 200.}
 
 \item{overwrite}{If \code{TRUE}, an existing \code{outdir} is removed first.}
 

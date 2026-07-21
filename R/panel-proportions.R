@@ -29,7 +29,7 @@ proportions_server <- function(id, data, cells_r = reactive(data$cells),
     m <- data$manifest
     .scroll_bind_view_cats(input, session, view_r, m, c("group", "fill"))
     # per-fill color pickers when the palette is "Manual" (levels of Fill by)
-    lvl_r <- reactive({ req(input$fill); unlist(m$meta[[input$fill]]$levels) })
+    lvl_r <- reactive({ req(input$fill); .scroll_meta_levels(data, input$fill) })
     output$manual <- renderUI(
       if (identical(input$palette, "Manual")) .scroll_manual_ui(session$ns, lvl_r()))
     manual_colors <- reactive(

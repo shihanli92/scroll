@@ -11,6 +11,12 @@
 #' @param assays Assays to export. `NULL` exports the default assay only.
 #' @param embeddings Reductions to export. `NULL` exports all reductions.
 #' @param meta_cols Metadata columns to export. `NULL` infers a sensible set.
+#' @param max_levels Cap on how many distinct values of a categorical column are
+#'   cached as a `levels:` list in `manifest.yaml`. Columns above the cap (e.g. a
+#'   clone id or barcode with thousands of values) still export normally and stay
+#'   fully usable — the manifest just records their `n_levels` count and the app
+#'   recomputes the level set from `cells.parquet` when a control needs it. Keeps
+#'   the manifest small and hand-editable. Defaults to 200.
 #' @param quantize If `TRUE`, expression is quantized to `uint8` (256 levels),
 #'   with a per-assay `max` recorded in the manifest for dequantization. Values
 #'   below ~`max/510` round to zero, so fraction-expressing statistics (dotplot
@@ -59,6 +65,7 @@ scroll_build <- function(object, outdir,
                          quantize = TRUE, counts = FALSE, subsets = NULL,
                          vdj = NULL, spatial = NULL, atac = NULL,
                          panels = NULL, exclude_panels = NULL,
+                         max_levels = .SCROLL_MAX_LEVELS,
                          overwrite = FALSE, verbose = interactive()) {
   if (!is.null(panels) && !is.character(panels))
     stop("`panels` must be a character vector of panel ids, or NULL.", call. = FALSE)
@@ -153,7 +160,8 @@ scroll_build <- function(object, outdir,
                          vdj = vdj_block, images = images_block,
                          spatial_embeddings = if (!is.null(spatial_prep)) spatial_prep$name else character(),
                          atac = atac_block,
-                         peaks_assay = if (!is.null(atac_block)) atac_block$assay else character())
+                         peaks_assay = if (!is.null(atac_block)) atac_block$assay else character(),
+                         max_levels = max_levels)
   scroll_scaffold_app(outdir, panels = panels, exclude_panels = exclude_panels)
 
   message("scroll project built at: ", normalizePath(outdir))
@@ -194,7 +202,7 @@ scroll_build <- function(object, outdir,
     v <- md[[col]]
     is_cat <- is.factor(v) || is.character(v) || is.logical(v)
     n_lvl <- length(unique(v))
-    if (is_cat && n_lvl > 1 && n_lvl <= 200) keep <- c(keep, col)
+    if (is_cat && n_lvl > 1 && n_lvl <= .SCROLL_MAX_LEVELS) keep <- c(keep, col)
   }
   qc <- grep("^(nCount|nFeature|percent)", colnames(md), value = TRUE)
   unique(c(keep, qc))

@@ -58,7 +58,7 @@ biaxial_server <- function(id, data, cells_r = reactive(data$cells),
     m <- data$manifest
     .scroll_bind_view_cats(input, session, view_r, m, "colorby")
     # per-level color pickers when the palette is "Manual" (levels of Colour by)
-    lvl_r <- reactive({ req(input$colorby); unlist(m$meta[[input$colorby]]$levels) })
+    lvl_r <- reactive({ req(input$colorby); .scroll_meta_levels(data, input$colorby) })
     output$manual <- renderUI(
       if (identical(input$palette, "Manual")) .scroll_manual_ui(session$ns, lvl_r()))
     manual_colors <- reactive(

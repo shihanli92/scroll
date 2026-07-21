@@ -10,6 +10,7 @@ scroll_update(
   embeddings = NULL,
   meta_cols = NULL,
   subsets = NULL,
+  max_levels = .SCROLL_MAX_LEVELS,
   verbose = interactive()
 )
 }
@@ -29,6 +30,10 @@ replace. \code{NULL} adds none.}
 \item{subsets}{Optional named list of subset-view specs (as in \code{\link[=scroll_build]{scroll_build()}});
 defaults to any spec attached by \code{\link[=scroll_add_subset]{scroll_add_subset()}}. Their embeddings /
 meta must be present after this update (existing or newly added).}
+
+\item{max_levels}{Cap on cached categorical \verb{levels:} per column, as in
+\code{\link[=scroll_build]{scroll_build()}} (default 200). Columns above it record only \code{n_levels} and
+the app recomputes the level set at runtime.}
 
 \item{verbose}{If \code{TRUE}, report what was written.}
 }
