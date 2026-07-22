@@ -22,6 +22,8 @@ de_ui <- function(id, data) {
                                       placeholder = "rest (all other cells)")),
         if (length(assays) > 1) selectInput(ns("assay"), "Assay", assays, selected = m$default_assay),
         numericInput(ns("maxcells"), "Max cells / group (0 = all)", 0, min = 0, step = 500)),
+      .scroll_group("Preview",                       # live: red = group1, blue = group2/rest
+        plotOutput(ns("preview"), height = "170px")),
       .scroll_group("Table",
         sliderInput(ns("minpct"), "Min % expressing", 0, 50, 10, 1),
         sliderInput(ns("topn"), "Show top", 10, 300, 50, 10),
@@ -66,6 +68,18 @@ de_server <- function(id, data, cells_r = reactive(data$cells),
       lv <- .scroll_meta_levels(data, input$group)
       updateSelectizeInput(session, "ident1", choices = lv, selected = lv[[1]])
       updateSelectizeInput(session, "ident2", choices = lv, selected = character(0))
+    })
+
+    # Live contrast preview (NOT gated by Compute): a mini-UMAP showing which cells
+    # each side selects — red = group1, blue = group2/rest, grey = everything else.
+    # Debounced (selectize multi-picks fire fast); embedding follows the active view.
+    preview_in <- .scroll_cosmetic(reactive(list(
+      cells = cells_r(), group = input$group, ident1 = input$ident1,
+      ident2 = input$ident2, emb = .scroll_view_embeddings(m, view_r())[[1]])))
+    output$preview <- renderPlot({
+      p <- preview_in(); req(p$group, p$emb)
+      view_contrast_preview(p$cells, p$emb,
+                            .scroll_contrast_labels(p$cells, p$group, p$ident1, p$ident2))
     })
 
     # min_pct = 0 so the volcano keeps every gene; the table applies its own

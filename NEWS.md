@@ -3,6 +3,18 @@
 First development release. `scroll` turns a processed Seurat object into a
 polished, flat-RAM interactive single-cell explorer.
 
+## Live contrast preview (DE + Pseudobulk)
+
+* Both differential panels now show a small **live mini-embedding** of the chosen
+  contrast, updating as you pick controls — *before* you Compute. In the DE panel,
+  `ident1` cells are drawn **red** and `ident2` (or "rest") **blue** over a faint grey
+  outline of the whole UMAP; in Pseudobulk, one coloured point per pseudobulk **sample**
+  is placed at that sample's medoid (showing how cells compact into their groups). It's
+  pure metadata + coordinates (no store query), stratified-subsampled for speed, and
+  driven by the same contrast-membership logic the compute uses, so the picture always
+  matches what will be tested. New exported view cores `view_contrast_preview()` and
+  `view_contrast_medoids()`.
+
 ## Faster, lighter live DE
 
 * Live DE (`scroll_de()`) reconstructs the contrast's sparse matrix with a

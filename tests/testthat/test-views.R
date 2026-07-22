@@ -169,3 +169,28 @@ test_that("toggles: split_by facets and overrides group_by", {
   v <- view_violin(cells, list(feature = "CD3D"), NULL, state = list(split_by = "condition"))
   expect_true(all(v$data$group %in% as.character(cells$condition)))
 })
+
+test_that("view_contrast_preview draws red/blue over a grey outline (placeholder on empty)", {
+  set.seed(1); n <- 200
+  cells <- data.frame(umap_1 = rnorm(n), umap_2 = rnorm(n),
+                      ct = sample(c("A", "B", "C"), n, replace = TRUE),
+                      stringsAsFactors = FALSE)
+  lab <- scroll:::.scroll_contrast_labels(cells, "ct", "A", "B")
+  expect_s3_class(view_contrast_preview(cells, "umap", lab), "ggplot")
+  # all-NA labels -> outline only, still a ggplot
+  expect_s3_class(view_contrast_preview(cells, "umap", rep(NA_character_, n)), "ggplot")
+  # no coordinates -> friendly placeholder, no error
+  expect_s3_class(view_contrast_preview(data.frame(ct = "A"), "umap", "group1"), "ggplot")
+})
+
+test_that("view_contrast_medoids emits exactly one point per sample", {
+  set.seed(1); n <- 300
+  cells <- data.frame(umap_1 = rnorm(n), umap_2 = rnorm(n),
+                      samp = sample(paste0("s", 1:6), n, replace = TRUE),
+                      stringsAsFactors = FALSE)
+  grp <- ifelse(cells$samp %in% c("s1", "s2", "s3"), "group1", "group2")
+  p <- view_contrast_medoids(cells, "umap", cells$samp, grp)
+  expect_s3_class(p, "ggplot")
+  b <- ggplot2::ggplot_build(p)
+  expect_equal(nrow(b$data[[length(b$data)]]), 6L)   # medoid layer: one point per sample
+})

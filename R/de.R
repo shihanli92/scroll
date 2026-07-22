@@ -37,25 +37,15 @@ scroll_de <- function(data, assay, group_col, ident1, ident2 = NULL, min_pct = 0
   if (!requireNamespace("presto", quietly = TRUE))
     stop("Live DE needs the 'presto' package.", call. = FALSE)
   cells <- cells %||% data$cells
-  g <- as.character(cells[[group_col]])
   ident1 <- as.character(ident1); ident1 <- ident1[nzchar(ident1)]
-  ident2 <- as.character(ident2); ident2 <- ident2[nzchar(ident2)]
   if (!length(ident1)) stop("Pick at least one level for group 1.", call. = FALSE)
-
-  in1 <- !is.na(g) & g %in% ident1
-  one_vs_rest <- !length(ident2) || "rest" %in% ident2
-  if (one_vs_rest) {
-    keep <- !is.na(g)                       # drop un-annotated cells (else NA labels)
-    labels <- ifelse(in1, "group1", "rest")
-  } else {
-    in2 <- !is.na(g) & g %in% ident2
-    keep <- in1 | in2                       # in1 wins if a level is in both
-    labels <- ifelse(in1, "group1", "group2")
-  }
+  # per-cell label ("group1" / "group2" / "rest", NA = not in the contrast); the
+  # single source of truth shared with the panel's live contrast preview.
+  lab <- .scroll_contrast_labels(cells, group_col, ident1, ident2)
   # `.gidx` rides on the cells handle; `kept` indexes the tested cells.
   gidx <- if (!is.null(cells$.gidx)) cells$.gidx else seq_len(nrow(cells))
-  kept <- which(keep)
-  labels <- labels[keep]
+  kept <- which(!is.na(lab))
+  labels <- lab[kept]
   # optional per-group cap: down-sample each side to <= max_cells so a large
   # contrast stays bounded in time + peak RAM (Wilcoxon on a subsample is a
   # standard marker shortcut). Deterministic + RNG-neutral (see .scroll_cap_groups).
@@ -109,6 +99,24 @@ scroll_de <- function(data, assay, group_col, ident1, ident2 = NULL, min_pct = 0
     p_val_adj = signif(res$padj, 3),
     row.names = NULL, stringsAsFactors = FALSE
   )
+}
+
+# Per-cell contrast label aligned to the rows of `cells`: "group1" (a cell whose
+# `group_col` value is in `ident1`), "group2" (in `ident2`), "rest" (one-vs-rest:
+# any other annotated cell), or NA for a cell not in the contrast (un-annotated,
+# or outside both idents in a two-group contrast). This is what `scroll_de()`
+# tests over AND what the DE panel's live preview colours, so the picture always
+# matches the computation. Empty `ident1` => everything NA (nothing selected).
+.scroll_contrast_labels <- function(cells, group_col, ident1, ident2 = NULL) {
+  ident1 <- as.character(ident1); ident1 <- ident1[nzchar(ident1)]
+  if (!length(ident1)) return(rep(NA_character_, nrow(cells)))
+  ident2 <- as.character(ident2); ident2 <- ident2[nzchar(ident2)]
+  g <- as.character(cells[[group_col]])
+  in1 <- !is.na(g) & g %in% ident1
+  if (!length(ident2) || "rest" %in% ident2)
+    ifelse(in1, "group1", ifelse(!is.na(g), "rest", NA_character_))
+  else
+    ifelse(in1, "group1", ifelse(!is.na(g) & g %in% ident2, "group2", NA_character_))
 }
 
 # Positions (into `labels`) keeping at most `max_cells` cells per group. The

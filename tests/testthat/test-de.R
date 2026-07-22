@@ -66,6 +66,26 @@ test_that("scroll_de max_cells caps cells per group and still returns markers", 
   expect_equal(res, scroll_de(data, "RNA", "celltype", ident1 = ident1, max_cells = 15))
 })
 
+test_that(".scroll_contrast_labels labels group1 / group2 / rest / NA", {
+  cells <- data.frame(ct = c("A", "A", "B", "C", NA), stringsAsFactors = FALSE)
+  expect_equal(scroll:::.scroll_contrast_labels(cells, "ct", "A"),
+               c("group1", "group1", "rest", "rest", NA))              # one-vs-rest
+  expect_equal(scroll:::.scroll_contrast_labels(cells, "ct", "A", "B"),
+               c("group1", "group1", "group2", NA, NA))                # two-group
+  expect_true(all(is.na(scroll:::.scroll_contrast_labels(cells, "ct", character(0)))))
+})
+
+test_that("de_server renders a live contrast preview without Compute", {
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  ct <- sort(unique(as.character(data$cells$celltype)))[[1]]
+  shiny::testServer(scroll:::de_server, args = list(data = data), {
+    session$setInputs(group = "celltype", ident1 = ct, ident2 = character(0))
+    session$elapse(200)                              # fire the debounce
+    expect_no_error(output$preview)                  # rendered without a Compute click
+  })
+})
+
 test_that("view_volcano renders from a DE result (and empty input)", {
   set.seed(1)
   de <- data.frame(gene = paste0("G", 1:50), logFC = stats::rnorm(50, 0, 1.5),

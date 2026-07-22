@@ -32,6 +32,8 @@ pseudobulk_de_ui <- function(id, data) {
         selectInput(ns("replicate"), "Replicate",
                     c("No replicate (pseudo)" = "no_replicate", stats::setNames(cats, cats))),
         if (length(assays) > 1) selectInput(ns("assay"), "Assay", assays, selected = m$default_assay)),
+      .scroll_group("Preview",                       # live: one coloured medoid per sample
+        plotOutput(ns("preview"), height = "170px")),
       .scroll_group("Pseudobulk",
         sliderInput(ns("mincells"), "Min cells / sample", 3, 200, 10, 1),
         numericInput(ns("npseudo"), "Pseudo-reps (if no replicate)", 3, min = 2, max = 10),
@@ -79,6 +81,23 @@ pseudobulk_de_server <- function(id, data, cells_r = reactive(data$cells)) {
                            selected = intersect(isolate(input$ident1), combos))
       updateSelectizeInput(session, "ident2", choices = combos,
                            selected = intersect(isolate(input$ident2), combos))
+    })
+
+    # Live sample preview (NOT gated by Compute): grey embedding outline + one
+    # coloured point per pseudobulk sample at its medoid (red = group1, blue =
+    # group2), so users see how cells compact into samples as they pick controls.
+    preview_in <- .scroll_cosmetic(reactive(list(
+      cells = cells_r(), agg = input$aggregate_by, ident1 = input$ident1,
+      ident2 = input$ident2, rep = input$replicate,
+      emb = .scroll_default(data, "default_embedding", .scroll_global_embeddings(m)[[1]]))))
+    output$preview <- renderPlot({
+      p <- preview_in(); req(length(p$agg) > 0, p$emb)
+      combo <- .scroll_combo_levels(p$cells, p$agg)
+      grp <- .scroll_combo_group(combo, p$ident1, p$ident2)
+      samp <- if (!is.null(p$rep) && nzchar(p$rep) && p$rep != "no_replicate" &&
+                  p$rep %in% names(p$cells))
+                paste(combo, as.character(p$cells[[p$rep]]), sep = " :: ") else combo
+      view_contrast_medoids(p$cells, p$emb, samp, grp)
     })
 
     # stability = re-run the pseudo-replication K times (pseudo mode only). The

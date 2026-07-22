@@ -256,6 +256,102 @@ view_umap_colorby <- function(cells, params, state = list()) {
   .scroll_finish_scatter(p, df, state)
 }
 
+# --- live contrast previews (DE + Pseudobulk panels) --------------------------
+
+# A borderless ggplot with a centred message, for empty/degenerate preview states.
+.scroll_preview_empty <- function(msg = "Pick a contrast") {
+  ggplot2::ggplot() + ggplot2::theme_void() +
+    ggplot2::annotate("text", x = 0, y = 0, label = msg, size = 3.4, colour = "grey55")
+}
+
+# Faint grey outline of the whole embedding (all cells, subsampled to n_bg for
+# speed); the shared backdrop the contrast previews draw coloured points onto.
+# Returns NULL when the embedding has no coordinates in `cells`.
+.scroll_umap_outline <- function(cells, embedding, n_bg = 2000L) {
+  if (!all(c(sprintf("%s_1", embedding), sprintf("%s_2", embedding)) %in% names(cells)))
+    return(NULL)
+  df <- .scroll_embedding_xy(cells, embedding)
+  if (!nrow(df)) return(NULL)
+  if (nrow(df) > n_bg) df <- df[sample(nrow(df), n_bg), , drop = FALSE]
+  ggplot2::ggplot(df, ggplot2::aes(x = .data$.x, y = .data$.y)) +
+    .scroll_point_layer(color = "grey86", size = 0.35, alpha = 0.55,
+                        raster = nrow(df) > .scroll_raster_threshold) +
+    ggplot2::coord_fixed() + ggplot2::theme_void() +
+    ggplot2::theme(legend.position = "none",
+                   plot.subtitle = ggplot2::element_text(size = 8, colour = "grey40"))
+}
+
+#' Live DE contrast preview: cells coloured by contrast membership
+#'
+#' A compact mini-embedding for the DE panel: the whole embedding as a faint grey
+#' outline, with `ident1` cells **red** and `ident2` (or "rest") cells **blue** on
+#' top. Pure metadata + coordinates (no store query), so it can update live as the
+#' contrast controls change, showing exactly the cells `scroll_de()` would test.
+#'
+#' @param cells The cells data.frame (must carry the embedding's `_1`/`_2` coords).
+#' @param embedding Reduction name; coordinates read from `<embedding>_1`/`_2`.
+#' @param labels Per-cell contrast label ("group1" / "group2" / "rest" / `NA`), as
+#'   produced by the DE panel from the current picks.
+#' @param cap Max coloured cells drawn per group (stratified sample, for speed).
+#' @return A ggplot.
+#' @export
+view_contrast_preview <- function(cells, embedding, labels, cap = 500L) {
+  base <- .scroll_umap_outline(cells, embedding)
+  if (is.null(base)) return(.scroll_preview_empty("No embedding coordinates"))
+  n1 <- sum(labels == "group1", na.rm = TRUE)
+  n2 <- sum(labels %in% c("group2", "rest"), na.rm = TRUE)
+  if (!n1 && !n2)
+    return(base + ggplot2::labs(subtitle = "Pick Group 1 to preview the contrast"))
+  cells$.lab <- as.character(labels)
+  fg <- cells[!is.na(cells$.lab) & cells$.lab %in% c("group1", "group2", "rest"), , drop = FALSE]
+  fg <- .scroll_embedding_xy(fg, embedding)
+  if (nrow(fg)) fg <- fg[.scroll_cap_groups(fg$.lab, cap), , drop = FALSE]
+  lbl2 <- if (any(labels == "rest", na.rm = TRUE)) "rest" else "group2"
+  base +
+    .scroll_point_layer(ggplot2::aes(color = .data$.lab), data = fg, size = 1.0, alpha = 0.9) +
+    ggplot2::scale_color_manual(
+      values = c(group1 = "#B2182B", group2 = "#2166AC", rest = "#2166AC"), guide = "none") +
+    ggplot2::labs(subtitle = sprintf("group1: %s    %s: %s",
+                                     format(n1, big.mark = ","), lbl2,
+                                     format(n2, big.mark = ",")))
+}
+
+#' Live Pseudobulk preview: sample medoids over the embedding outline
+#'
+#' For the Pseudobulk panel: the embedding as a faint grey outline with one
+#' coloured point per pseudobulk **sample**, placed at that sample's medoid (the
+#' member cell nearest the sample's centroid) — group1 **red**, group2 **blue**.
+#' Shows how cells compact into their aggregation groups. Pure metadata + coords.
+#'
+#' @param cells The cells data.frame (must carry the embedding's `_1`/`_2` coords).
+#' @param embedding Reduction name.
+#' @param sample Per-cell pseudobulk-sample id (a combined level, optionally
+#'   crossed with a replicate level).
+#' @param group Per-cell group label ("group1" / "group2" / `NA`).
+#' @return A ggplot.
+#' @export
+view_contrast_medoids <- function(cells, embedding, sample, group) {
+  base <- .scroll_umap_outline(cells, embedding)
+  if (is.null(base)) return(.scroll_preview_empty("No embedding coordinates"))
+  cells$.samp <- as.character(sample)
+  cells$.grp  <- as.character(group)
+  d <- .scroll_embedding_xy(cells, embedding)
+  d <- d[!is.na(d$.grp) & !is.na(d$.samp) & d$.grp %in% c("group1", "group2"), , drop = FALSE]
+  if (!nrow(d)) return(base + ggplot2::labs(subtitle = "Pick Group 1 to preview the samples"))
+  meds <- do.call(rbind, lapply(split(seq_len(nrow(d)), d$.samp), function(ix) {
+    cx <- mean(d$.x[ix]); cy <- mean(d$.y[ix])
+    j <- ix[which.min((d$.x[ix] - cx)^2 + (d$.y[ix] - cy)^2)]     # cell nearest centroid
+    data.frame(.x = d$.x[j], .y = d$.y[j], .grp = d$.grp[j], stringsAsFactors = FALSE)
+  }))
+  base +
+    ggplot2::geom_point(ggplot2::aes(x = .data$.x, y = .data$.y, color = .data$.grp),
+                        data = meds, size = 2.6, alpha = 0.95) +
+    ggplot2::scale_color_manual(
+      values = c(group1 = "#B2182B", group2 = "#2166AC"), guide = "none") +
+    ggplot2::labs(subtitle = sprintf("pseudobulk samples: group1 = %d, group2 = %d",
+                                     sum(meds$.grp == "group1"), sum(meds$.grp == "group2")))
+}
+
 #' Embedding colored by a feature's expression
 #'
 #' @param cells The globally-loaded cells data.frame.

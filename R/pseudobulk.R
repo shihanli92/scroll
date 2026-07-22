@@ -12,6 +12,21 @@
   combo
 }
 
+# Group label ("group1" / "group2" / NA) for each cell given its combined level.
+# NA = not in the contrast (its combo is NA, or it is outside both idents in a
+# two-group contrast). Shared by scroll_pseudobulk_de() and the panel's live
+# preview so the preview matches what the compute aggregates. Empty ident1 => NA.
+.scroll_combo_group <- function(combo, ident1, ident2 = NULL) {
+  ident1 <- as.character(ident1); ident1 <- ident1[nzchar(ident1)]
+  if (!length(ident1)) return(rep(NA_character_, length(combo)))
+  ident2 <- as.character(ident2); ident2 <- ident2[nzchar(ident2)]
+  in1 <- !is.na(combo) & combo %in% ident1
+  if (!length(ident2) || "rest" %in% ident2)
+    ifelse(in1, "group1", ifelse(!is.na(combo), "group2", NA_character_))
+  else
+    ifelse(in1, "group1", ifelse(!is.na(combo) & combo %in% ident2, "group2", NA_character_))
+}
+
 .rbind_or_empty <- function(out)
   if (length(out)) do.call(rbind, out) else
     data.frame(cell = character(), psample = character(), group = character())
@@ -106,10 +121,7 @@ scroll_pseudobulk_de <- function(data, assay, aggregate_cols, ident1, ident2 = N
   if (!length(ident1)) stop("Pick at least one Group 1 level.", call. = FALSE)
 
   combo <- .scroll_combo_levels(cells, aggregate_cols)
-  in1 <- combo %in% ident1
-  one_vs_rest <- !length(ident2) || "rest" %in% ident2
-  grp <- if (one_vs_rest) ifelse(in1, "group1", "group2")
-         else ifelse(in1, "group1", ifelse(combo %in% ident2, "group2", NA_character_))
+  grp <- .scroll_combo_group(combo, ident1, ident2)   # "group1"/"group2"/NA per cell
 
   rep_vals <- if (!is.null(replicate_col) && replicate_col %in% names(cells))
                 as.character(cells[[replicate_col]]) else NA_character_

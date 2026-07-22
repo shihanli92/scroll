@@ -169,3 +169,24 @@ test_that("pseudobulk_de_server runs stability mode (runs > 1, no_replicate)", {
     expect_false(is.null(output$plot))
   })
 })
+
+test_that(".scroll_combo_group labels group1 / group2 / NA from combined levels", {
+  combo <- c("X | 0", "X | 1", "Y | 0", NA)
+  expect_equal(scroll:::.scroll_combo_group(combo, "X | 0"),
+               c("group1", "group2", "group2", NA))                 # one-vs-rest
+  expect_equal(scroll:::.scroll_combo_group(combo, "X | 0", "Y | 0"),
+               c("group1", NA, "group2", NA))                       # two-group
+  expect_true(all(is.na(scroll:::.scroll_combo_group(combo, character(0)))))
+})
+
+test_that("pseudobulk_de_server renders a live sample preview without Compute", {
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  ct <- sort(unique(as.character(data$cells$celltype)))[[1]]
+  shiny::testServer(scroll:::pseudobulk_de_server, args = list(data = data), {
+    session$setInputs(aggregate_by = "celltype", ident1 = ct, ident2 = character(0),
+                      replicate = "no_replicate")
+    session$elapse(200)
+    expect_no_error(output$preview)
+  })
+})
