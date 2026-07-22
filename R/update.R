@@ -30,12 +30,16 @@
 #' @param subsets Optional named list of subset-view specs (as in [scroll_build()]);
 #'   defaults to any spec attached by [scroll_add_subset()]. Their embeddings /
 #'   meta must be present after this update (existing or newly added).
+#' @param max_levels Cap on cached categorical `levels:` per column, as in
+#'   [scroll_build()] (default 200). Columns above it record only `n_levels` and
+#'   the app recomputes the level set at runtime.
 #' @param verbose If `TRUE`, report what was written.
 #' @return `dir`, invisibly.
 #' @seealso [scroll_build()], [scroll_add_subset()]
 #' @export
 scroll_update <- function(dir, object, embeddings = NULL, meta_cols = NULL,
-                          subsets = NULL, verbose = interactive()) {
+                          subsets = NULL, max_levels = .SCROLL_MAX_LEVELS,
+                          verbose = interactive()) {
   .scroll_need_seurat()
   cells_path <- file.path(dir, "cells.parquet")
   if (!file.exists(cells_path))
@@ -92,14 +96,11 @@ scroll_update <- function(dir, object, embeddings = NULL, meta_cols = NULL,
   for (col in meta_cols) {
     sc <- if (col %in% names(scope_map)) scope_map[[col]] else NULL
     v <- if (!is.null(sc) && !is.null(member[[sc]])) cells[[col]][member[[sc]]] else cells[[col]]
-    entry <- if (is.character(v) || is.factor(v) || is.logical(v))
-      list(type = "categorical", levels = as.list(sort(unique(as.character(v)))))
-    else
-      list(type = "numeric",
-           range = list(min = min(v, na.rm = TRUE), max = max(v, na.rm = TRUE)))
+    entry <- .scroll_meta_entry(v, max_levels)
     if (!is.null(sc)) entry$scope <- sc
     man$meta[[col]] <- entry
   }
+  if (length(meta_cols)) .scroll_report_trimmed(man$meta[meta_cols])
 
   if (!is.null(subs_norm)) {
     for (nm in names(subs_norm)) {

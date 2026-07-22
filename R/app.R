@@ -303,7 +303,7 @@ scroll_reset_panels <- function() {
 .scroll_wire <- function(input, output, session, data, panels) {
   active_view <- reactive(.scroll_nz(input$scroll_view))
   active_cells <- .scroll_active_cells(input, data, active_view)
-  .scroll_bind_subset_control(input, session, data$manifest)
+  .scroll_bind_subset_control(input, session, data)
   .scroll_render_ncells(output, data$manifest, active_cells, active_view)
   .scroll_mount_panels(data, panels, active_cells, active_view)
 }
@@ -320,10 +320,12 @@ scroll_reset_panels <- function() {
 }
 
 # Repopulate the app-bar subset-value selectize when its column changes.
-.scroll_bind_subset_control <- function(input, session, m) {
+# server = TRUE streams choices incrementally, so this stays fast even for a
+# high-cardinality column (whose levels are recomputed from cells, not cached).
+.scroll_bind_subset_control <- function(input, session, data) {
   observeEvent(input$scroll_subset_col, {
     col <- .scroll_nz(input$scroll_subset_col)
-    lv <- if (is.null(col)) character(0) else unlist(m$meta[[col]]$levels)
+    lv <- if (is.null(col)) character(0) else .scroll_meta_levels(data, col)
     updateSelectizeInput(session, "scroll_subset_val", choices = lv,
                          selected = character(0), server = TRUE)
   })

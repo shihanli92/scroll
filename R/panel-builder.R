@@ -68,7 +68,7 @@ scroll_features <- function(data, assay = NULL)
 #' @export
 scroll_bind_levels <- function(input, session, id, from, data, selected = 1,
                                control_ids = character()) {
-  levs <- function(col) unlist(data$manifest$meta[[col]]$levels)
+  levs <- function(col) .scroll_meta_levels(data, col)
   pick <- function(lv) {
     if (identical(selected, "none") || !length(lv)) character(0)
     else if (is.numeric(selected)) lv[selected[selected <= length(lv)]]

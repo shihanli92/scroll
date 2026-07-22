@@ -102,6 +102,15 @@ Doubling the cell count adds a few hundred MB of metadata, not tens of GB of mat
 Large scatters (millions of points) rasterize on screen automatically (via `scattermore`,
 a Suggests) and still export as vector.
 
+### High-cardinality metadata
+
+A large merge often carries columns with thousands of distinct values — a clone id, a
+barcode, a per-cell sample id. `scroll_build()` (and `scroll_build_stream()`) will not inline
+all of those into `manifest.yaml`: above `max_levels` (default 200) a categorical column
+stores only its `n_levels` count, and the app recomputes the level set from `cells.parquet`
+when a control needs it. The manifest stays small and hand-editable, and the column remains
+fully usable. Raise `max_levels` if you want the level list cached in the manifest.
+
 ## A runnable example
 
 Two small synthetic "sources" streamed into one store, then queried — the same shape as a

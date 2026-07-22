@@ -45,12 +45,31 @@
 .scroll_assays_of <- function(m) names(m$assays)
 .scroll_features_of <- function(m, assay) unlist(m$assays[[assay]]$features)
 
+# Distinct-value count of a categorical column. `n_levels` is always written by
+# recent builds; fall back to the cached `levels` length for older manifests.
+.scroll_n_levels <- function(m, col) {
+  m$meta[[col]]$n_levels %||% length(m$meta[[col]]$levels)
+}
+
+# The level set of a categorical column. The manifest caches `levels` only up to
+# `max_levels` (see `.scroll_meta_entry`); above that the cache is absent and we
+# recompute from the in-RAM cells table (cheap; NA -> a missing category, which
+# for a subset-scoped column drops non-members, matching the build-time scoping).
+.scroll_meta_levels <- function(data, col) {
+  lv <- data$manifest$meta[[col]]$levels
+  if (!is.null(lv)) return(unlist(lv, use.names = FALSE))
+  v <- data$cells[[col]]
+  if (is.null(v)) return(character(0))
+  sort(unique(as.character(v[!is.na(v)])))
+}
+
 # Is there a categorical column with >=2 levels, i.e. a grouping a contrast can
 # be built from? DE/Pseudobulk are pointless without one (e.g. a single-region
-# Visium slide has `region` but only one level), so they gate on this.
+# Visium slide has `region` but only one level), so they gate on this. Uses the
+# level *count* so a high-cardinality column (levels uncached) still qualifies.
 .scroll_has_contrast <- function(m) {
   cats <- .scroll_cat_cols(m)
-  any(vapply(cats, function(c) length(m$meta[[c]]$levels) >= 2, logical(1)))
+  any(vapply(cats, function(c) .scroll_n_levels(m, c) >= 2, logical(1)))
 }
 .scroll_subset_names <- function(m) names(m$subsets)
 
@@ -116,7 +135,14 @@
 # vector (NULL until set). A panel wires them by: adding "Manual" to its palette
 # choices, a `uiOutput(ns("manual"))`, and passing `manual_colors` into the view
 # state (which `.scroll_group_colors` honours when palette == "Manual").
+# Above this many levels, per-level colour pickers become an unusable wall of
+# widgets (and a DOM blow-up), so fall back to a note pointing at a palette.
+.SCROLL_MANUAL_CAP <- 30L
 .scroll_manual_ui <- function(ns, levels) {
+  if (length(levels) > .SCROLL_MANUAL_CAP)
+    return(tags$p(class = "scroll-desc",
+                  sprintf("Manual colours are unavailable for %d-level columns - pick a palette instead.",
+                          length(levels))))
   defaults <- .scroll_discrete_colors(levels, "Tableau 10")
   # compact circular swatches that wrap into rows (rather than tall full-width
   # inputs), so many levels stay manageable; the level name is a caption + title.

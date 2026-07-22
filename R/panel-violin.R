@@ -53,7 +53,7 @@ violin_server <- function(id, data, cells_r = reactive(data$cells),
       updateSelectizeInput(session, "feature", choices = feats, server = TRUE, selected = keep)
     })
     # per-group color pickers when the palette is "Manual" (levels of Group by)
-    lvl_r <- reactive({ req(input$group); unlist(m$meta[[input$group]]$levels) })
+    lvl_r <- reactive({ req(input$group); .scroll_meta_levels(data, input$group) })
     output$manual <- renderUI(
       if (identical(input$palette, "Manual")) .scroll_manual_ui(session$ns, lvl_r()))
     manual_colors <- reactive(
