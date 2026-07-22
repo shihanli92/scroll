@@ -3,6 +3,21 @@
 First development release. `scroll` turns a processed Seurat object into a
 polished, flat-RAM interactive single-cell explorer.
 
+## Faster, lighter live DE
+
+* Live DE (`scroll_de()`) reconstructs the contrast's sparse matrix with a
+  reverse-index gather instead of `match()` over tens of millions of cell ids, and
+  frees the long (feature, cell, value) table **before** allocating the matrix so
+  the two never coexist. On a 44k-cell one-vs-rest contrast this cut **peak memory
+  ~2.3×** (≈5.9 GB → ≈2.6 GB) with byte-identical results — enough to stop the
+  swapping that made DE crawl on a 16 GB server.
+* New `scroll_de(max_cells = )` + a **"Max cells / group"** control in the DE panel
+  (default off) down-sample each side of a contrast to bound DE time and memory on
+  large or many-cell datasets — a standard marker-detection shortcut (cf. Seurat's
+  `max.cells.per.ident`); e.g. capping at 5,000/group ran ~4× faster with an
+  unchanged top-marker list. The subsample is deterministic and leaves the session
+  RNG untouched.
+
 ## Expression store: first-letter bucketing
 
 * The expression store now partitions by the feature's **case-folded first

@@ -41,6 +41,31 @@ test_that("scroll_de pools multiple levels per group", {
   expect_gt(nrow(scroll_de(data, "RNA", "celltype", ident1 = cts[1:2])), 0)
 })
 
+test_that(".scroll_cap_groups caps per group, deterministic, RNG-neutral", {
+  labels <- rep(c("group1", "rest"), c(50, 80))
+  sel <- scroll:::.scroll_cap_groups(labels, 20)
+  expect_equal(sum(labels[sel] == "group1"), 20)      # each side capped to 20
+  expect_equal(sum(labels[sel] == "rest"), 20)
+  expect_identical(sel, scroll:::.scroll_cap_groups(labels, 20))   # deterministic
+  expect_equal(scroll:::.scroll_cap_groups(labels, 1000),          # cap > size keeps all
+               sort(seq_along(labels)))
+  # the caller's RNG stream is preserved (next draw unaffected by the cap call)
+  set.seed(99); invisible(runif(1)); want <- runif(1)
+  set.seed(99); invisible(runif(1)); invisible(scroll:::.scroll_cap_groups(labels, 20))
+  expect_equal(runif(1), want)
+})
+
+test_that("scroll_de max_cells caps cells per group and still returns markers", {
+  skip_if_not_installed("presto")
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  ident1 <- sort(unique(as.character(data$cells$celltype)))[[1]]
+  res <- scroll_de(data, "RNA", "celltype", ident1 = ident1, max_cells = 15)
+  expect_true(all(c("gene", "logFC", "p_val_adj") %in% names(res)))
+  expect_gt(nrow(res), 0)
+  expect_equal(res, scroll_de(data, "RNA", "celltype", ident1 = ident1, max_cells = 15))
+})
+
 test_that("view_volcano renders from a DE result (and empty input)", {
   set.seed(1)
   de <- data.frame(gene = paste0("G", 1:50), logFC = stats::rnorm(50, 0, 1.5),

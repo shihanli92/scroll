@@ -11,7 +11,8 @@ scroll_de(
   ident1,
   ident2 = NULL,
   min_pct = 0.1,
-  cells = NULL
+  cells = NULL,
+  max_cells = NULL
 )
 }
 \arguments{
@@ -30,6 +31,13 @@ one-vs-rest (every cell not in \code{ident1}).}
 
 \item{cells}{Cells to test over (default \code{data$cells}); pass a subset to run
 DE within an active cell-subset filter.}
+
+\item{max_cells}{Optional cap on cells \strong{per group}. When set (a positive
+number), each side is randomly down-sampled to at most \code{max_cells} cells
+before testing, which bounds DE time and peak memory on large contrasts
+(a standard marker-detection shortcut; cf. Seurat's \code{max.cells.per.ident}).
+\code{NULL} (default) uses every cell. The subsample is deterministic (fixed
+seed) so repeated runs match, and the session RNG is left untouched.}
 }
 \value{
 A data.frame of results, ranked by adjusted p-value.

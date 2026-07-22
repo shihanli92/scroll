@@ -20,7 +20,8 @@ de_ui <- function(id, data) {
         selectizeInput(ns("ident2"), "vs.", choices = NULL, multiple = TRUE,
                        options = list(plugins = list("remove_button"),
                                       placeholder = "rest (all other cells)")),
-        if (length(assays) > 1) selectInput(ns("assay"), "Assay", assays, selected = m$default_assay)),
+        if (length(assays) > 1) selectInput(ns("assay"), "Assay", assays, selected = m$default_assay),
+        numericInput(ns("maxcells"), "Max cells / group (0 = all)", 0, min = 0, step = 500)),
       .scroll_group("Table",
         sliderInput(ns("minpct"), "Min % expressing", 0, 50, 10, 1),
         sliderInput(ns("topn"), "Show top", 10, 300, 50, 10),
@@ -71,7 +72,8 @@ de_server <- function(id, data, cells_r = reactive(data$cells),
       tryCatch(
         list(ok = scroll_de(data, assay(), input$group, input$ident1,
                             if (length(input$ident2)) input$ident2 else NULL,
-                            min_pct = 0, cells = cells_r())),
+                            min_pct = 0, cells = cells_r(),
+                            max_cells = if (isTRUE(input$maxcells > 0)) input$maxcells else NULL)),
         error = function(e) list(err = conditionMessage(e)))
     })
 
