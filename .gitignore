@@ -10,3 +10,11 @@ examples/*/project*/
 examples/**/*.rds
 inst/doc
 docs/
+
+# Built artifacts: package tarballs and deploy bundles are regenerable, often large,
+# and must never be committed (*.tar.gz was already in .Rbuildignore but not here).
+*.tar.gz
+*.zip
+
+# Local dev/scratch scripts (dataset-specific; not part of the package)
+dev/

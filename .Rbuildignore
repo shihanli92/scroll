@@ -15,3 +15,5 @@
 ^codecov\.yml$
 ^CLAUDE\.md$
 ^\.claude$
+^dev$
+^dev/
