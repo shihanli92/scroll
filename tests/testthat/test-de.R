@@ -73,6 +73,21 @@ test_that(".scroll_contrast_labels labels group1 / group2 / rest / NA", {
   expect_equal(scroll:::.scroll_contrast_labels(cells, "ct", "A", "B"),
                c("group1", "group1", "group2", NA, NA))                # two-group
   expect_true(all(is.na(scroll:::.scroll_contrast_labels(cells, "ct", character(0)))))
+  # multiple grouping columns -> interaction levels
+  cells2 <- data.frame(a = c("x", "x", "y", "y"), b = c("1", "2", "1", "2"),
+                       stringsAsFactors = FALSE)
+  expect_equal(scroll:::.scroll_contrast_labels(cells2, c("a", "b"), "x | 1", "y | 2"),
+               c("group1", NA, NA, "group2"))
+})
+
+test_that("scroll_de groups by multiple columns (interaction levels)", {
+  skip_if_not_installed("presto")
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  combos <- scroll:::.scroll_combo_choices(data$cells, c("condition", "celltype"))
+  res <- scroll_de(data, "RNA", c("condition", "celltype"), ident1 = combos[[1]])
+  expect_true(all(c("gene", "logFC", "p_val_adj") %in% names(res)))
+  expect_gt(nrow(res), 0)
 })
 
 test_that("de_server renders a live contrast preview without Compute", {
@@ -83,6 +98,19 @@ test_that("de_server renders a live contrast preview without Compute", {
     session$setInputs(group = "celltype", ident1 = ct, ident2 = character(0))
     session$elapse(200)                              # fire the debounce
     expect_no_error(output$preview)                  # rendered without a Compute click
+  })
+})
+
+test_that("de_server accepts a multi-column group-by (interaction levels)", {
+  skip_if_not_installed("presto")
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  combos <- scroll:::.scroll_combo_choices(data$cells, c("condition", "celltype"))
+  shiny::testServer(scroll:::de_server, args = list(data = data), {
+    session$setInputs(group = c("condition", "celltype"), ident1 = combos[[1]],
+                      ident2 = "rest", minpct = 0, topn = 20, lfc = 1, padj = 0.05,
+                      labeln = 10, aspect = 1, maxcells = 0, compute = 1)
+    expect_gt(nrow(de_df()), 0)                      # DE ran on the combined grouping
   })
 })
 

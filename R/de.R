@@ -12,7 +12,10 @@
 #'
 #' @param data A scroll data handle (`con`, `cells`, `manifest`).
 #' @param assay Assay to test.
-#' @param group_col Metadata column defining the groups.
+#' @param group_col Metadata column(s) defining the groups. Naming several columns
+#'   compares their **interaction levels** (e.g. `c("genotype", "timepoint")` gives
+#'   groups like `"KO | d7"`); `ident1`/`ident2` then select which combined levels
+#'   form each side.
 #' @param ident1 One or more levels of `group_col` forming the group of interest.
 #' @param ident2 One or more comparison levels, or `NULL`/`"rest"` for
 #'   one-vs-rest (every cell not in `ident1`).
@@ -102,16 +105,18 @@ scroll_de <- function(data, assay, group_col, ident1, ident2 = NULL, min_pct = 0
 }
 
 # Per-cell contrast label aligned to the rows of `cells`: "group1" (a cell whose
-# `group_col` value is in `ident1`), "group2" (in `ident2`), "rest" (one-vs-rest:
-# any other annotated cell), or NA for a cell not in the contrast (un-annotated,
-# or outside both idents in a two-group contrast). This is what `scroll_de()`
-# tests over AND what the DE panel's live preview colours, so the picture always
-# matches the computation. Empty `ident1` => everything NA (nothing selected).
-.scroll_contrast_labels <- function(cells, group_col, ident1, ident2 = NULL) {
+# grouping value is in `ident1`), "group2" (in `ident2`), "rest" (one-vs-rest: any
+# other annotated cell), or NA for a cell not in the contrast (un-annotated, or
+# outside both idents in a two-group contrast). `group_cols` may name several
+# metadata columns, which are combined into interaction levels ("a | b"), so the
+# idents are combined levels. This is what `scroll_de()` tests over AND what the
+# DE panel's live preview colours, so the picture always matches the computation.
+# Empty `ident1` => everything NA (nothing selected).
+.scroll_contrast_labels <- function(cells, group_cols, ident1, ident2 = NULL) {
   ident1 <- as.character(ident1); ident1 <- ident1[nzchar(ident1)]
   if (!length(ident1)) return(rep(NA_character_, nrow(cells)))
   ident2 <- as.character(ident2); ident2 <- ident2[nzchar(ident2)]
-  g <- as.character(cells[[group_col]])
+  g <- .scroll_combo_levels(cells, group_cols)   # 1 col => that col; many => "a | b"
   in1 <- !is.na(g) & g %in% ident1
   if (!length(ident2) || "rest" %in% ident2)
     ifelse(in1, "group1", ifelse(!is.na(g), "rest", NA_character_))

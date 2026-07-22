@@ -3,6 +3,15 @@
 First development release. `scroll` turns a processed Seurat object into a
 polished, flat-RAM interactive single-cell explorer.
 
+## DE: group by multiple columns
+
+* The live-DE panel's **Group by** is now multi-select: naming several categorical
+  columns compares their **interaction levels** (e.g. `genotype` + `timepoint` gives
+  groups like `"KO | d7"`), and the `ident1`/`ident2` selectors pick which combined
+  levels form each side — matching how the Pseudobulk panel already groups.
+  `scroll_de(group_col = c("genotype", "timepoint"))` accepts a column vector too.
+  A single column behaves exactly as before.
+
 ## Live contrast preview (DE + Pseudobulk)
 
 * Both differential panels now show a small **live mini-embedding** of the chosen

@@ -14,7 +14,8 @@ de_ui <- function(id, data) {
     div(
       class = "scroll-controls",
       .scroll_group("Contrast",
-        selectInput(ns("group"), "Group by", stats::setNames(cats, cats), selected = cats[[1]]),
+        selectizeInput(ns("group"), "Group by", stats::setNames(cats, cats), multiple = TRUE,
+                       selected = cats[[1]], options = list(plugins = list("remove_button"))),
         selectizeInput(ns("ident1"), "Group 1", choices = NULL, multiple = TRUE,
                        options = list(plugins = list("remove_button"))),
         selectizeInput(ns("ident2"), "vs.", choices = NULL, multiple = TRUE,
@@ -62,12 +63,24 @@ de_server <- function(id, data, cells_r = reactive(data$cells),
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     assay <- reactive(input$assay %||% m$default_assay)
-    .scroll_bind_view_cats(input, session, view_r, m, "group")
 
-    observeEvent(input$group, {
-      lv <- .scroll_meta_levels(data, input$group)
-      updateSelectizeInput(session, "ident1", choices = lv, selected = lv[[1]])
-      updateSelectizeInput(session, "ident2", choices = lv, selected = character(0))
+    # Group-by may combine several categorical columns into interaction levels
+    # (e.g. "genotype | timepoint"); the idents then pick which combos form each
+    # side. The column choices track the active subset view (scoped columns).
+    observeEvent(view_r(), {
+      cats <- .scroll_cat_cols(m, view_r())
+      sel <- intersect(input$group, cats); if (!length(sel)) sel <- cats[[1]]
+      updateSelectizeInput(session, "group", choices = stats::setNames(cats, cats), selected = sel)
+    }, ignoreNULL = FALSE)
+
+    observeEvent(list(input$group, cells_r()), {
+      req(length(input$group) > 0)
+      combos <- .scroll_combo_choices(cells_r(), input$group)     # interaction levels
+      cur1 <- intersect(isolate(input$ident1), combos)
+      if (!length(cur1) && length(combos)) cur1 <- combos[[1]]    # default a ready contrast
+      updateSelectizeInput(session, "ident1", choices = combos, selected = cur1)
+      updateSelectizeInput(session, "ident2", choices = combos,
+                           selected = intersect(isolate(input$ident2), combos))
     })
 
     # Live contrast preview (NOT gated by Compute): a mini-UMAP showing which cells

@@ -20,7 +20,10 @@ scroll_de(
 
 \item{assay}{Assay to test.}
 
-\item{group_col}{Metadata column defining the groups.}
+\item{group_col}{Metadata column(s) defining the groups. Naming several columns
+compares their \strong{interaction levels} (e.g. \code{c("genotype", "timepoint")} gives
+groups like \code{"KO | d7"}); \code{ident1}/\code{ident2} then select which combined levels
+form each side.}
 
 \item{ident1}{One or more levels of \code{group_col} forming the group of interest.}
 
