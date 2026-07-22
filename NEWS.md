@@ -17,6 +17,13 @@ polished, flat-RAM interactive single-cell explorer.
   `max.cells.per.ident`); e.g. capping at 5,000/group ran ~4× faster with an
   unchanged top-marker list. The subsample is deterministic and leaves the session
   RNG untouched.
+* The DE and Pseudobulk **Compute** buttons are now `bslib::input_task_button`s:
+  clicking one immediately turns it into a disabled spinner labelled "Computing…"
+  until results return. Previously the only progress cue was an output-area spinner
+  that needed the optional `shinycssloaders` package — absent on many deploy
+  servers, users saw nothing happen during the multi-second compute and assumed the
+  app had frozen. The task button needs only `bslib` (already required) and gives
+  clear feedback right where the user clicked.
 
 ## Expression store: first-letter bucketing
 

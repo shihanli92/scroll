@@ -47,7 +47,10 @@ pseudobulk_de_ui <- function(id, data) {
         numericInput(ns("padj"), "Adj. p cutoff", 0.05, min = 0, max = 1, step = 0.01),
         sliderInput(ns("labeln"), "Label top", 0, 40, 15, 1),
         .scroll_aspect_input(ns)),
-      actionButton(ns("compute"), "Compute pseudobulk DE", class = "btn-primary", width = "100%")
+      # input_task_button: the button shows a spinner + "Computing..." and disables
+      # the instant it is clicked (immediate feedback during the blocking compute).
+      bslib::input_task_button(ns("compute"), "Compute pseudobulk DE", type = "primary",
+                               label_busy = "Computing...", class = "w-100")
     ),
     div(class = "scroll-plot",
         uiOutput(ns("note")),
