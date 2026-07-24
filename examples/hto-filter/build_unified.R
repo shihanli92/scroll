@@ -124,6 +124,10 @@ cfg$default_embedding <- "umap"
 cfg$markers <- c("Cd3d","Cd8a","Il7r","Ccr7","Cd101","Cx3cr1","Tcf7","Mki67")
 yaml::write_yaml(cfg, file.path(outdir, "config.yaml"))
 
+# install the auth-aware app.R over the scaffold default (optional shinymanager
+# gate; enabled at runtime by setting SCROLL_PW). See app_unified.R.
+file.copy(file.path(root, "app_unified.R"), file.path(outdir, "app.R"), overwrite = TRUE)
+
 m <- scroll_manifest(outdir)
 message("DONE: ", outdir)
 message("  n_cells=", m$n_cells, "  has_counts=", m$has_counts)
