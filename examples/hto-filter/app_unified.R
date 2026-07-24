@@ -14,6 +14,12 @@ library(scroll)
 
 app <- scroll_app(".")
 
+# Load credentials from a local .Renviron beside this app.R if present (runApp()
+# sets the working dir to the app folder, so R's startup .Renviron loading may miss
+# it). Keeps SCROLL_USER / SCROLL_PW out of committed source — the file ships with
+# the deploy bundle, not the repo.
+if (file.exists(".Renviron")) readRenviron(".Renviron")
+
 .pw <- Sys.getenv("SCROLL_PW")
 if (nzchar(.pw) && requireNamespace("shinymanager", quietly = TRUE)) {
   .ui   <- environment(app$httpHandler)$ui
