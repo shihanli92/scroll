@@ -1,6 +1,6 @@
-# scroll 0.0.0.9000
+# scroll 0.1.0
 
-First development release. `scroll` turns a processed Seurat object into a
+First tagged release. `scroll` turns a processed Seurat object into a
 polished, flat-RAM interactive single-cell explorer.
 
 ## Fix: `scroll_add_subset()` preserves scoped-column types
