@@ -11,10 +11,10 @@ polished, flat-RAM interactive single-cell explorer.
   high-cardinality **categorical** (one "level" per cell) rather than **numeric** —
   breaking numeric colour-by / violins / sliders on those columns. Rebuild any
   project with numeric scoped columns to pick up the correct types.
-* The Violin panel's **numeric-column** picker (Metadata mode) is now view-aware, so
-  scoped numeric columns appear when their subset view is active — matching the
-  categorical Group-by, which was already view-aware. (Added `.scroll_bind_view_nums`,
-  a numeric sibling of `.scroll_bind_view_cats`.)
+* The **Violin** (Metadata mode) and **Biaxial** numeric-column pickers are now
+  view-aware, so scoped numeric columns appear when their subset view is active —
+  matching the categorical Group-by, which was already view-aware. (Added
+  `.scroll_bind_view_nums`, a numeric sibling of `.scroll_bind_view_cats`.)
 
 ## DE: group by multiple columns
 

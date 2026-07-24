@@ -57,6 +57,15 @@ biaxial_server <- function(id, data, cells_r = reactive(data$cells),
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     .scroll_bind_view_cats(input, session, view_r, m, "colorby")
+    # numeric axis choices are view-aware too (scoped numeric columns appear only in
+    # their view). Multi-select: keep the current pair when still valid, else fall
+    # back to the default axes for the new column set.
+    observeEvent(view_r(), {
+      nums <- .scroll_num_cols(m, view_r())
+      cur <- isolate(input$features); keep <- cur[cur %in% nums]
+      sel <- if (length(keep) >= 2) keep else .scroll_default_biaxial(nums)
+      updateSelectizeInput(session, "features", choices = nums, selected = sel)
+    }, ignoreNULL = FALSE)
     # per-level color pickers when the palette is "Manual" (levels of Colour by)
     lvl_r <- reactive({ req(input$colorby); .scroll_meta_levels(data, input$colorby) })
     output$manual <- renderUI(

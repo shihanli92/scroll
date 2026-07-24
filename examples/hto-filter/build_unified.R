@@ -26,9 +26,19 @@ outdir <- file.path(root, "project-unified")
 
 RES <- sprintf("%.1f", seq(0.1, 1.0, 0.1))
 
-# --- base: percent.ribo + whole-dataset clustering at every resolution ----------
+# --- base: percent.ribo + cell-cycle + whole-dataset clustering -----------------
 DefaultAssay(raw) <- "RNA"
 raw[["percent.ribo"]] <- PercentageFeatureSet(raw, pattern = "^Rp[sl]")   # mouse ribo
+# Cell-cycle score (S.Score / G2M.Score, numeric) + Phase (G1/S/G2M, categorical),
+# computed once on the whole base so they're global columns available in every view.
+# Seurat's cc.genes are HUMAN symbols; title-case them to mouse (MCM5 -> Mcm5) and
+# keep only genes present in this object.
+mouse_cc <- function(g) intersect(paste0(substring(g, 1, 1), tolower(substring(g, 2))),
+                                  rownames(raw))
+raw <- CellCycleScoring(raw,
+                        s.features   = mouse_cc(cc.genes.updated.2019$s.genes),
+                        g2m.features = mouse_cc(cc.genes.updated.2019$g2m.genes),
+                        set.ident = FALSE)
 raw <- FindNeighbors(raw, reduction = "pca", dims = 1:30, verbose = FALSE)
 for (r in RES) {
   raw <- FindClusters(raw, resolution = as.numeric(r), verbose = FALSE)
@@ -89,7 +99,8 @@ for (nm in names(pairs)) {
 
 # --- build ----------------------------------------------------------------------
 base_meta <- c("sample", "nCount_RNA", "nFeature_RNA", "nCount_HTO", "nFeature_HTO",
-               "percent.mt", "percent.ribo", sprintf("res_%s", RES),
+               "percent.mt", "percent.ribo", "S.Score", "G2M.Score", "Phase",
+               sprintf("res_%s", RES),
                grep("^hto_Hashtag", colnames(raw[[]]), value = TRUE))
 meta_all  <- c(base_meta, clean_meta, unlist(sub_meta, use.names = FALSE),
                unlist(pair_meta, use.names = FALSE))
