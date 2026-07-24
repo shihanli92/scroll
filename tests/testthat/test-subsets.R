@@ -13,7 +13,7 @@ test_that("scroll_add_subset transfers a reduction + scoped meta by barcode", {
   # spec recorded in @misc (survives downstream Seurat ops) for scroll_build
   spec <- SeuratObject::Misc(obj, "scroll_subsets")
   expect_equal(spec$tcell$embeddings, "umap_tcell")
-  expect_equal(spec$tcell$meta, "tsub")
+  expect_equal(spec$tcell$meta, c("tsub", "tscore"))
   # and it survives an assay-data edit (a bare attribute would not)
   obj2 <- SeuratObject::SetAssayData(obj, layer = "data",
                                      new.data = SeuratObject::GetAssayData(obj, layer = "data"))
@@ -53,6 +53,11 @@ test_that("build records subsets, embedding coverage, and scoped meta", {
   expect_setequal(unlist(m$meta$tsub$levels), c("Tcm", "Tem", "Tfh"))
   expect_false("NA" %in% unlist(m$meta$tsub$levels))
   expect_null(m$meta$celltype$scope)
+  # a scoped *numeric* column stays numeric (not stringified to categorical) and
+  # is scoped to its view
+  expect_equal(m$meta$tscore$type, "numeric")
+  expect_false(is.null(m$meta$tscore$range))
+  expect_equal(m$meta$tscore$scope, "tcell")
 })
 
 test_that("scoped columns are hidden from whole-dataset selectors, shown in-view", {
@@ -65,6 +70,23 @@ test_that("scoped columns are hidden from whole-dataset selectors, shown in-view
   flat_view <- unlist(scroll:::.scroll_colorby_choices(m, "tcell"), use.names = FALSE)
   expect_false("tsub" %in% flat_global)
   expect_true("tsub" %in% flat_view)
+  # a scoped numeric column is likewise hidden globally, shown in its view — so the
+  # Violin panel's numeric-column picker only offers it under the subset view
+  expect_false("tscore" %in% scroll:::.scroll_num_cols(m))
+  expect_true("tscore" %in% scroll:::.scroll_num_cols(m, "tcell"))
+})
+
+test_that("violin plots a scoped numeric column under its subset view", {
+  data <- scroll:::.scroll_load(subset_test_project())
+  on.exit(scroll_disconnect(data$con))
+  shiny::testServer(scroll:::violin_server,
+                    args = list(data = data, view_r = reactive("tcell")), {
+    session$setInputs(source = "Metadata", metacol = "tscore", group = "tsub",
+                      palette = "Tableau 10", jitter = FALSE, legend = FALSE, aspect = 1)
+    session$flushReact()
+    expect_equal(data_r()$value_col, "tscore")     # numeric column plotted directly
+    expect_false(is.null(output$plot))
+  })
 })
 
 test_that("view embeddings split full vs subset; sub-embedding only in its view", {

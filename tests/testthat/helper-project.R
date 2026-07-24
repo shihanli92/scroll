@@ -61,8 +61,9 @@ make_subset_object <- function(n = 120, seed = 1) {
   sub[["umap"]] <- SeuratObject::CreateDimReducObject(embeddings = te, key = "UMAP_", assay = "RNA")
   set.seed(seed + 7)
   sub$tsub <- factor(sample(c("Tfh", "Tcm", "Tem"), length(tcells), replace = TRUE))
+  sub$tscore <- stats::runif(length(tcells))          # a scoped *numeric* column (module-score-like)
   scroll_add_subset(obj, sub, "tcell", embeddings = c(umap_tcell = "umap"),
-                    label = "T cells", meta = "tsub")
+                    label = "T cells", meta = c("tsub", "tscore"))
 }
 
 subset_test_project <- local({
@@ -72,7 +73,7 @@ subset_test_project <- local({
       dir <- file.path(tempdir(), "scroll-subset-proj")
       if (!dir.exists(file.path(dir, "expr")))
         suppressMessages(scroll_build(make_subset_object(), dir, assays = "RNA",
-                                      meta_cols = c("condition", "celltype", "tsub"),
+                                      meta_cols = c("condition", "celltype", "tsub", "tscore"),
                                       overwrite = TRUE))
       cached <<- dir
     }

@@ -43,6 +43,9 @@ violin_server <- function(id, data, cells_r = reactive(data$cells),
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     .scroll_bind_view_cats(input, session, view_r, m, "group")
+    # numeric-column picker (Metadata mode) is view-aware too, so scoped numeric
+    # columns (e.g. module scores) surface only in the view where they're defined
+    if (length(.scroll_num_cols(m))) .scroll_bind_view_nums(input, session, view_r, m, "metacol")
     assay <- reactive(input$assay %||% m$default_assay)
     # repopulate the gene list for the active assay; drop a selection that does
     # not exist in the newly chosen assay (else it silently queries empty)

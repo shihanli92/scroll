@@ -119,22 +119,37 @@
 # subset-scoped columns appear only inside their subset view. `prepend` is a
 # leading choice map (e.g. c("None" = "")); the current selection is preserved
 # when still valid, else falls back to `default` (or the prepend value).
-.scroll_bind_view_cats <- function(input, session, view_r, m, ids,
-                                    prepend = NULL, default = NULL) {
+# Keep a `selectInput`'s choices in sync with the active subset view, using
+# `cols_fn(view)` to list the columns valid in that view (so scoped columns appear
+# only in their view). Preserves the current pick when still valid.
+.scroll_bind_view_cols <- function(input, session, view_r, cols_fn, ids,
+                                   prepend = NULL, default = NULL) {
   observeEvent(view_r(), {
-    cats <- .scroll_cat_cols(m, view_r())
+    cols <- cols_fn(view_r())
     for (id in ids) {
       cur <- input[[id]]
-      sel <- if (!is.null(cur) && cur %in% cats) cur
-             else if (!is.null(default) && default %in% cats) default
+      sel <- if (!is.null(cur) && cur %in% cols) cur
+             else if (!is.null(default) && default %in% cols) default
              else if (!is.null(prepend)) unname(prepend)[[1]]
-             else if (length(cats)) cats[[1]] else NULL
+             else if (length(cols)) cols[[1]] else NULL
       updateSelectInput(session, id,
-                        choices = c(prepend, stats::setNames(cats, cats)),
+                        choices = c(prepend, stats::setNames(cols, cols)),
                         selected = sel)
     }
   }, ignoreNULL = FALSE)
 }
+
+# Categorical / numeric view-aware selector binders (scoped columns surface only
+# in their own view).
+.scroll_bind_view_cats <- function(input, session, view_r, m, ids,
+                                   prepend = NULL, default = NULL)
+  .scroll_bind_view_cols(input, session, view_r,
+                         function(v) .scroll_cat_cols(m, v), ids, prepend, default)
+
+.scroll_bind_view_nums <- function(input, session, view_r, m, ids,
+                                   prepend = NULL, default = NULL)
+  .scroll_bind_view_cols(input, session, view_r,
+                         function(v) .scroll_num_cols(m, v), ids, prepend, default)
 
 .scroll_default <- function(data, key, fallback) {
   data$config[[key]] %||% data$manifest[[key]] %||% fallback
