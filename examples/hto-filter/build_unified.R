@@ -103,7 +103,7 @@ scroll_build(
 # --- config: brand + curated markers --------------------------------------------
 cfg <- yaml::read_yaml(file.path(outdir, "config.yaml"))
 cfg$brand <- "Cao et al."
-cfg$title <- "Cao et al. — all cells + subset views"
+cfg$title <- "Cao et al. - all cells + subset views"   # ASCII hyphen: yaml escapes non-ASCII to <U+...> under a C locale
 cfg$default_embedding <- "umap"
 cfg$markers <- c("Cd3d","Cd8a","Il7r","Ccr7","Cd101","Cx3cr1","Tcf7","Mki67")
 yaml::write_yaml(cfg, file.path(outdir, "config.yaml"))

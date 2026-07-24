@@ -190,3 +190,17 @@ test_that("pseudobulk_de_server renders a live sample preview without Compute", 
     expect_no_error(output$preview)
   })
 })
+
+test_that("pseudobulk_de_server preview follows the active subset view's embedding", {
+  data <- scroll:::.scroll_load(subset_test_project())
+  on.exit(scroll_disconnect(data$con))
+  # whole dataset -> global embedding; subset view -> that view's embedding
+  shiny::testServer(scroll:::pseudobulk_de_server,
+                    args = list(data = data, view_r = reactive("tcell")), {
+    session$setInputs(aggregate_by = "tsub", ident1 = "Tfh", ident2 = character(0),
+                      replicate = "no_replicate")
+    session$elapse(200)
+    expect_equal(preview_in()$emb, "umap_tcell")       # NOT the global umap
+    expect_no_error(output$preview)
+  })
+})

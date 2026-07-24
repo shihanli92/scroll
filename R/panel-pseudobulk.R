@@ -69,7 +69,8 @@ pseudobulk_de_ui <- function(id, data) {
   )
 }
 
-pseudobulk_de_server <- function(id, data, cells_r = reactive(data$cells)) {
+pseudobulk_de_server <- function(id, data, cells_r = reactive(data$cells),
+                                 view_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     assay <- reactive(input$assay %||% m$default_assay)
@@ -89,7 +90,7 @@ pseudobulk_de_server <- function(id, data, cells_r = reactive(data$cells)) {
     preview_in <- .scroll_cosmetic(reactive(list(
       cells = cells_r(), agg = input$aggregate_by, ident1 = input$ident1,
       ident2 = input$ident2, rep = input$replicate,
-      emb = .scroll_default(data, "default_embedding", .scroll_global_embeddings(m)[[1]]))))
+      emb = .scroll_view_embeddings(m, view_r())[[1]])))   # follows the active subset view
     output$preview <- renderPlot({
       p <- preview_in(); req(length(p$agg) > 0, p$emb)
       combo <- .scroll_combo_levels(p$cells, p$agg)

@@ -23,6 +23,9 @@ polished, flat-RAM interactive single-cell explorer.
   driven by the same contrast-membership logic the compute uses, so the picture always
   matches what will be tested. New exported view cores `view_contrast_preview()` and
   `view_contrast_medoids()`.
+* Fix: the Pseudobulk panel's live preview now follows the **active subset view's**
+  embedding (like the DE panel already did) — previously it always drew on the whole-
+  dataset embedding, so medoids for a re-embedded subset landed on the wrong UMAP.
 
 ## Faster, lighter live DE
 
