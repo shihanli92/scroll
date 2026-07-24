@@ -29,6 +29,7 @@ RES <- sprintf("%.1f", seq(0.1, 1.0, 0.1))
 # --- base: percent.ribo + cell-cycle + whole-dataset clustering -----------------
 DefaultAssay(raw) <- "RNA"
 raw[["percent.ribo"]] <- PercentageFeatureSet(raw, pattern = "^Rp[sl]")   # mouse ribo
+raw[["percent.hsp"]]  <- PercentageFeatureSet(raw, pattern = "^Hsp")      # mouse heat-shock (global)
 # Cell-cycle score (S.Score / G2M.Score, numeric) + Phase (G1/S/G2M, categorical),
 # computed once on the whole base so they're global columns available in every view.
 # Seurat's cc.genes are HUMAN symbols; title-case them to mouse (MCM5 -> Mcm5) and
@@ -51,7 +52,7 @@ for (r in RES) {
 # singlets, so they are scoped to this view (absent for the raw-only cells).
 for (r in RES) sub[[sprintf("clean_res_%s", r)]] <- sub[[sprintf("res_%s", r)]][[1]]
 clean_meta <- c("genotype", "treatment", "celltype", "hto",
-                "sig_tfh2", "sig_memory", "percent.hsp",
+                "sig_tfh2", "sig_memory",              # percent.hsp is now global (base)
                 sprintf("clean_res_%s", RES))
 raw <- scroll_add_subset(raw, sub, name = "clean", label = "Clean singlets",
                          embeddings = c(umap_clean = "umap"), meta = clean_meta)
@@ -99,7 +100,7 @@ for (nm in names(pairs)) {
 
 # --- build ----------------------------------------------------------------------
 base_meta <- c("sample", "nCount_RNA", "nFeature_RNA", "nCount_HTO", "nFeature_HTO",
-               "percent.mt", "percent.ribo", "S.Score", "G2M.Score", "Phase",
+               "percent.mt", "percent.ribo", "percent.hsp", "S.Score", "G2M.Score", "Phase",
                sprintf("res_%s", RES),
                grep("^hto_Hashtag", colnames(raw[[]]), value = TRUE))
 meta_all  <- c(base_meta, clean_meta, unlist(sub_meta, use.names = FALSE),
