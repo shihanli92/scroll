@@ -204,3 +204,17 @@ test_that("pseudobulk_de_server preview follows the active subset view's embeddi
     expect_no_error(output$preview)
   })
 })
+
+test_that(".scroll_preview_embedding: whole=default_embedding, subset=its own", {
+  data <- list(
+    manifest = list(
+      n_cells = 100,
+      embeddings = list(pca = list(dims = 2, n_covered = 100),   # first global, but NOT default
+                        umap = list(dims = 2, n_covered = 100),
+                        umap_sub = list(dims = 2, n_covered = 40)),
+      subsets = list(sub = list(embeddings = "umap_sub",
+                                primary_embedding = "umap_sub"))),
+    config = list(default_embedding = "umap"))
+  expect_equal(scroll:::.scroll_preview_embedding(data, NULL), "umap")     # default, not pca
+  expect_equal(scroll:::.scroll_preview_embedding(data, "sub"), "umap_sub")# the view's own
+})

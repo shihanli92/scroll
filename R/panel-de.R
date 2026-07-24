@@ -88,7 +88,7 @@ de_server <- function(id, data, cells_r = reactive(data$cells),
     # Debounced (selectize multi-picks fire fast); embedding follows the active view.
     preview_in <- .scroll_cosmetic(reactive(list(
       cells = cells_r(), group = input$group, ident1 = input$ident1,
-      ident2 = input$ident2, emb = .scroll_view_embeddings(m, view_r())[[1]])))
+      ident2 = input$ident2, emb = .scroll_preview_embedding(data, view_r()))))
     output$preview <- renderPlot({
       p <- preview_in(); req(p$group, p$emb)
       view_contrast_preview(p$cells, p$emb,

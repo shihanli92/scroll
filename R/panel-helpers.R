@@ -88,6 +88,17 @@
   as.character(unlist(m$subsets[[view]]$embeddings))
 }
 
+# Embedding a live contrast preview (DE / Pseudobulk) should draw on: the config
+# `default_embedding` for the whole dataset (so it matches DimPlot, not just the
+# first global reduction), else the active subset view's primary embedding. Mirrors
+# the reduction-default logic in dimplot_server.
+.scroll_preview_embedding <- function(data, view) {
+  reds <- .scroll_view_embeddings(data$manifest, view)
+  sel <- if (is.null(view)) .scroll_default(data, "default_embedding", reds[[1]]) else reds[[1]]
+  if (!sel %in% reds) sel <- reds[[1]]
+  sel
+}
+
 # Restrict cells to a subset view (members = non-NA primary-embedding coords).
 .scroll_view_cells <- function(cells, m, view) {
   if (is.null(view) || is.null(m$subsets[[view]])) return(cells)

@@ -90,7 +90,7 @@ pseudobulk_de_server <- function(id, data, cells_r = reactive(data$cells),
     preview_in <- .scroll_cosmetic(reactive(list(
       cells = cells_r(), agg = input$aggregate_by, ident1 = input$ident1,
       ident2 = input$ident2, rep = input$replicate,
-      emb = .scroll_view_embeddings(m, view_r())[[1]])))   # follows the active subset view
+      emb = .scroll_preview_embedding(data, view_r()))))   # default for whole dataset, else the view's
     output$preview <- renderPlot({
       p <- preview_in(); req(length(p$agg) > 0, p$emb)
       combo <- .scroll_combo_levels(p$cells, p$agg)
