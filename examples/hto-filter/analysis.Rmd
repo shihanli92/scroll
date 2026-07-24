@@ -1,0 +1,378 @@
+---
+title: "HTO mouse T-cell dataset — full analysis from raw data (scroll)"
+subtitle: "Cao et al. — raw 10x h5 → gated singlets → cell types → subset views → scroll explorer"
+author: "Generated for verification"
+date: "`r format(Sys.Date())`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: show
+    df_print: paged
+    fig_width: 7
+    fig_height: 5
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, message = FALSE, warning = FALSE,
+  cache = TRUE, cache.lazy = FALSE, fig.align = "center"
+)
+set.seed(1)
+```
+
+This document reproduces the **entire pipeline from raw data** for the two-sample
+mouse RNA + hashtag (HTO) experiment: from the raw 10x `.h5` matrices through
+gated singlets, cell-type annotation, per-cell-type **subset views**, and the
+final `scroll` explorer with a counts store for pseudobulk DE. Knit it to verify
+every intermediate output.
+
+The only non-scriptable step is the **manual hashtag gating** (interactive), which
+was performed once in scroll's gating app and exported to a CSV; this document
+consumes that export and runs everything else from the raw matrices.
+
+Heavy chunks are cached, so the first knit is slow (~20–30 min: several
+re-embeddings of tens of thousands of cells) and re-knits are fast.
+
+```{r libs}
+suppressPackageStartupMessages({
+  library(Seurat); library(SeuratObject); library(Matrix)
+  library(ggplot2); library(dplyr)
+  library(scroll)     # the package under test
+})
+
+root   <- "/Users/shihanl1/scroll"
+h5s    <- c(s1 = file.path(root, "data/s1_sample_filtered_feature_bc_matrix.h5"),
+            s2 = file.path(root, "data/s2_sample_filtered_feature_bc_matrix.h5"))
+gating <- file.path(root, "data/hto_keep_barcodes.csv")   # export of the manual gating
+exdir  <- file.path(root, "examples/hto-filter")
+outdir <- file.path(exdir, "project-filtered")            # scroll project (git-ignored)
+stopifnot(all(file.exists(h5s)), file.exists(gating))
+
+MT_MAX    <- 10     # percent.mt filter
+NFEAT_MAX <- 6000   # nFeature_RNA filter
+RES       <- seq(0.1, 1.0, by = 0.1)
+```
+
+# 1. Raw 10x → merged RNA + HTO object
+
+Each `.h5` holds **Gene Expression** (RNA) and **Antibody Capture** (the three
+hashtags). Build one Seurat object per sample with an `HTO` assay, prefix
+barcodes by sample so ids stay unique, merge, and compute mouse mito %. (Seurat
+sanitizes the hashtag underscores to dashes, so features become `Hashtag-1/2/3`.)
+
+```{r read-raw}
+make_obj <- function(h5, sample) {
+  x   <- Read10X_h5(h5)
+  obj <- CreateSeuratObject(counts = x[["Gene Expression"]], project = sample)
+  obj[["HTO"]] <- CreateAssay5Object(counts = x[["Antibody Capture"]])
+  obj$sample <- sample
+  obj
+}
+o1 <- make_obj(h5s[["s1"]], "s1")
+o2 <- make_obj(h5s[["s2"]], "s2")
+
+obj <- merge(o1, o2, add.cell.ids = c("s1", "s2"))
+obj <- JoinLayers(obj); obj <- JoinLayers(obj, assay = "HTO")
+obj[["percent.mt"]] <- PercentageFeatureSet(obj, pattern = "^mt-")   # mouse mito
+
+data.frame(sample = c("s1", "s2", "merged"),
+           cells  = c(ncol(o1), ncol(o2), ncol(obj)),
+           genes  = c(nrow(o1), nrow(o2), nrow(obj)))
+```
+
+## HTO CLR normalization
+
+`margin = 2` normalizes each hashtag across cells, so an independent threshold per
+hashtag separates positive from background. The per-cell CLR values are copied
+into metadata (`hto_Hashtag-*`) — these are what the gating and the Biaxial panel
+plot.
+
+```{r hto-clr}
+obj <- NormalizeData(obj, assay = "HTO", normalization.method = "CLR",
+                     margin = 2, verbose = FALSE)
+hto_clr <- as.matrix(GetAssayData(obj, assay = "HTO", layer = "data"))   # 3 x cells
+for (h in rownames(hto_clr)) obj[[paste0("hto_", h)]] <- hto_clr[h, ]
+obj <- SetAssayData(obj, assay = "HTO", layer = "data",
+                    new.data = Matrix::Matrix(hto_clr, sparse = TRUE))
+rownames(hto_clr)
+```
+
+# 2. Hashtag demultiplexing (manual gating → CSV)
+
+The three hashtags have tricky background, so single-positive gates were drawn
+**manually** in scroll's QC/hashtag gating panel (`examples/hto-filter/panel.R`)
+and exported to `data/hto_keep_barcodes.csv` (barcode + assignment). That step is
+interactive and shown here for provenance only:
+
+```{r gating-provenance, eval=FALSE}
+# NOT run — interactive. Reproduce with:
+#   scroll::scroll_serve("examples/hto-filter/project")  # built by build.R
+#   -> QC & hashtag gating section -> draw single-positive gates
+#   -> Download CSV -> data/hto_keep_barcodes.csv
+```
+
+We load the export and attach the assignment (Singlet hashtag / Doublet /
+Negative) as metadata.
+
+```{r gating-load}
+keep <- utils::read.csv(gating, stringsAsFactors = FALSE)
+obj$assignment <- keep$assignment[match(colnames(obj), keep$cell)]
+table(obj$assignment, useNA = "ifany")
+```
+
+The demux is exactly what the new **Biaxial** panel shows — pairwise hashtag CLR
+scatters coloured by the assignment. Reproduced here with the package's own view:
+
+```{r gating-biaxial, fig.width=10, fig.height=3.6}
+hto_cols <- grep("^hto_", colnames(obj[[]]), value = TRUE)
+gate_df <- obj[[]]
+gate_df$assignment[is.na(gate_df$assignment)] <- "Unassigned"
+view_biaxial(gate_df, list(features = hto_cols, color_by = "assignment"),
+             list(point_size = 0.3, alpha = 0.5))
+```
+
+# 3. Singlets + QC filtering + re-embedding
+
+Keep **singlets** (assignment is one hashtag) that also pass `percent.mt < 10` and
+`nFeature_RNA < 6000`, then re-process RNA from counts on the clean population.
+
+```{r reprocess}
+obj$hto <- ifelse(grepl("^Hashtag", obj$assignment), obj$assignment, NA_character_)
+keep_cells <- colnames(obj)[
+  !is.na(obj$hto) & obj$percent.mt < MT_MAX & obj$nFeature_RNA < NFEAT_MAX]
+sub <- subset(obj, cells = keep_cells)
+
+DefaultAssay(sub) <- "RNA"
+sub <- sub |>
+  NormalizeData(verbose = FALSE) |>
+  FindVariableFeatures(verbose = FALSE) |>
+  ScaleData(verbose = FALSE) |>
+  RunPCA(npcs = 30, verbose = FALSE) |>
+  RunUMAP(dims = 1:30, verbose = FALSE)
+
+data.frame(stage = c("merged", "singlets", "+ QC filters (kept)"),
+           cells = c(ncol(obj), sum(!is.na(obj$hto)), ncol(sub)))
+```
+
+```{r qc-plots, fig.width=9, fig.height=3.2}
+VlnPlot(sub, c("nCount_RNA", "nFeature_RNA", "percent.mt"),
+        group.by = "sample", pt.size = 0, ncol = 3) & theme(legend.position = "none")
+```
+
+# 4. Genotype & treatment from hashtag / sample
+
+The 3 hashtags encode the CRISPR guide (genotype); the 2 samples encode
+treatment. Derived deterministically and cross-checked.
+
+```{r meta}
+geno_map <- c("Hashtag-1" = "sgCtrl", "Hashtag-2" = "sgIcos", "Hashtag-3" = "sgCxcr5")
+trt_map  <- c("s1" = "post", "s2" = "neg")
+sub$genotype  <- factor(unname(geno_map[sub$hto]),   levels = c("sgCtrl","sgIcos","sgCxcr5"))
+sub$treatment <- factor(unname(trt_map[sub$sample]), levels = c("post","neg"))
+list(genotype = table(sub$genotype), treatment = table(sub$treatment),
+     `hashtag x genotype` = table(sub$hto, sub$genotype))
+```
+
+# 5. Clustering (res 0.1), cell-type labels, and marker ID
+
+```{r cluster01}
+sub <- FindNeighbors(sub, dims = 1:30, verbose = FALSE)
+sub <- FindClusters(sub, resolution = 0.1, verbose = FALSE)
+sub$cluster01 <- sub$seurat_clusters
+table(sub$cluster01)
+```
+
+```{r labels}
+label_map <- c("0"="Cd101+","1"="Tfh","2"="Cx3cr1+","3"="Cycling",
+               "4"="C4","5"="C5","6"="B cells")
+sub$celltype <- factor(unname(label_map[as.character(sub$cluster01)]),
+                       levels = c("Cd101+","Tfh","Cx3cr1+","Cycling","C4","C5","B cells"))
+table(sub$celltype)
+```
+
+```{r umap-labeled, fig.width=7.5, fig.height=5}
+DimPlot(sub, group.by = "celltype", label = TRUE, repel = TRUE) +
+  ggtitle("res-0.1 cell types")
+```
+
+## Marker identification (one-vs-rest, presto)
+
+```{r markers}
+mk <- presto::wilcoxauc(GetAssayData(sub, assay = "RNA", layer = "data"),
+                        as.character(sub$celltype))
+top_markers <- function(group, n = 12) {
+  g <- mk[mk$group == group, ]
+  head(g[order(-g$auc), c("feature","auc","logFC","pct_in","pct_out")], n)
+}
+setNames(lapply(levels(sub$celltype)[1:6], top_markers), levels(sub$celltype)[1:6])
+```
+
+**Reading of the two unnamed clusters (hypotheses):**
+
+- **C4** — TCR-signaling genes (`Tox`, `Themis`, `Fyn`, `Dock2/10`, `Ikzf1`,
+  `Grap2`) over a high-lncRNA background (`Malat1`, `Gm42418`): a **resting /
+  naive-like or Tox-hi transitional T** state rather than a distinct effector
+  program. Check naive vs exhaustion markers below.
+- **C5** — dominated by **mitochondrial** genes (`mt-Co1/2/3`, `mt-Atp8`,
+  `mt-Cytb`) with `Malat1`, still `Ptprc+`: a **high-mito / stressed / low-quality**
+  signature, likely partly technical.
+
+```{r c45-diagnostics, fig.width=9, fig.height=5.5}
+FeaturePlot(sub, c("Tcf7","Sell","Pdcd1","Tox","Ptprc","percent.mt"),
+            order = TRUE, ncol = 3)
+```
+
+# 6. Remove B cells, re-embed the main object (merge C4/5)
+
+B cells (cluster 6) are removed and the rest re-embedded from scratch — the app's
+**main UMAP**. Clusters 4 and 5 are merged into one **C4/5** cell type. A global
+resolution sweep 0.1–1.0 is computed on the new graph.
+
+```{r main-reembed}
+main <- subset(sub, cells = colnames(sub)[sub$celltype != "B cells"])
+ct <- as.character(main$celltype); ct[ct %in% c("C4","C5")] <- "C4/5"
+main$celltype <- factor(ct, levels = c("Cd101+","Tfh","Cx3cr1+","Cycling","C4/5"))
+
+DefaultAssay(main) <- "RNA"
+main <- main |>
+  NormalizeData(verbose = FALSE) |> FindVariableFeatures(verbose = FALSE) |>
+  ScaleData(verbose = FALSE) |> RunPCA(npcs = 30, verbose = FALSE) |>
+  RunUMAP(dims = 1:30, verbose = FALSE) |> FindNeighbors(dims = 1:30, verbose = FALSE)
+
+res_names <- sprintf("res_%.1f", RES)
+for (i in seq_along(RES)) {
+  main <- FindClusters(main, resolution = RES[i], verbose = FALSE)
+  main[[res_names[i]]] <- paste0("c", as.character(main$seurat_clusters))
+}
+main[["seurat_clusters"]] <- NULL
+c(cells = ncol(main),
+  setNames(vapply(res_names, function(n) length(unique(main[[n]][[1]])), 0L), res_names))
+```
+
+```{r main-umaps, fig.width=10, fig.height=3.4}
+patchwork::wrap_plots(
+  DimPlot(main, group.by = "celltype",  label = TRUE, repel = TRUE) + ggtitle("cell type"),
+  DimPlot(main, group.by = "genotype")  + ggtitle("genotype"),
+  DimPlot(main, group.by = "treatment") + ggtitle("treatment"),
+  nrow = 1)
+```
+
+# 7. Per-cell-type subset views (re-embed + subcluster sweep)
+
+Each of the 5 cell types is re-embedded **in isolation** and re-clustered across
+resolutions 0.1–1.0. These become the app's **subset views** (attached by barcode
+with `scroll_add_subset()`; subcluster columns are scoped to their view).
+
+```{r subsets}
+ids <- c(cd101="Cd101+", tfh="Tfh", cx3cr1="Cx3cr1+", cycling="Cycling", c45="C4/5")
+sub_meta <- list(); sub_umaps <- list()
+
+for (id in names(ids)) {
+  lab <- unname(ids[id])
+  s <- subset(main, cells = colnames(main)[main$celltype == lab])
+  DefaultAssay(s) <- "RNA"
+  s <- s |>
+    NormalizeData(verbose = FALSE) |> FindVariableFeatures(verbose = FALSE) |>
+    ScaleData(verbose = FALSE) |> RunPCA(npcs = 30, verbose = FALSE) |>
+    RunUMAP(dims = 1:30, verbose = FALSE) |> FindNeighbors(dims = 1:30, verbose = FALSE)
+
+  cols <- sprintf("%s_res_%.1f", id, RES)
+  for (i in seq_along(RES)) {
+    s <- FindClusters(s, resolution = RES[i], verbose = FALSE)
+    v <- rep(NA_character_, ncol(main)); names(v) <- colnames(main)
+    v[colnames(s)] <- paste0("c", as.character(s$seurat_clusters))
+    main[[cols[i]]] <- unname(v)
+  }
+  main <- scroll_add_subset(main, s, name = id, label = lab,
+                            embeddings = setNames("umap", paste0("umap_", id)), meta = cols)
+  sub_meta[[id]]  <- cols
+  sub_umaps[[id]] <- DimPlot(s, group.by = "RNA_snn_res.0.3") +
+    ggtitle(sprintf("%s (%d cells)", lab, ncol(s))) + theme(legend.position = "none")
+}
+```
+
+```{r subset-umap-grid, fig.width=10, fig.height=6.5}
+patchwork::wrap_plots(sub_umaps, ncol = 3)
+```
+
+# 8. Composition by genotype (biology check)
+
+ICOS and CXCR5 are central to the Tfh program, so guide knockouts are expected to
+shift composition — especially the **Tfh** fraction.
+
+```{r composition, fig.width=7.5, fig.height=4.5}
+comp <- main[[]] |>
+  dplyr::count(genotype, celltype) |>
+  dplyr::group_by(genotype) |> dplyr::mutate(frac = n / sum(n)) |> dplyr::ungroup()
+ggplot(comp, aes(genotype, frac, fill = celltype)) +
+  geom_col() + scale_y_continuous(labels = scales::percent) +
+  labs(y = "fraction of cells", x = NULL, title = "Cell-type composition by genotype") +
+  theme_minimal(base_size = 12)
+```
+
+```{r composition-table}
+tidyr::pivot_wider(comp[, c("genotype","celltype","frac")],
+                   names_from = celltype, values_from = frac) |>
+  dplyr::mutate(dplyr::across(where(is.numeric), ~round(.x, 3)))
+```
+
+# 9. Build the scroll project (subset views + counts store)
+
+Persist the object and build the explorer with `counts = TRUE` (enables Pseudobulk
+DE). Brand it "Cao et al." (the config regenerates on each build).
+
+```{r build, cache=FALSE}
+main <- SetAssayData(main, assay = "HTO", layer = "data",
+  new.data = as(GetAssayData(main, assay = "HTO", layer = "data"), "CsparseMatrix"))
+saveRDS(main, file.path(exdir, "filtered-subsets.rds"))
+
+subsets <- lapply(names(ids), function(id)
+  list(label = unname(ids[id]), embeddings = paste0("umap_", id), meta = sub_meta[[id]]))
+names(subsets) <- names(ids)
+hto_cols <- grep("^hto_", colnames(main[[]]), value = TRUE)
+
+scroll_build(
+  main, outdir, assays = c("RNA", "HTO"), counts = TRUE,
+  meta_cols = c("sample","hto","genotype","treatment",
+                "nCount_RNA","nFeature_RNA","percent.mt","celltype",
+                res_names, hto_cols, unlist(sub_meta, use.names = FALSE)),
+  subsets = subsets, overwrite = TRUE)
+
+cfg <- yaml::read_yaml(file.path(outdir, "config.yaml"))
+cfg$brand <- "Cao et al."; cfg$title <- "Mouse Tfh CRISPR (HTO)"
+yaml::write_yaml(cfg, file.path(outdir, "config.yaml"))
+
+m <- scroll_manifest(outdir)
+list(n_cells = m$n_cells, has_counts = m$has_counts,
+     subsets = names(m$subsets), embeddings = names(m$embeddings))
+```
+
+# 10. Pseudobulk DE example — sgIcos vs sgCtrl within Tfh
+
+A worked verification of the Pseudobulk DE panel. There are **no biological
+replicates** (one hashtag per genotype), so this uses `no_replicate`
+pseudo-replication — anti-conservative by construction; treat p-values as a
+ranking, not inference. `Icos` itself should drop in the sgIcos arm.
+
+```{r pseudobulk, cache=FALSE, fig.width=6.5, fig.height=5}
+data <- scroll:::.scroll_load(outdir)
+tfh <- data$cells[data$cells$celltype == "Tfh", ]
+res <- scroll_pseudobulk_de(
+  data, assay = "RNA", aggregate_cols = "genotype",
+  ident1 = "sgIcos", ident2 = "sgCtrl", replicate_col = "no_replicate",
+  n_pseudo = 4, cells_per_pseudo = 200, min_cells = 50, cells = tfh)
+
+knitr::kable(head(res[order(res$p_val_adj), ], 15), digits = 3,
+             caption = "Top pseudobulk DE genes (sgIcos vs sgCtrl, Tfh)")
+print(view_volcano(res, list(lfc = 1, padj = 0.05, labeln = 15)))
+cat("Icos logFC (expect negative in sgIcos):",
+    round(res$logFC[res$gene == "Icos"], 3), "\n")
+scroll_disconnect(data$con)
+```
+
+# Session info
+
+```{r sessioninfo, cache=FALSE}
+sessionInfo()
+```
