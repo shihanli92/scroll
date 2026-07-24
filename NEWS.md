@@ -3,6 +3,15 @@
 First development release. `scroll` turns a processed Seurat object into a
 polished, flat-RAM interactive single-cell explorer.
 
+## Fix: `scroll_add_subset()` preserves scoped-column types
+
+* A subset's scoped metadata columns kept their **original type** instead of being
+  coerced to character. Numeric scoped columns (e.g. `AddModuleScore` signature
+  scores, `percent.*`) were being stringified, so the manifest classified them as
+  high-cardinality **categorical** (one "level" per cell) rather than **numeric** —
+  breaking numeric colour-by / violins / sliders on those columns. Rebuild any
+  project with numeric scoped columns to pick up the correct types.
+
 ## DE: group by multiple columns
 
 * The live-DE panel's **Group by** is now multi-select: naming several categorical

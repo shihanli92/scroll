@@ -474,10 +474,19 @@ scroll_add_subset <- function(object, sub_object, name, embeddings,
   }
   for (mc in meta) {
     src_vals <- sub_object[[mc]][[1]]
-    col <- rep(NA_character_, length(parent_cells)); names(col) <- parent_cells
+    # Preserve the source column's type so numeric scores (e.g. module scores) stay
+    # numeric rather than being stringified into a high-cardinality categorical. A
+    # factor is flattened to character (matching .scroll_extract_cells); non-members
+    # get the type-appropriate NA. (The `as.character`-everything path here used to
+    # misclassify continuous scoped columns as categorical.)
+    fill <- if (is.numeric(src_vals)) NA_real_
+            else if (is.logical(src_vals)) NA
+            else NA_character_
+    src <- if (is.factor(src_vals)) as.character(src_vals) else src_vals
+    col <- rep(fill, length(parent_cells)); names(col) <- parent_cells
     idx <- match(colnames(sub_object), parent_cells)
     ok <- !is.na(idx)
-    col[idx[ok]] <- as.character(src_vals)[ok]
+    col[idx[ok]] <- src[ok]
     object[[mc]] <- unname(col)
   }
   spec <- list(label = label, embeddings = unname(new_names),

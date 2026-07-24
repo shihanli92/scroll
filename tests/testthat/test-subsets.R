@@ -20,6 +20,24 @@ test_that("scroll_add_subset transfers a reduction + scoped meta by barcode", {
   expect_equal(SeuratObject::Misc(obj2, "scroll_subsets")$tcell$embeddings, "umap_tcell")
 })
 
+test_that("scroll_add_subset preserves a numeric scoped column (not stringified)", {
+  obj <- make_test_object(80, seed = 5)
+  tcells <- colnames(obj)[obj$celltype == "T"]
+  sub <- subset(obj, cells = tcells)
+  te <- matrix(stats::rnorm(length(tcells) * 2), ncol = 2,
+               dimnames = list(tcells, c("UMAP_1", "UMAP_2")))
+  sub[["umap"]] <- SeuratObject::CreateDimReducObject(embeddings = te, key = "UMAP_",
+                                                      assay = "RNA")
+  sub$score <- stats::runif(length(tcells))                   # a continuous scoped column
+  out <- scroll_add_subset(obj, sub, "tcell", embeddings = c(umap_tcell = "umap"),
+                           meta = "score")
+  v <- out$score
+  expect_type(v, "double")                                    # stayed numeric, not character
+  expect_equal(sum(!is.na(v)), length(tcells))                # members carry the score
+  expect_true(all(is.na(v[setdiff(colnames(out), tcells)])))  # NA off the subset
+  expect_equal(scroll:::.scroll_meta_entry(v)$type, "numeric")# classifier types it numeric
+})
+
 test_that("build records subsets, embedding coverage, and scoped meta", {
   dir <- subset_test_project()
   m <- scroll_manifest(dir)
