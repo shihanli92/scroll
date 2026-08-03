@@ -52,6 +52,19 @@ cells, the control values by id (`input$group`), and the data handle. An empty
 required control or an error in the plot function shows an inline message instead of
 a blank plot.
 
+### Previewing while you develop
+
+While iterating, `scroll_preview_panel()` mounts just **that** panel in the real app
+harness (app bar + subset filter + subset-View selector, no other panels), so you get
+quick feedback without building or scrolling through the whole app — and the panel is
+exercised exactly as it will run:
+
+```r
+source("panels/my_panel.R")               # (re-)registers the panel
+scroll_preview_panel("my_panel", "pbmc3k")
+# edit the panel file -> re-source -> re-run
+```
+
 **Declared controls** (`controls = list(...)`):
 
 | Constructor | Input |

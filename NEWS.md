@@ -3,6 +3,16 @@
 First tagged release. `scroll` turns a processed Seurat object into a
 polished, flat-RAM interactive single-cell explorer.
 
+## New: `scroll_preview_panel()` — fast custom-panel dev loop
+
+* `scroll_preview_panel(panel, dir)` mounts **one** panel (by id) in the real app
+  harness — the app bar with the cell-subset filter and subset-View selector, but
+  none of the other panels — so a custom panel can be driven for quick feedback
+  without building or scrolling through the whole app. Because it reuses the actual
+  page + wiring, the panel is tested exactly as it will run (under the app-bar filter
+  and subset views). The loop is `source()` the panel file → `scroll_preview_panel()`
+  → edit → re-source → re-run.
+
 ## Correctness fixes
 
 * **`scroll_update()` no longer re-escapes non-ASCII feature names.** It rewrites

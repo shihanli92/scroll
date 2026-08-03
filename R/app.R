@@ -452,3 +452,53 @@ scroll_multi_app <- function(projects) {
 scroll_serve <- function(dir = ".", ...) {
   shiny::runApp(scroll_app(dir), ...)
 }
+
+# Find a panel spec by id: registered panels first (a custom panel replacing a
+# built-in wins), then the built-ins.
+.scroll_lookup_panel <- function(id) {
+  all <- c(.scroll_registry$panels, .scroll_builtin_panels())
+  ids <- vapply(all, `[[`, "", "id")
+  if (id %in% ids) all[[which(ids == id)[1L]]] else NULL
+}
+
+#' Preview a single panel while developing it
+#'
+#' Mounts **one** panel in the full scroll harness — the app bar (with the
+#' cell-subset filter and the subset-View selector) but none of the other panels —
+#' so a custom panel can be driven for quick feedback without building or scrolling
+#' through the whole app. Because the harness is the real one, the panel is tested
+#' exactly as it will run: under the app-bar filter and any subset views.
+#'
+#' The development loop is:
+#' ```r
+#' source("panels/my_panel.R")               # (re-)registers the panel
+#' scroll_preview_panel("my_panel", "projects/demo")
+#' # edit the panel file -> re-source -> re-run
+#' ```
+#'
+#' @param panel The id of a panel registered with [register_panel()] /
+#'   [register_plot_panel()] (or a built-in id, e.g. `"dotplot"`).
+#' @param dir A built scroll project directory to render the panel against.
+#' @return A `shiny.appobj` — auto-prints/launches at the console, or pass to
+#'   [shiny::runApp()].
+#' @seealso [register_plot_panel()], [scroll_app()]
+#' @export
+scroll_preview_panel <- function(panel, dir = ".") {
+  if (!is.character(panel) || length(panel) != 1L || is.na(panel))
+    stop("`panel` must be a single registered or built-in panel id.", call. = FALSE)
+  data <- .scroll_load(dir)
+  spec <- .scroll_lookup_panel(panel)
+  if (is.null(spec))
+    stop("No panel with id '", panel, "'. Register it first with ",
+         "register_panel() / register_plot_panel(), or check the id.", call. = FALSE)
+
+  panels <- list(spec)
+  ttl <- .scroll_nz(data$config$title) %||% "scroll"
+  title <- paste0(ttl, " \u00b7 preview: ", spec$id)
+  ui <- .scroll_page(data, title, panels)
+  server <- function(input, output, session)
+    .scroll_wire(input, output, session, data, panels)
+  shiny::shinyApp(ui, server, onStart = function() {
+    shiny::onStop(function() try(scroll_disconnect(data$con), silent = TRUE))
+  })
+}

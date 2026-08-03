@@ -36,6 +36,7 @@ reference:
   - scroll_app
   - scroll_multi_app
   - scroll_serve
+  - scroll_preview_panel
   - scroll_scaffold_app
   - scroll_config
 
