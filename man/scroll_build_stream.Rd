@@ -29,8 +29,10 @@ log-normalized \code{data} layer, the reductions, and the metadata columns).}
 \item{assays, embeddings}{Names to export; \code{NULL} takes the default assay / all
 reductions of the \strong{first} source (then held constant across sources).}
 
-\item{meta_cols}{Metadata columns to expose (required; the reader's objects may
-be heterogeneous, so the columns are declared explicitly).}
+\item{meta_cols}{Metadata columns to expose (required; declared explicitly
+rather than inferred). The declared assays, embeddings, and meta columns must
+be present in \strong{every} source — a source missing any is an error naming it
+(extra columns a source happens to carry are simply ignored).}
 
 \item{quantize}{Must be \code{FALSE} (streaming stores float32; see Details).}
 

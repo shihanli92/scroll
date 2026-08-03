@@ -14,7 +14,8 @@ scroll_pseudobulk_de(
   min_cells = 10,
   n_pseudo = 3,
   cells_per_pseudo = 50,
-  cells = NULL
+  cells = NULL,
+  seed = 1L
 )
 }
 \arguments{
@@ -39,6 +40,10 @@ group's cells) instead of using a real replicate column.}
 pseudo-replicates and cells sampled per pseudo-replicate.}
 
 \item{cells}{Cells to test over (default \code{data$cells}).}
+
+\item{seed}{Integer seed for the pseudo-replicate draw, so a compute is
+reproducible and the caller's RNG stream is left untouched. \code{NULL} uses the
+current RNG state (used internally to vary draws across stability runs).}
 }
 \value{
 A data.frame (\code{gene}, \code{logFC}, \code{avg_expr}, \code{p_val}, \code{p_val_adj}) ranked

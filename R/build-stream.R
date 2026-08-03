@@ -40,8 +40,10 @@
 #'   log-normalized `data` layer, the reductions, and the metadata columns).
 #' @param assays,embeddings Names to export; `NULL` takes the default assay / all
 #'   reductions of the **first** source (then held constant across sources).
-#' @param meta_cols Metadata columns to expose (required; the reader's objects may
-#'   be heterogeneous, so the columns are declared explicitly).
+#' @param meta_cols Metadata columns to expose (required; declared explicitly
+#'   rather than inferred). The declared assays, embeddings, and meta columns must
+#'   be present in **every** source — a source missing any is an error naming it
+#'   (extra columns a source happens to carry are simply ignored).
 #' @param quantize Must be `FALSE` (streaming stores float32; see Details).
 #' @param id_of `function(source) -> character` id used for append-tracking and
 #'   part-file tags (default `as.character`).
@@ -92,8 +94,22 @@ scroll_build_stream <- function(outdir, sources, reader, assays = NULL,
       em <- if (is.null(embeddings)) names(seu@reductions) else embeddings
       lock <- list(assays = a, embeddings = em, meta_cols = meta_cols)
     }
-    mc <- intersect(lock$meta_cols, colnames(md))
-    cframe <- .scroll_extract_cells(seu, md, mc, lock$embeddings)
+    # Every source must carry the declared assays / embeddings / meta columns:
+    # the cells frames are rbind-ed at the end, so a source missing a column would
+    # otherwise fail deep in the merge. Fail here with the offending source named.
+    miss_a <- setdiff(lock$assays, SeuratObject::Assays(seu))
+    if (length(miss_a))
+      stop(sprintf("[stream] source '%s' is missing declared assay(s): %s",
+                   id, paste(miss_a, collapse = ", ")), call. = FALSE)
+    miss_e <- setdiff(lock$embeddings, names(seu@reductions))
+    if (length(miss_e))
+      stop(sprintf("[stream] source '%s' is missing declared reduction(s): %s",
+                   id, paste(miss_e, collapse = ", ")), call. = FALSE)
+    miss_m <- setdiff(lock$meta_cols, colnames(md))
+    if (length(miss_m))
+      stop(sprintf("[stream] source '%s' is missing declared meta column(s): %s",
+                   id, paste(miss_m, collapse = ", ")), call. = FALSE)
+    cframe <- .scroll_extract_cells(seu, md, lock$meta_cols, lock$embeddings)
 
     for (assay in lock$assays) {
       ai <- .scroll_export_assay(seu, assay, tmp_root, quantize = FALSE, offset = offset)

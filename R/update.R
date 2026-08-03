@@ -112,7 +112,10 @@ scroll_update <- function(dir, object, embeddings = NULL, meta_cols = NULL,
     }
   }
 
-  yaml::write_yaml(man, file.path(dir, "manifest.yaml"))
+  # unicode = TRUE to match .scroll_write_manifest(): otherwise re-writing the
+  # manifest here would re-escape non-ASCII feature names to `<U+XXXX>` and break
+  # their match against the store's feature column.
+  yaml::write_yaml(man, file.path(dir, "manifest.yaml"), unicode = TRUE)
   .scroll_step(verbose, sprintf(
     "Updated %s: +%d embedding(s), +%d meta col(s)%s (expr store untouched).",
     dir, length(embeddings), length(meta_cols),

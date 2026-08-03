@@ -3,6 +3,10 @@
 # matrix from the Parquet store (the one runtime operation that materialises a
 # chunk of the matrix — hence on-demand, behind a Compute button).
 
+# Above this many tested cells (with no max_cells cap) scroll_de emits a heads-up
+# that the in-RAM matrix may be large — the one place runtime memory scales.
+.SCROLL_DE_WARN_CELLS <- 100000L
+
 #' Live differential expression for a contrast (presto / Wilcoxon)
 #'
 #' Compares `ident1` against `ident2` or against the rest of the cells when
@@ -58,6 +62,14 @@ scroll_de <- function(data, assay, group_col, ident1, ident2 = NULL, min_pct = 0
   }
   if (sum(labels == "group1") < 3 || sum(labels != "group1") < 3)
     stop("Each side of the contrast needs at least 3 cells.", call. = FALSE)
+  # Heads-up: DE materialises an all-genes x tested-cells matrix in RAM (the one
+  # runtime operation whose memory scales with the matrix). On a very large
+  # uncapped contrast that can be sizable — point the caller at max_cells.
+  if (is.null(max_cells) && length(labels) > .SCROLL_DE_WARN_CELLS)
+    message(sprintf(
+      "scroll_de: testing %s cells with no max_cells cap; the in-memory matrix ",
+      format(length(labels), big.mark = ",")),
+      "may be large. Set max_cells to bound DE time and peak RAM.")
   # `bc` = barcodes (matrix dimnames); `key` = the store's cell key used to query +
   # join (v2 int global index / v1 barcode).
   bc  <- cells$cell[kept]
@@ -124,17 +136,28 @@ scroll_de <- function(data, assay, group_col, ident1, ident2 = NULL, min_pct = 0
     ifelse(in1, "group1", ifelse(!is.na(g) & g %in% ident2, "group2", NA_character_))
 }
 
+# Evaluate `expr` with the RNG seeded to `seed` (for reproducible sampling),
+# restoring the caller's `.Random.seed` afterward so the draw never perturbs the
+# session's RNG stream. `seed = NULL` runs `expr` against the current RNG state
+# untouched. Shared by the DE cap and the pseudobulk pseudo-replicate draws.
+.scroll_with_seed <- function(seed, expr) {
+  if (is.null(seed)) return(expr)
+  old <- if (exists(".Random.seed", .GlobalEnv, inherits = FALSE))
+           get(".Random.seed", .GlobalEnv) else NULL
+  set.seed(seed)
+  on.exit(if (!is.null(old)) assign(".Random.seed", old, .GlobalEnv)
+          else if (exists(".Random.seed", .GlobalEnv, inherits = FALSE))
+            rm(".Random.seed", envir = .GlobalEnv))
+  force(expr)
+}
+
 # Positions (into `labels`) keeping at most `max_cells` cells per group. The
 # subsample is deterministic (fixed seed) so repeated DE runs match, and the
 # caller's RNG stream is preserved (save + restore `.Random.seed`).
 .scroll_cap_groups <- function(labels, max_cells) {
-  old <- if (exists(".Random.seed", .GlobalEnv, inherits = FALSE))
-           get(".Random.seed", .GlobalEnv) else NULL
-  set.seed(1L)
-  on.exit(if (!is.null(old)) assign(".Random.seed", old, .GlobalEnv)
-          else if (exists(".Random.seed", .GlobalEnv, inherits = FALSE))
-            rm(".Random.seed", envir = .GlobalEnv))
-  sel <- lapply(split(seq_along(labels), labels), function(ii)
-    if (length(ii) > max_cells) sample(ii, max_cells) else ii)
-  sort(unlist(sel, use.names = FALSE))
+  .scroll_with_seed(1L, {
+    sel <- lapply(split(seq_along(labels), labels), function(ii)
+      if (length(ii) > max_cells) sample(ii, max_cells) else ii)
+    sort(unlist(sel, use.names = FALSE))
+  })
 }

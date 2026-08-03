@@ -3,6 +3,26 @@
 First tagged release. `scroll` turns a processed Seurat object into a
 polished, flat-RAM interactive single-cell explorer.
 
+## Correctness fixes
+
+* **`scroll_update()` no longer re-escapes non-ASCII feature names.** It rewrites
+  the manifest, but wrote it without `unicode = TRUE` (unlike `scroll_build()`), so
+  an update on a project with a non-ASCII feature (e.g. an antibody `FcεRIa`)
+  re-mangled the name to `<U+XXXX>` and broke its query/label match. Now consistent
+  with the build path.
+* **Pseudobulk DE is RNG-neutral and reproducible.** `scroll_pseudobulk_de()`'s
+  random pseudo-replicate draw used the session's global RNG as a side effect and
+  was non-reproducible. It now seeds the draw (new `seed =` argument, default `1L`)
+  and restores the caller's `.Random.seed`, mirroring `scroll_de()`'s cap.
+  `scroll_pseudobulk_stability()` still varies the draw per run (distinct per-run
+  seeds), so it stays reproducible as a whole without perturbing the session.
+* **`scroll_build_stream()` validates each source up front.** A source missing a
+  declared assay / embedding / metadata column now errors with the offending source
+  named, instead of failing deep in the final cells-frame merge.
+* **`scroll_de()`** emits a heads-up when testing a very large contrast with no
+  `max_cells` cap (the one runtime step whose memory scales with the matrix),
+  pointing at `max_cells` to bound time and peak RAM.
+
 ## Fix: `scroll_add_subset()` preserves scoped-column types
 
 * A subset's scoped metadata columns kept their **original type** instead of being

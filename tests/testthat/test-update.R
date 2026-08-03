@@ -58,6 +58,44 @@ test_that("scroll_update registers a subset view (partial coverage + scoped meta
   expect_equal(man$meta$tsub$scope, "tcell")
 })
 
+test_that("scroll_update preserves non-ASCII feature names in the manifest", {
+  # Regression: scroll_update rewrites the manifest, so it must write it with
+  # unicode = TRUE (as the build does); otherwise a non-ASCII feature name is
+  # re-escaped to a `<U+XXXX>` form that no longer matches the store. yaml only
+  # keeps UTF-8 under a UTF-8 locale, so pin one for this test (skip if none).
+  old_loc <- Sys.getlocale("LC_CTYPE")
+  on.exit(suppressWarnings(Sys.setlocale("LC_CTYPE", old_loc)), add = TRUE)
+  set_ok <- ""
+  for (loc in c("en_US.UTF-8", "C.UTF-8", "en_US.utf8"))
+    if (nzchar(set_ok <- suppressWarnings(Sys.setlocale("LC_CTYPE", loc)))) break
+  skip_if_not(nzchar(set_ok), "no UTF-8 locale available")
+
+  dir <- file.path(tempdir(), "scroll-update-unicode")
+  set.seed(3)
+  genes <- c("CD3D", "Fc\u03b5RIa", "Na\u00efve1")   # non-ASCII feature names
+  n <- 40
+  cm <- matrix(rpois(length(genes) * n, 0.8), nrow = length(genes),
+               dimnames = list(genes, paste0("cell", seq_len(n))))
+  norm <- log1p(sweep(cm, 2, pmax(colSums(cm), 1), "/") * 1e4)
+  obj <- SeuratObject::CreateSeuratObject(counts = Matrix::Matrix(cm, sparse = TRUE),
+                                          min.cells = 0, min.features = 0)
+  obj <- SeuratObject::SetAssayData(obj, layer = "data",
+                                    new.data = Matrix::Matrix(norm, sparse = TRUE))
+  emb <- matrix(rnorm(n * 2), ncol = 2,
+                dimnames = list(colnames(obj), c("UMAP_1", "UMAP_2")))
+  obj[["umap"]] <- SeuratObject::CreateDimReducObject(embeddings = emb, key = "UMAP_", assay = "RNA")
+
+  suppressMessages(scroll_build(obj, dir, assays = "RNA", overwrite = TRUE))
+  feats0 <- unlist(scroll_manifest(dir)$assays$RNA$features)
+  expect_true(all(genes %in% feats0))              # build round-trips UTF-8
+
+  obj$score <- runif(n)
+  suppressMessages(scroll_update(dir, obj, meta_cols = "score"))
+  feats1 <- unlist(scroll_manifest(dir)$assays$RNA$features)
+  expect_true(all(genes %in% feats1))              # update must NOT re-escape them
+  expect_false(any(grepl("<U\\+", feats1)))
+})
+
 test_that("scroll_update errors on unknown refs and no-ops when empty", {
   dir <- file.path(tempdir(), "scroll-update-proj")   # built above
   obj <- make_test_object()

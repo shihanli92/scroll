@@ -100,13 +100,17 @@
 #' @param n_pseudo,cells_per_pseudo Pseudo-replicate fallback: number of
 #'   pseudo-replicates and cells sampled per pseudo-replicate.
 #' @param cells Cells to test over (default `data$cells`).
+#' @param seed Integer seed for the pseudo-replicate draw, so a compute is
+#'   reproducible and the caller's RNG stream is left untouched. `NULL` uses the
+#'   current RNG state (used internally to vary draws across stability runs).
 #' @return A data.frame (`gene`, `logFC`, `avg_expr`, `p_val`, `p_val_adj`) ranked
 #'   by adjusted p-value; positive `logFC` is up in `ident1`. The attribute
 #'   `"pseudo"` is `TRUE` when pseudo-replicates were used.
 #' @export
 scroll_pseudobulk_de <- function(data, assay, aggregate_cols, ident1, ident2 = NULL,
                                  replicate_col = NULL, min_cells = 10,
-                                 n_pseudo = 3, cells_per_pseudo = 50, cells = NULL) {
+                                 n_pseudo = 3, cells_per_pseudo = 50, cells = NULL,
+                                 seed = 1L) {
   if (!requireNamespace("edgeR", quietly = TRUE) ||
       !requireNamespace("limma", quietly = TRUE))
     stop("Pseudobulk DE needs the 'edgeR' and 'limma' packages.", call. = FALSE)
@@ -134,7 +138,10 @@ scroll_pseudobulk_de <- function(data, assay, aggregate_cols, ident1, ident2 = N
   df <- df[!is.na(df$combo) & !is.na(df$grp), , drop = FALSE]
   if (!nrow(df)) stop("No cells match the selected groups.", call. = FALSE)
 
-  pm <- .scroll_pseudobulk_map(df, replicate_col, min_cells, n_pseudo, cells_per_pseudo)
+  # seed the pseudo-replicate draw (reproducible) without perturbing the session
+  # RNG; stability passes seed = NULL / a per-run seed to vary the draws.
+  pm <- .scroll_with_seed(seed,
+    .scroll_pseudobulk_map(df, replicate_col, min_cells, n_pseudo, cells_per_pseudo))
   mapping <- pm$mapping
   samp <- unique(mapping[, c("psample", "group")])
   if (sum(samp$group == "group1") < 2 || sum(samp$group == "group2") < 2)
@@ -172,11 +179,14 @@ scroll_pseudobulk_de <- function(data, assay, aggregate_cols, ident1, ident2 = N
   res
 }
 
-# Run scroll_pseudobulk_de `runs` times (fresh random pseudo-replicates each) and
-# return the successful per-run result data.frames.
+# Run scroll_pseudobulk_de `runs` times (fresh pseudo-replicates each) and return
+# the successful per-run result data.frames. A distinct per-run seed keeps the
+# draws varied AND the whole stability computation reproducible, and (like a
+# single compute) leaves the caller's RNG stream untouched.
 .scroll_pseudobulk_runs <- function(..., runs) {
   out <- lapply(seq_len(runs),
-                function(i) tryCatch(scroll_pseudobulk_de(...), error = function(e) NULL))
+                function(i) tryCatch(scroll_pseudobulk_de(..., seed = i),
+                                     error = function(e) NULL))
   out <- Filter(Negate(is.null), out)
   if (length(out) < 2)
     stop("Stability needs >= 2 successful runs (", length(out), " succeeded); ",
