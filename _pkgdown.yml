@@ -5,17 +5,8 @@ template:
 
 navbar:
   structure:
-    left:  [intro, reference, articles, news]
+    left:  [reference, news]
     right: [search, github]
-
-articles:
-- title: Tutorials
-  navbar: ~
-  contents:
-  - getting-started
-  - large-datasets
-  - custom-panels
-  - multimodal
 
 reference:
 - title: Build & assemble
@@ -25,6 +16,7 @@ reference:
   contents:
   - scroll_build
   - scroll_build_stream
+  - scroll_update
   - scroll_add_subset
   - vdj_spec
   - spatial_spec
@@ -42,7 +34,7 @@ reference:
 
 - title: Query layer
   desc: >
-    The flat-RAM duckdb query interface, usable programmatically without the app.
+    The flat-RAM arrow query interface, usable programmatically without the app.
   contents:
   - scroll_connect
   - scroll_disconnect
@@ -92,3 +84,5 @@ reference:
   - view_de_table
   - view_volcano
   - view_stability
+  - view_contrast_preview
+  - view_contrast_medoids

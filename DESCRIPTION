@@ -10,7 +10,7 @@ Description: Turns a processed Seurat object into a polished, interactive
     expression including replicate-aware pseudobulk), each with its own controls.
     A heavy offline build phase extracts a compact, sparse on-disk store (cell
     metadata and embeddings as one Parquet table, expression as a
-    feature-partitioned Parquet store) that the app reads one feature at a time
+    bucket-partitioned Parquet store) that the app reads one feature at a time
     via 'arrow', so runtime memory stays flat regardless of matrix size. A
     streaming builder assembles multi-million-cell projects one source at a time.
 License: MIT + file LICENSE
@@ -48,12 +48,9 @@ Suggests:
     limma,
     DT,
     ggrepel,
-    knitr,
-    rmarkdown,
     testthat (>= 3.0.0),
     SeuratData
 Remotes:
     immunogenomics/presto,
     satijalab/seurat-data
-VignetteBuilder: knitr
 Config/testthat/edition: 3

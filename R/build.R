@@ -277,7 +277,7 @@ scroll_build <- function(object, outdir,
   bnd <- c(0L, cumsum(tabulate(fi, nbins = nfeat)))   # feature f rows: (bnd[f]+1):bnd[f+1]
 
   dest  <- file.path(outdir, "expr", assay)
-  # v3 store: partition by the feature's (case-folded) first character -- a few
+  # v2 store: partition by the feature's (case-folded) first character -- a few
   # dozen buckets instead of one directory per feature. This keeps the arrow
   # Dataset-open cheap (dozens of dirs, not tens of thousands) while a single-gene
   # query still reads little: rows are sorted by `feature` within each bucket, so

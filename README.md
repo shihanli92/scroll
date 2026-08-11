@@ -19,7 +19,7 @@ step.
 > **Status:** feature-complete for the MVP and validated at scale (a live 4.4M-cell
 > atlas). Includes the two-phase build; eight analysis panels (incl. a live DE panel
 > and replicate-aware **Pseudobulk DE**); a compact **v2 storage format** (int32
-> cell-index + float32 + zstd, ~6× smaller than v1 with no precision loss);
+> cell-index + zstd, ~5× smaller than v1; lossless with `quantize = FALSE`);
 > **`scroll_build_stream()`** for streaming multi-million-cell builds on a laptop;
 > **`scroll_multi_app()`** for several datasets behind one page; multimodal support
 > (multi-assay, per-cell **VDJ / immune repertoire** via `vdj_spec()`, **spatial**
@@ -27,15 +27,14 @@ step.
 > views** for reprocessed sub-embeddings; rich declarative controls (data-derived choices,
 > cascading levels, preferred defaults, palette picker); PNG/PDF/CSV export; a
 > rasterization/memoization performance pass; and the public `register_panel()`
-> extension point. Documentation: [pkgdown site](https://shihanli1992.github.io/scroll/) +
-> four vignettes (`browseVignettes("scroll")`).
+> extension point. Documentation: [pkgdown site](https://shihanli1992.github.io/scroll/).
 
 ## The two phases
 
 ```
 Seurat .rds ──scroll_build()──▶  project/            ──scroll_serve()──▶  explorer
  (heavy, once)                    cells.parquet        (light, per session)
-                                  expr/<assay>/feature=*/…
+                                  expr/<assay>/bucket=<char>/…
                                   manifest.yaml
                                   config.yaml   ← optional defaults
                                   app.R         ← deploy to a Shiny Server
@@ -44,23 +43,6 @@ Seurat .rds ──scroll_build()──▶  project/            ──scroll_serv
 The running app **never loads the Seurat object**. It loads `cells.parquet`
 (metadata + embeddings, a few MB) once globally, and answers each feature lookup
 with an arrow query that reads only that feature's Parquet partition.
-
-## Tutorials
-
-Four vignettes walk through the package (`browseVignettes("scroll")`):
-
-- **Getting started** — from a Seurat object to a running app:
-  `vignette("getting-started", package = "scroll")`.
-- **Large datasets & streaming builds** — multi-million-cell projects one source at a
-  time with `scroll_build_stream()`, the storage format, and `quantize`/`counts`
-  tradeoffs: `vignette("large-datasets", package = "scroll")`.
-- **Writing a custom panel** — extend the app declaratively with `register_plot_panel()`
-  (richer controls + reusable helpers) or the low-level `register_panel()`:
-  `vignette("custom-panels", package = "scroll")`.
-- **Multimodal: VDJ, spatial & ATAC** — TCR/BCR repertoire with `vdj_spec()` (four
-  repertoire panels), 10x Visium / imaging with `spatial_spec()` (a tissue-image
-  Spatial panel with zoom), and scATAC peaks with `atac_spec()` (a gene/region peak
-  search): `vignette("multimodal", package = "scroll")`.
 
 ## Install
 
@@ -93,7 +75,7 @@ expression — use `quantize = FALSE` when exact fractions matter.
 single-gene queries in tens of milliseconds even at several million cells, with no lossy
 precision change (`quantize = FALSE`). Add `counts = TRUE` for a raw-counts store (needed
 by Pseudobulk DE; roughly doubles build size). Projects built with an older `scroll` keep
-working un-rebuilt. See `vignette("large-datasets")` for the `quantize`/`counts` tradeoffs.
+working un-rebuilt.
 
 **Build large datasets (streaming).** For many samples that won't fit in RAM as one
 merged object, `scroll_build_stream()` reads **one source at a time** into a shared
@@ -150,7 +132,7 @@ page, each on its own tab (namespaced, independent):
 scroll_multi_app(c("PBMC 3k" = "pbmc3k", "CITE-seq" = "cite"))
 ```
 
-### Panels (v1)
+### Panels
 
 | Panel | Controls |
 |-------|----------|
@@ -238,8 +220,7 @@ For full control (cross-output state, custom reactivity), `register_panel(id, ui
 server, …)` takes a raw `ui(id, data)` / `server(id, data, cells_r)` module pair —
 the same contract the built-ins use — and the helpers `scroll_render_plot()` /
 `scroll_bind_levels()` remove most of the boilerplate. Registering an existing `id`
-overrides that panel in place; `scroll_reset_panels()` clears custom ones. See
-`vignette("custom-panels")`.
+overrides that panel in place; `scroll_reset_panels()` clears custom ones.
 
 ## Query features directly (no app needed)
 

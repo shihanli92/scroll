@@ -329,10 +329,8 @@ Each built-in analysis panel carries its own fine-grained controls:
 
 ## Documentation
 
-* Three vignettes: *Getting started* (Seurat object → running app), *Large datasets
-  & streaming builds* (`scroll_build_stream()`, the v2 storage format, and the
-  `quantize`/`counts` tradeoffs), and *Writing a custom panel* (declarative
-  `register_plot_panel()` + richer controls, and the low-level contract).
+* Reference documentation for every export, published as a
+  [pkgdown site](https://shihanli1992.github.io/scroll/).
 
 ## Internal
 
