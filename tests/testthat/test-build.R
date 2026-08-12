@@ -134,3 +134,23 @@ test_that("max_levels raised caches the full level list", {
   man <- scroll_manifest(dir)
   expect_equal(length(man$meta$clone$levels), 300L)
 })
+
+test_that(".scroll_check_cell_order guards the assay/metadata cell-order invariant", {
+  skip_if_not_installed("Matrix")
+  mat <- Matrix::Matrix(matrix(1, 2, 3,
+    dimnames = list(c("g1", "g2"), c("c1", "c2", "c3"))), sparse = TRUE)
+  # matching order (and NULL) pass silently
+  expect_silent(.scroll_check_cell_order(mat, c("c1", "c2", "c3"), "RNA"))
+  expect_silent(.scroll_check_cell_order(mat, NULL, "RNA"))
+  # permuted or mismatched-length cell ids -> a clear "mis-aligned" error
+  expect_error(.scroll_check_cell_order(mat, c("c1", "c3", "c2"), "RNA"), "mis-aligned")
+  expect_error(.scroll_check_cell_order(mat, c("c1", "c2"), "RNA"), "mis-aligned")
+})
+
+test_that("a standard build passes the cell-order assertion", {
+  skip_if_not_installed("SeuratObject")
+  obj <- make_test_object(n = 40)
+  dir <- file.path(tempdir(), "scroll-cellorder-ok")
+  expect_no_error(suppressMessages(
+    scroll_build(obj, dir, assays = "RNA", counts = TRUE, overwrite = TRUE)))
+})

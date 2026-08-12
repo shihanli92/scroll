@@ -112,7 +112,8 @@ scroll_build_stream <- function(outdir, sources, reader, assays = NULL,
     cframe <- .scroll_extract_cells(seu, md, lock$meta_cols, lock$embeddings)
 
     for (assay in lock$assays) {
-      ai <- .scroll_export_assay(seu, assay, tmp_root, quantize = FALSE, offset = offset)
+      ai <- .scroll_export_assay(seu, assay, tmp_root, quantize = FALSE, offset = offset,
+                                 cell_ids = cframe$cell)
       .scroll_stream_move(file.path(tmp_root, "expr", assay),
                           file.path(outdir, "expr", assay), tag = .scroll_safe_tag(id))
       gmax[[assay]] <- max(gmax[[assay]] %||% 0, ai$max)

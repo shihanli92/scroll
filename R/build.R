@@ -116,10 +116,11 @@ scroll_build <- function(object, outdir,
   # --- expr/<assay>/: long, feature-partitioned expression (+ optional counts)
   assay_info <- list()
   for (a in assays) {
-    assay_info[[a]] <- .scroll_export_assay(object, a, outdir, quantize, verbose = verbose)
+    assay_info[[a]] <- .scroll_export_assay(object, a, outdir, quantize, verbose = verbose,
+                                            cell_ids = cells$cell)
     if (counts) {
       .scroll_step(verbose, sprintf("Exporting raw counts for '%s'...", a))
-      .scroll_export_counts(object, a, outdir)
+      .scroll_export_counts(object, a, outdir, cell_ids = cells$cell)
     }
   }
 
@@ -243,6 +244,20 @@ scroll_build <- function(object, outdir,
 # Emit a progress step message when verbose.
 .scroll_step <- function(verbose, ...) if (isTRUE(verbose)) message(...)
 
+# Guard the load-bearing invariant behind the v2 integer cell-index: the store's
+# `cell` column is the assay matrix COLUMN position, which is only a valid row index
+# into cells.parquet if the matrix columns are in the SAME order as the cell metadata
+# rows (`cell_ids`, i.e. rownames(md) / cells$cell). Seurat maintains this, but a
+# mismatch would silently mis-join every expression value, so fail the build loudly.
+.scroll_check_cell_order <- function(mat, cell_ids, assay) {
+  if (is.null(cell_ids)) return(invisible())
+  if (!identical(colnames(mat), as.character(cell_ids)))
+    stop(sprintf(
+      "Assay '%s': the %d assay-matrix columns are not identical (in order) to the %s cell-metadata rows, so the store's integer cell-index would be mis-aligned. Reorder the assay to match colnames == rownames(metadata) before building.",
+      assay, ncol(mat), format(length(cell_ids), big.mark = ",")),
+      call. = FALSE)
+}
+
 # Export one assay's `data` layer as long, feature-partitioned Parquet.
 # Returns list(features=, max=, n_features=) for the manifest. The write is done
 # in feature batches so a progress bar can advance over the (potentially tens of
@@ -250,7 +265,7 @@ scroll_build <- function(object, outdir,
 # bounded. Each feature lands in exactly one batch, so every partition holds one
 # part file, identical in content to a single write.
 .scroll_export_assay <- function(object, assay, outdir, quantize, verbose = FALSE,
-                                 offset = 0L) {
+                                 offset = 0L, cell_ids = NULL) {
   # `offset` shifts the (1-based) local cell index onto a GLOBAL row index so a
   # streaming builder can append one source at a time into a shared store
   # (scroll_build uses offset = 0: local index == global index).
@@ -258,6 +273,7 @@ scroll_build <- function(object, outdir,
   if (is.null(mat) || nrow(mat) == 0 || length(mat@x) == 0)
     stop("Assay '", assay, "' has an empty `data` layer; normalize the object ",
          "before building.", call. = FALSE)
+  .scroll_check_cell_order(mat, cell_ids, assay)   # int cell-index <-> cells.parquet row order
 
   feats <- rownames(mat)
   .scroll_warn_unsafe_features(feats)
@@ -320,11 +336,12 @@ scroll_build <- function(object, outdir,
 # Unlike expr/ this is NOT feature-partitioned: pseudobulk always full-scans all
 # genes to aggregate, and one file scans far faster than tens of thousands of
 # partitions. Only the nonzero entries are stored (sparse).
-.scroll_export_counts <- function(object, assay, outdir) {
+.scroll_export_counts <- function(object, assay, outdir, cell_ids = NULL) {
   mat <- SeuratObject::GetAssayData(object, assay = assay, layer = "counts")
   if (is.null(mat) || nrow(mat) == 0 || length(mat@x) == 0)
     stop("Assay '", assay, "' has an empty `counts` layer; cannot export counts ",
          "for pseudobulk.", call. = FALSE)
+  .scroll_check_cell_order(mat, cell_ids, assay)   # int cell-index <-> cells.parquet row order
   feats <- rownames(mat)
   trip <- Matrix::summary(mat)             # i (feature), j (cell), x (count)
   df <- data.frame(feature = feats[trip$i], cell = trip$j,          # int32 cell-index (v2)
