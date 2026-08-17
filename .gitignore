@@ -18,3 +18,6 @@ docs/
 
 # Local dev/scratch scripts (dataset-specific; not part of the package)
 dev/
+
+# Internal usage guide — lab reference, not part of the package
+USAGE.md
