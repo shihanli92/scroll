@@ -3,6 +3,18 @@
 First tagged release. `scroll` turns a processed Seurat object into a
 polished, flat-RAM interactive single-cell explorer.
 
+## New: reproducible CSV export for the built-in plot panels
+
+* Every built-in plot panel (DimPlot, FeaturePlot, Biaxial, Violin, DotPlot,
+  Proportions) now offers a **CSV** download beside its PNG/PDF buttons, containing
+  the minimal source data behind the figure. For the per-cell panels the CSV leads
+  with the **cell barcode** plus the plotted columns (embedding coords + colour-by /
+  expression / group), so an exported point maps back to a tracked cell; the two
+  aggregated panels export their group×feature (DotPlot: `avg_expr`, `pct_expressing`)
+  and group×category (Proportions: `n_cells`, `proportion`) summary. The CSV reuses
+  the exact data the plot draws, so it reproduces the figure. Custom panels built with
+  `.scroll_plot_area(csv = TRUE)` + `.scroll_plot_downloads(csv_r = )` get the same.
+
 ## New: `scroll_preview_panel()` — fast custom-panel dev loop
 
 * `scroll_preview_panel(panel, dir)` mounts **one** panel (by id) in the real app

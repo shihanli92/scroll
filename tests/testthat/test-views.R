@@ -194,3 +194,34 @@ test_that("view_contrast_medoids emits exactly one point per sample", {
   b <- ggplot2::ggplot_build(p)
   expect_equal(nrow(b$data[[length(b$data)]]), 6L)   # medoid layer: one point per sample
 })
+
+test_that("plot-source CSV builders carry barcodes + reproducer columns", {
+  skip_if_not_installed("SeuratObject")
+  dir <- test_project()
+  cells <- as.data.frame(arrow::read_parquet(file.path(dir, "cells.parquet")))
+  cells$.gidx <- seq_len(nrow(cells))
+  emb <- "umap"
+
+  # DimPlot source: cell barcode + the two embedding coords + the color-by column
+  d <- .scroll_dimplot_source(cells, emb, "celltype")
+  expect_true(all(c("cell", paste0(emb, c("_1", "_2")), "celltype") %in% names(d)))
+  expect_true(all(d$cell %in% cells$cell))              # barcodes are real
+  expect_equal(anyNA(d[[paste0(emb, "_1")]]), FALSE)    # NA-coord rows dropped
+
+  # FeaturePlot source: barcode + coords + a feature-expression column, 0-filled
+  con <- scroll_connect(dir); on.exit(scroll_disconnect(con))
+  vals <- scroll_query_feature(con, "RNA", "CD3D")
+  f <- .scroll_featureplot_source(cells, emb, "CD3D", vals)
+  expect_true(all(c("cell", "CD3D") %in% names(f)))
+  expect_false(anyNA(f$CD3D))
+
+  # Violin source: barcode-first, group column, feature column
+  v <- .scroll_violin_source(cells, "celltype", "CD3D", vals, value_col = NULL)
+  expect_identical(names(v)[1], "cell")
+  expect_true(all(c("celltype", "CD3D") %in% names(v)))
+
+  # Aggregated panels: no per-cell barcode, the plotted summary instead
+  p <- .scroll_proportions_source(cells, "celltype", "condition")
+  expect_setequal(names(p), c("group", "category", "n_cells", "proportion"))
+  expect_false("cell" %in% names(p))
+})

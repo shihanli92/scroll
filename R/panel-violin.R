@@ -34,7 +34,7 @@ violin_ui <- function(id, data) {
         bslib::input_switch(ns("legend"), "Legend", FALSE)),
       .scroll_group("Layout", .scroll_aspect_input(ns))
     ),
-    .scroll_plot_area(ns, "460px")
+    .scroll_plot_area(ns, "460px", csv = TRUE)
   )
 }
 
@@ -90,7 +90,8 @@ violin_server <- function(id, data, cells_r = reactive(data$cells),
                   d$values, cosmetic_r())
     })
     output$plot <- renderPlot(plot_r())
-    .scroll_plot_downloads(output, plot_r, id)
+    csv_r <- reactive({ d <- data_r(); .scroll_violin_source(d$cells, d$group_by, d$feature, d$values, d$value_col) })
+    .scroll_plot_downloads(output, plot_r, id, csv_r = csv_r)
   })
 }
 

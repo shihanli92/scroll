@@ -551,6 +551,63 @@ view_violin <- function(cells, params, values = NULL, state = list()) {
 # Long data.frame of all column pairs (one facet per pair), NA rows dropped.
 # Factored out so the Shiny server can build it once in a data reactive rather
 # than re-expanding on every cosmetic change.
+# --- CSV "plot source" builders --------------------------------------------
+# The minimal tidy data behind each core plot, for the per-plot CSV download.
+# Per-cell panels lead with `cell` (the barcode from cells.parquet) so an exported
+# point maps back to a tracked cell; the two aggregated panels (dotplot, proportions)
+# have no 1:1 cell and export their group/feature summary instead. Each reuses the
+# exact data the plot draws, so the CSV reproduces the figure.
+
+.scroll_dimplot_source <- function(cells, embedding, color_by) {
+  df <- .scroll_embedding_xy(cells, embedding)                 # drops NA-coord cells, like the plot
+  cols <- unique(c("cell", paste0(embedding, c("_1", "_2")), color_by))
+  df[, intersect(cols, names(df)), drop = FALSE]
+}
+
+.scroll_featureplot_source <- function(cells, embedding, feature, values) {
+  df <- .scroll_embedding_xy(cells, embedding)
+  out <- df[, intersect(c("cell", paste0(embedding, c("_1", "_2"))), names(df)), drop = FALSE]
+  out[[feature]] <- .scroll_expr_vector(df, values)            # 0-filled, dequantized, .gidx-joined
+  out
+}
+
+.scroll_violin_source <- function(cells, group_by, feature, values, value_col = NULL) {
+  expr <- if (!is.null(value_col)) suppressWarnings(as.numeric(cells[[value_col]]))
+          else .scroll_expr_vector(cells, values)
+  out <- data.frame(cell = cells$cell, stringsAsFactors = FALSE)
+  out[[group_by]] <- as.character(cells[[group_by]])
+  out[[feature]] <- expr
+  out
+}
+
+.scroll_biaxial_source <- function(cells, features, color_by) {
+  feats <- unique(features[features %in% names(cells)])
+  out <- data.frame(cell = cells$cell, stringsAsFactors = FALSE)
+  for (f in feats) out[[f]] <- suppressWarnings(as.numeric(cells[[f]]))
+  if (!is.null(color_by) && color_by %in% names(cells)) out[[color_by]] <- as.character(cells[[color_by]])
+  out
+}
+
+# dotplot is group x feature aggregated -> no barcode; export the plotted stats.
+.scroll_dotplot_source <- function(assembly) {
+  a <- assembly$agg
+  data.frame(feature = as.character(a$feature), group = as.character(a$group),
+             avg_expr = a$mean, pct_expressing = a$frac, n_expressing = a$npos,
+             stringsAsFactors = FALSE)
+}
+
+# proportions is group x category counts -> no barcode; export counts + fraction.
+.scroll_proportions_source <- function(cells, group_by, fill_by) {
+  tab <- as.data.frame(table(group    = as.character(cells[[group_by]]),
+                             category = as.character(cells[[fill_by]])),
+                       stringsAsFactors = FALSE)
+  totals <- stats::aggregate(Freq ~ group, tab, sum)
+  tab <- merge(tab, totals, by = "group", suffixes = c("", "_total"))
+  tab$proportion <- ifelse(tab$Freq_total > 0, tab$Freq / tab$Freq_total, 0)
+  names(tab)[names(tab) == "Freq"] <- "n_cells"
+  tab[order(tab$group, tab$category), c("group", "category", "n_cells", "proportion"), drop = FALSE]
+}
+
 .scroll_biaxial_df <- function(cells, params) {
   feats <- params$features
   feats <- feats[feats %in% names(cells)]

@@ -19,7 +19,7 @@ proportions_ui <- function(id, data) {
         bslib::input_switch(ns("legend"), "Legend", TRUE)),
       .scroll_group("Layout", .scroll_aspect_input(ns))
     ),
-    .scroll_plot_area(ns, "460px")
+    .scroll_plot_area(ns, "460px", csv = TRUE)
   )
 }
 
@@ -47,7 +47,8 @@ proportions_server <- function(id, data, cells_r = reactive(data$cells),
       view_proportions(d$cells, list(group_by = d$group_by, fill_by = d$fill_by), cosmetic_r())
     })
     output$plot <- renderPlot(plot_r())
-    .scroll_plot_downloads(output, plot_r, id)
+    csv_r <- reactive({ d <- data_r(); .scroll_proportions_source(d$cells, d$group_by, d$fill_by) })
+    .scroll_plot_downloads(output, plot_r, id, csv_r = csv_r)
   })
 }
 

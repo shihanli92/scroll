@@ -26,7 +26,7 @@ dotplot_ui <- function(id, data) {
                     c("Off" = "off", "Rows" = "rows", "Columns" = "columns", "Both" = "both")),
         .scroll_aspect_input(ns))
     ),
-    .scroll_plot_area(ns, "520px")
+    .scroll_plot_area(ns, "520px", csv = TRUE)
   )
 }
 
@@ -65,7 +65,8 @@ dotplot_server <- function(id, data, cells_r = reactive(data$cells),
                    NULL, cosmetic_r(), assembly = d$assembly)
     })
     output$plot <- renderPlot(plot_r())
-    .scroll_plot_downloads(output, plot_r, id)
+    csv_r <- reactive(.scroll_dotplot_source(data_r()$assembly))
+    .scroll_plot_downloads(output, plot_r, id, csv_r = csv_r)
   })
 }
 

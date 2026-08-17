@@ -208,12 +208,15 @@
   else tag
 }
 
-# Standard plot area: a small toolbar (PNG + PDF download) above the plot output.
-.scroll_plot_area <- function(ns, height = "460px")
+# Standard plot area: a small toolbar (PNG + PDF, and optionally a CSV of the
+# plot's source data) above the plot output. Pass csv = TRUE to add the CSV button
+# (the server must then wire output$csv, e.g. via .scroll_plot_downloads(csv_r=)).
+.scroll_plot_area <- function(ns, height = "460px", csv = FALSE)
   div(class = "scroll-plot",
       div(class = "scroll-plot-bar",
           .scroll_dl_button(ns("png"), "PNG"),
-          .scroll_dl_button(ns("pdf"), "PDF")),
+          .scroll_dl_button(ns("pdf"), "PDF"),
+          if (isTRUE(csv)) .scroll_dl_button(ns("csv"), "CSV")),
       .scroll_spin(plotOutput(ns("plot"), height = height)))
 
 # Image downloadHandler for a plot reactive, raster (PNG) or vector (PDF). Uses
@@ -232,10 +235,12 @@
 }
 
 # Register the standard PNG + PDF download outputs (ids "png"/"pdf") for a plot
-# reactive on a module's `output`. Filenames stem from the panel id.
-.scroll_plot_downloads <- function(output, plot_r, id) {
+# reactive on a module's `output`. Filenames stem from the panel id. When `csv_r`
+# (a data.frame reactive of the plot's source data) is supplied, also wire output$csv.
+.scroll_plot_downloads <- function(output, plot_r, id, csv_r = NULL) {
   output$png <- .scroll_img_handler(plot_r, paste0("scroll_", id, ".png"), "png")
   output$pdf <- .scroll_img_handler(plot_r, paste0("scroll_", id, ".pdf"), "pdf")
+  if (!is.null(csv_r)) output$csv <- .scroll_csv_handler(csv_r, paste0("scroll_", id, ".csv"))
   invisible()
 }
 

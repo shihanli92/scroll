@@ -30,7 +30,7 @@ featureplot_ui <- function(id, data) {
         selectInput(ns("split"), "Split by", c("None" = "", stats::setNames(cats, cats))),
         .scroll_aspect_input(ns))
     ),
-    .scroll_plot_area(ns, "460px")
+    .scroll_plot_area(ns, "460px", csv = TRUE)
   )
 }
 
@@ -95,7 +95,8 @@ featureplot_server <- function(id, data, cells_r = reactive(data$cells),
     plot_r   <- reactive(build(.scroll_use_raster(input$raster, data_r()$n)))
     export_r <- reactive(build(FALSE))
     output$plot <- renderPlot(plot_r())
-    .scroll_plot_downloads(output, export_r, id)
+    csv_r <- reactive({ d <- data_r(); .scroll_featureplot_source(d$cells, d$embedding, d$feature, d$values) })
+    .scroll_plot_downloads(output, export_r, id, csv_r = csv_r)
   })
 }
 
