@@ -48,9 +48,12 @@ Suggests:
     limma,
     DT,
     ggrepel,
+    knitr,
+    rmarkdown,
     testthat (>= 3.0.0),
     SeuratData
 Remotes:
     immunogenomics/presto,
     satijalab/seurat-data
+VignetteBuilder: knitr
 Config/testthat/edition: 3
