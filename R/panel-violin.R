@@ -100,7 +100,7 @@ violin_server <- function(id, data, cells_r = reactive(data$cells),
       list(palette = input$palette, jitter = isTRUE(input$jitter),
            legend = isTRUE(input$legend), aspect = input$aspect,
            manual_colors = manual_colors())))
-    plot_r <- reactive({
+    plot_r <- .scroll_lazy_plot(input, function() {
       d <- data_r()
       if (isTRUE(d$multi))
         return(view_violin_multi(d$cells, list(group_by = d$group_by, features = d$features),

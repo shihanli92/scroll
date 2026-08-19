@@ -24,6 +24,17 @@ many genes at once (grids and co-expression blend), with paste-a-list gene entry
   share — the lower cutoff had no visible effect. It now spans the real expression
   range.
 
+## New: lazy on-screen rendering (snappier View/subset switching)
+
+* The built-in plot panels (DimPlot, FeaturePlot, Biaxial, DotPlot, Violin,
+  Proportions) now **recompute only while on screen**. An `IntersectionObserver`
+  reports each panel's visibility to its module, and the panel keeps its last
+  render while off screen, refreshing when scrolled back into view. Switching the
+  app-bar **View** (subset) or cell filter therefore redraws just the panels in
+  view instead of every panel on the page — the on-screen panel updates
+  immediately and the rest catch up as you scroll, rather than the whole page
+  re-rendering serially at once.
+
 ## New: multi-gene Violin, and paste a gene list into DotPlot/Violin
 
 * The Violin gene box is now **multi-select**: pick or paste several genes and the

@@ -129,7 +129,7 @@ featureplot_server <- function(id, data, cells_r = reactive(data$cells),
       view_feature_plot(d$cells, list(embedding = d$embedding, feature = d$feature),
                         d$values, st)
     }
-    plot_r   <- reactive(build(.scroll_use_raster(input$raster, data_r()$n)))
+    plot_r   <- .scroll_lazy_plot(input, function() build(.scroll_use_raster(input$raster, data_r()$n)))
     export_r <- reactive(build(FALSE))
     output$plot <- renderPlot(plot_r())
     csv_r <- reactive({

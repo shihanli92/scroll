@@ -292,7 +292,9 @@ scroll_reset_panels <- function() {
 .scroll_page <- function(data, title, panels) {
   bslib::page_fluid(
     theme = .scroll_theme(),
-    tags$head(tags$style(HTML(.scroll_css())), tags$script(HTML(.scroll_spy_js()))),
+    tags$head(tags$style(HTML(.scroll_css())),
+              tags$script(HTML(.scroll_spy_js())),
+              tags$script(HTML(.scroll_lazy_js()))),
     .scroll_body(data, title, panels)
   )
 }
@@ -426,7 +428,9 @@ scroll_multi_app <- function(projects) {
 
   ui <- bslib::page_fluid(
     theme = .scroll_theme(),
-    tags$head(tags$style(HTML(.scroll_css())), tags$script(HTML(.scroll_spy_js()))),
+    tags$head(tags$style(HTML(.scroll_css())),
+              tags$script(HTML(.scroll_spy_js())),
+              tags$script(HTML(.scroll_lazy_js()))),
     # .scroll-multi lets the CSS pin the dataset tab strip and drop each dataset's
     # app bar + rail below it, so the dataset selector stays visible while scrolling.
     div(class = "scroll-multi", do.call(bslib::navset_tab, tabs))

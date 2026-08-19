@@ -108,7 +108,7 @@ biaxial_server <- function(id, data, cells_r = reactive(data$cells),
       d <- data_r(); st <- cosmetic_r(); st$raster <- raster
       view_biaxial(NULL, d$params, st, df = d$df)
     }
-    plot_r   <- reactive(build(.scroll_use_raster(input$raster, nrow(data_r()$df))))
+    plot_r   <- .scroll_lazy_plot(input, function() build(.scroll_use_raster(input$raster, nrow(data_r()$df))))
     export_r <- reactive(build(FALSE))
     output$plot <- renderPlot(plot_r())
     csv_r <- reactive({ d <- data_r(); .scroll_biaxial_source(d$cells, d$params$features, d$params$color_by) })

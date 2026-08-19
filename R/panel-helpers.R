@@ -211,13 +211,34 @@
 # Standard plot area: a small toolbar (PNG + PDF, and optionally a CSV of the
 # plot's source data) above the plot output. Pass csv = TRUE to add the CSV button
 # (the server must then wire output$csv, e.g. via .scroll_plot_downloads(csv_r=)).
+# Lazy on-screen rendering: gate a plot so it recomputes only while its card is on
+# screen, and otherwise keeps its last render. A View/filter change then redraws
+# only the panels in view; an off-screen panel refreshes when scrolled to. The
+# `onscreen` input is driven by the IntersectionObserver in .scroll_lazy_js and
+# defaults on, so a panel renders before/without JS (and under testServer).
+# `build` is a zero-arg function returning the plot; its reactive dependencies are
+# taken only on the cycles it actually runs, so an off-screen panel does not
+# invalidate on data changes.
+.scroll_lazy_plot <- function(input, build) {
+  last <- NULL
+  reactive({
+    if (isTRUE(input$onscreen %||% TRUE)) last <<- build()
+    shiny::req(last)
+    last
+  })
+}
+
 .scroll_plot_area <- function(ns, height = "460px", csv = FALSE)
   div(class = "scroll-plot",
       div(class = "scroll-plot-bar",
           .scroll_dl_button(ns("png"), "PNG"),
           .scroll_dl_button(ns("pdf"), "PDF"),
           if (isTRUE(csv)) .scroll_dl_button(ns("csv"), "CSV")),
-      .scroll_spin(plotOutput(ns("plot"), height = height)))
+      # the hold reserves the plot's height so that when an off-screen card is
+      # suspended (its output display:none'd for lazy rendering) the card does not
+      # collapse and jump the scroll position.
+      div(class = "scroll-plot-hold", style = sprintf("min-height:%s;", height),
+          .scroll_spin(plotOutput(ns("plot"), height = height))))
 
 # Image downloadHandler for a plot reactive, raster (PNG) or vector (PDF). Uses
 # a device + print() (not ggsave) so it renders both bare ggplots and the

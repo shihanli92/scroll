@@ -42,7 +42,7 @@ proportions_server <- function(id, data, cells_r = reactive(data$cells),
       list(palette = input$palette, normalize = isTRUE(input$normalize),
            legend = isTRUE(input$legend), aspect = input$aspect,
            manual_colors = manual_colors())))
-    plot_r <- reactive({
+    plot_r <- .scroll_lazy_plot(input, function() {
       d <- data_r()
       view_proportions(d$cells, list(group_by = d$group_by, fill_by = d$fill_by), cosmetic_r())
     })

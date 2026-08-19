@@ -105,7 +105,7 @@ dotplot_server <- function(id, data, cells_r = reactive(data$cells),
     })
     cosmetic_r <- .scroll_cosmetic(reactive(
       list(palette = input$palette, dot_size = input$dotrange, aspect = input$aspect)))
-    plot_r <- reactive({
+    plot_r <- .scroll_lazy_plot(input, function() {
       d <- data_r()
       view_dotplot(d$cells, list(group_by = d$group_by, features = d$features),
                    NULL, cosmetic_r(), assembly = d$assembly)

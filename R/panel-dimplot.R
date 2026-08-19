@@ -97,7 +97,7 @@ dimplot_server <- function(id, data, cells_r = reactive(data$cells),
       d <- data_r(); st <- cosmetic_r(); st$raster <- raster
       view_umap_colorby(d$cells, list(embedding = d$embedding, color_by = d$color_by), st)
     }
-    plot_r   <- reactive(build(.scroll_use_raster(input$raster, data_r()$n)))  # rasterized on screen
+    plot_r   <- .scroll_lazy_plot(input, function() build(.scroll_use_raster(input$raster, data_r()$n)))  # rasterized on screen; recomputed only on-screen
     export_r <- reactive(build(FALSE))                                         # vector for downloads
     output$plot <- renderPlot(plot_r())
     csv_r <- reactive({ d <- data_r(); .scroll_dimplot_source(d$cells, d$embedding, d$color_by) })
