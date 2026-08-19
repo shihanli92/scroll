@@ -375,6 +375,34 @@ view_feature_plot <- function(cells, params, values = NULL, state = list()) {
   .scroll_finish_scatter(p, df, state)
 }
 
+#' Embedding faceted into one feature plot per gene (Seurat multi-feature style)
+#'
+#' Draws one \code{\link{view_feature_plot}} per gene and composes them into a
+#' grid. Each panel gets its own colour scale (a gene's own expression range), as
+#' Seurat's \code{FeaturePlot(features = c(...))} does, so a low-expressed gene is
+#' not washed out beside a high one.
+#'
+#' @param cells The globally-loaded cells data.frame.
+#' @param params List with `embedding` and `features` (a character vector) and
+#'   optionally `ncol` (grid columns; default a square-ish layout).
+#' @param values_long A data.frame(feature, cell, value) for the genes, or `NULL`.
+#' @param state Optional toggle state, passed to each panel.
+#' @return A patchwork of feature plots (or the single panel if patchwork is
+#'   unavailable / only one gene is given).
+#' @export
+view_feature_multi <- function(cells, params, values_long, state = list()) {
+  feats <- params$features
+  panels <- lapply(feats, function(g) {
+    v <- if (!is.null(values_long) && nrow(values_long))
+           values_long[values_long$feature == g, c("cell", "value"), drop = FALSE] else NULL
+    view_feature_plot(cells, list(embedding = params$embedding, feature = g), v, state)
+  })
+  if (length(panels) == 1 || !requireNamespace("patchwork", quietly = TRUE))
+    return(panels[[1]])
+  ncol <- params$ncol %||% ceiling(sqrt(length(panels)))
+  patchwork::wrap_plots(panels, ncol = ncol)
+}
+
 # Colour blend matrix for two-feature co-expression, a faithful port of Seurat's
 # internal `BlendMatrix()` so the blend view matches `FeaturePlot(blend = TRUE)`
 # without a Seurat runtime dependency. Returns an n x n character matrix of hex

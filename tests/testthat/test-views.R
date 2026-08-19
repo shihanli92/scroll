@@ -25,6 +25,22 @@ test_that("view_feature_blend reproduces Seurat's blend colours and lays out 4 p
   expect_identical(as.vector(ours), as.vector(seur))
 })
 
+test_that("view_feature_multi renders a grid, one panel per gene", {
+  skip_if_not_installed("patchwork")
+  cells <- read_cells(test_project())
+  feats <- c("CD3D", "MS4A1", "CD8A")
+  vl <- do.call(rbind, lapply(feats, function(g)
+    data.frame(feature = g, cell = cells$cell, value = runif(nrow(cells)))))
+  p <- view_feature_multi(cells, list(embedding = "umap", features = feats), vl)
+  expect_s3_class(p, "patchwork")
+  expect_length(p$patches$plots, length(feats) - 1)     # + top-level object = 3 panels
+  # a single gene collapses to one plain feature plot, not a patchwork
+  p1 <- view_feature_multi(cells, list(embedding = "umap", features = "CD3D"),
+                           vl[vl$feature == "CD3D", ])
+  expect_s3_class(p1, "ggplot")
+  expect_false(inherits(p1, "patchwork"))
+})
+
 test_that("dotplot aggregates fraction and mean per group", {
   cells <- read_cells(test_project())
   feats <- c("CD3D", "MS4A1")

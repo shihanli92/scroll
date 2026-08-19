@@ -3,16 +3,21 @@
 First tagged release. `scroll` turns a processed Seurat object into a
 polished, flat-RAM interactive single-cell explorer.
 
-## New: two-feature co-expression blend in the FeaturePlot panel
+## New: multi-gene and co-expression blend in the FeaturePlot panel
 
-* The FeaturePlot panel gains a **Blend two genes** toggle that reproduces
-  `Seurat::FeaturePlot(blend = TRUE)`: pick a second gene and the panel lays out
-  four views — each gene alone, their co-expression blend, and a 2-D colour key —
-  with an adjustable **Blend threshold**. The blend colours are a faithful,
-  Seurat-free port of Seurat's `BlendMatrix`/`BlendExpression` (byte-identical
-  colours), and the CSV export includes both genes. New exported view core
-  `view_feature_blend()`. Requires the (Suggested) `patchwork` for the layout;
-  without it the panel degrades to the single co-expression view.
+* The FeaturePlot gene box is now **multi-select**, and the numeric-metadata
+  selector alongside it too. Pick any mix of genes and numeric columns and the
+  panel lays out a **grid of feature plots**, one per feature, each with its own
+  colour scale (as `Seurat::FeaturePlot(features = c(...))` does), up to 12.
+  New exported view core `view_feature_multi()`.
+* A **Blend** toggle reproduces `Seurat::FeaturePlot(blend = TRUE)` for the two
+  selected genes: four views — each gene alone, their co-expression blend, and a
+  2-D colour key — with an adjustable **Blend threshold** and pickers for the two
+  gene colours. The blend colours are a faithful, Seurat-free port of Seurat's
+  `BlendMatrix`/`BlendExpression` (byte-identical colours). New exported view core
+  `view_feature_blend()`. The CSV export includes every plotted gene.
+* Both features use the (Suggested) `patchwork` for their grid layout; without it
+  the panel degrades to a single plot.
 
 ## New: reproducible CSV export for the built-in plot panels
 

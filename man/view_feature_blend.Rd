@@ -10,7 +10,8 @@ view_feature_blend(cells, params, values1, values2, state = list())
 \item{cells}{The globally-loaded cells data.frame.}
 
 \item{params}{List with \code{embedding}, \code{feature1}, \code{feature2}, and optionally
-\code{blend_threshold} (0-1, Seurat's \code{blend.threshold}, default 0.5).}
+\code{blend_threshold} (0-1, Seurat's \code{blend.threshold}, default 0.5) and \code{colors}
+(a length-2 vector of the two feature colours; default red/green as in Seurat).}
 
 \item{values1, values2}{data.frame(cell, value) for each feature, or \code{NULL}.}
 
