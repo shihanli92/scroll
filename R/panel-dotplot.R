@@ -1,5 +1,17 @@
 # --- DotPlot panel ------------------------------------------------------------
 
+# Parse a pasted gene list (space/comma/tab/newline separated) and match it to a
+# feature set: exact first, then case-insensitively. Returns the matched features
+# in pasted order (`ok`) plus the unmatched tokens (`missing`).
+.scroll_parse_gene_list <- function(text, feats) {
+  toks <- strsplit(text %||% "", "[[:space:],;]+", perl = TRUE)[[1]]
+  toks <- unique(toks[nzchar(toks)])
+  if (!length(toks)) return(list(ok = character(0), missing = character(0)))
+  lut <- stats::setNames(feats, toupper(feats))
+  matched <- ifelse(toks %in% feats, toks, unname(lut[toupper(toks)]))
+  list(ok = unique(matched[!is.na(matched)]), missing = toks[is.na(matched)])
+}
+
 dotplot_ui <- function(id, data) {
   ns <- NS(id)
   m <- data$manifest
@@ -12,7 +24,11 @@ dotplot_ui <- function(id, data) {
       .scroll_group("Genes",
         selectizeInput(ns("markers"), "Marker genes", choices = NULL, multiple = TRUE,
                        options = list(placeholder = "Add genes...", maxOptions = 50,
-                                      plugins = list("remove_button")))),
+                                      plugins = list("remove_button"))),
+        textAreaInput(ns("marker_paste"), NULL, rows = 2,
+                      placeholder = "...or paste a list (space, comma, tab or newline separated)"),
+        actionButton(ns("marker_set"), "Set from list",
+                     class = "btn-outline-secondary btn-sm")),
       .scroll_group("Grouping",
         selectInput(ns("group"), "Group by", stats::setNames(cats, cats), selected = cats[[1]]),
         if (length(assays) > 1)
@@ -43,6 +59,20 @@ dotplot_server <- function(id, data, cells_r = reactive(data$cells),
       cur <- isolate(input$markers) %||% defaults
       updateSelectizeInput(session, "markers", choices = feats, server = TRUE,
                            selected = intersect(cur, feats))
+    })
+    # paste a whitespace/comma/tab/newline-separated gene list -> the selection,
+    # in the pasted order. Unknown symbols are matched case-insensitively, then
+    # reported. This replaces the current selection (a curated marker panel is
+    # usually pasted whole).
+    observeEvent(input$marker_set, {
+      feats <- .scroll_features_of(m, assay())
+      parsed <- .scroll_parse_gene_list(input$marker_paste, feats)
+      req(length(parsed$ok) > 0 || length(parsed$missing) > 0)
+      updateSelectizeInput(session, "markers", choices = feats, server = TRUE,
+                           selected = parsed$ok)
+      if (length(parsed$missing))
+        showNotification(paste("Not in this assay:", paste(parsed$missing, collapse = ", ")),
+                         type = "warning", duration = 6)
     })
     # DATA reactive: query + aggregation + hclust. `scale` and `cluster` change
     # the aggregation/clustering, so they are DATA inputs (not cosmetic); palette

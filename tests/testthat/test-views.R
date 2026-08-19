@@ -41,6 +41,14 @@ test_that("view_feature_multi renders a grid, one panel per gene", {
   expect_false(inherits(p1, "patchwork"))
 })
 
+test_that(".scroll_parse_gene_list splits on any whitespace/comma, matches case-insensitively", {
+  feats <- c("CD3D", "CD8A", "MS4A1", "NKG7")
+  res <- scroll:::.scroll_parse_gene_list("CD3D, cd8a\tMS4A1\nNKG7 CD3D foo", feats)
+  expect_equal(res$ok, c("CD3D", "CD8A", "MS4A1", "NKG7"))   # pasted order, deduped, canonical case
+  expect_equal(res$missing, "foo")
+  expect_equal(scroll:::.scroll_parse_gene_list("", feats)$ok, character(0))
+})
+
 test_that("dotplot aggregates fraction and mean per group", {
   cells <- read_cells(test_project())
   feats <- c("CD3D", "MS4A1")

@@ -24,6 +24,13 @@ polished, flat-RAM interactive single-cell explorer.
   share — the lower cutoff had no visible effect. It now spans the real expression
   range.
 
+## New: paste a gene list into the DotPlot
+
+* The DotPlot marker box gains a **paste area** and a "Set from list" button:
+  paste genes separated by spaces, tabs, commas or newlines and they populate the
+  selection in the pasted order. Symbols are matched case-insensitively and any
+  that aren't in the assay are reported.
+
 ## New: reproducible CSV export for the built-in plot panels
 
 * Every built-in plot panel (DimPlot, FeaturePlot, Biaxial, Violin, DotPlot,
