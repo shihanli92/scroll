@@ -6,6 +6,8 @@
 .DS_Store
 data/
 demo/
+pbmc3k/
+.claude/
 examples/*/project*/
 examples/**/*.rds
 inst/doc

@@ -3,6 +3,17 @@
 First tagged release. `scroll` turns a processed Seurat object into a
 polished, flat-RAM interactive single-cell explorer.
 
+## New: two-feature co-expression blend in the FeaturePlot panel
+
+* The FeaturePlot panel gains a **Blend two genes** toggle that reproduces
+  `Seurat::FeaturePlot(blend = TRUE)`: pick a second gene and the panel lays out
+  four views — each gene alone, their co-expression blend, and a 2-D colour key —
+  with an adjustable **Blend threshold**. The blend colours are a faithful,
+  Seurat-free port of Seurat's `BlendMatrix`/`BlendExpression` (byte-identical
+  colours), and the CSV export includes both genes. New exported view core
+  `view_feature_blend()`. Requires the (Suggested) `patchwork` for the layout;
+  without it the panel degrades to the single co-expression view.
+
 ## New: reproducible CSV export for the built-in plot panels
 
 * Every built-in plot panel (DimPlot, FeaturePlot, Biaxial, Violin, DotPlot,

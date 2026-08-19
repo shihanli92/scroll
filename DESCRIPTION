@@ -43,6 +43,7 @@ Suggests:
     ggtree,
     aplot,
     ape,
+    patchwork,
     presto,
     edgeR,
     limma,

@@ -375,6 +375,115 @@ view_feature_plot <- function(cells, params, values = NULL, state = list()) {
   .scroll_finish_scatter(p, df, state)
 }
 
+# Colour blend matrix for two-feature co-expression, a faithful port of Seurat's
+# internal `BlendMatrix()` so the blend view matches `FeaturePlot(blend = TRUE)`
+# without a Seurat runtime dependency. Returns an n x n character matrix of hex
+# colours: row i = feature-1 level (1..n), col j = feature-2 level (1..n).
+.scroll_blend_matrix <- function(n = 10, col.threshold = 0.5,
+                                 two.colors = c("#ff0000", "#00ff00"),
+                                 negative.color = "lightgrey") {
+  if (col.threshold < 0 || col.threshold > 1)
+    stop("col.threshold must be between 0 and 1", call. = FALSE)
+  C0 <- as.vector(grDevices::col2rgb(negative.color, alpha = TRUE))
+  C1 <- as.vector(grDevices::col2rgb(two.colors[1], alpha = TRUE))
+  C2 <- as.vector(grDevices::col2rgb(two.colors[2], alpha = TRUE))
+  blend_alpha <- (C1[4] + C2[4]) / 2
+  C0 <- C0[-4]; C1 <- C1[-4]; C2 <- C2[-4]
+  sigmoid <- function(x) 1 / (1 + exp(-x))
+  blend_color <- function(i, j) {
+    c.min <- sigmoid(5 * (1 / n - col.threshold))
+    c.max <- sigmoid(5 * (1 - col.threshold))
+    c1_weight <- (sigmoid(5 * (i / n - col.threshold)) - c.min) / (c.max - c.min)
+    c2_weight <- (sigmoid(5 * (j / n - col.threshold)) - c.min) / (c.max - c.min)
+    c0_weight <- (sigmoid(5 * ((i + j) / (2 * n) - col.threshold)) - c.min) / (c.max - c.min)
+    C1_length <- sqrt(sum((C1 - C0)^2)); C2_length <- sqrt(sum((C2 - C0)^2))
+    C1_unit <- (C1 - C0) / C1_length;    C2_unit <- (C2 - C0) / C2_length
+    C_blend <- C1_unit * c1_weight * (i - 1) * C1_length / (n - 1) +
+      C2_unit * c2_weight * (j - 1) * C2_length / (n - 1) +
+      (i - 1) * (j - 1) * c0_weight * C0 / (n - 1)^2 + C0
+    C_blend[C_blend > 255] <- 255; C_blend[C_blend < 0] <- 0
+    grDevices::rgb(C_blend[1], C_blend[2], C_blend[3],
+                   alpha = blend_alpha, maxColorValue = 255)
+  }
+  m <- matrix(NA_character_, n, n)
+  for (i in seq_len(n)) for (j in seq_len(n)) m[i, j] <- blend_color(i, j)
+  m
+}
+
+# One scatter panel of a blend layout: colour each cell by an already-resolved
+# hex vector (scale_color_identity), expressing cells on top. `aspect` sets a
+# shared panel aspect ratio so every panel in the 2x2 grid is sized alike.
+.scroll_blend_panel <- function(df, embedding, cols_vec, ord, title, size, raster, aspect = 1) {
+  d <- df; d$.col <- cols_vec; d <- d[ord, , drop = FALSE]
+  .scroll_base_scatter(d, embedding, legend = FALSE) +
+    .scroll_point_layer(ggplot2::aes(color = .data$.col), size = size, raster = raster) +
+    ggplot2::scale_color_identity() +
+    ggplot2::ggtitle(title) +
+    ggplot2::theme(plot.title = ggplot2::element_text(size = 12, face = "italic"),
+                   aspect.ratio = aspect)
+}
+
+#' Embedding coloured by the co-expression of two features (Seurat-style blend)
+#'
+#' Reproduces `Seurat::FeaturePlot(blend = TRUE)`: each feature is scaled to a
+#' 0-9 level, the two are blended through Seurat's colour matrix, and four panels
+#' are laid out — feature 1, feature 2, the co-expression blend, and a 2-D colour
+#' key. Faithful to Seurat but with no Seurat runtime dependency.
+#'
+#' @param cells The globally-loaded cells data.frame.
+#' @param params List with `embedding`, `feature1`, `feature2`, and optionally
+#'   `blend_threshold` (0-1, Seurat's `blend.threshold`, default 0.5) and `colors`
+#'   (a length-2 vector of the two feature colours; default red/green as in Seurat).
+#' @param values1,values2 data.frame(cell, value) for each feature, or `NULL`.
+#' @param state Optional toggle state (`point_size`, `order`, `raster`, `aspect`).
+#' @return A patchwork of four ggplots (or, if patchwork is unavailable, the
+#'   single co-expression panel).
+#' @export
+view_feature_blend <- function(cells, params, values1, values2, state = list()) {
+  embedding <- .scroll_eff_embedding(params, state)
+  df <- .scroll_embedding_xy(cells, embedding)
+  e1 <- .scroll_expr_vector(df, values1)
+  e2 <- .scroll_expr_vector(df, values2)
+  # 0-9 integer levels, matching Seurat's BlendExpression scaling
+  scale09 <- function(x) {
+    r <- range(x); if (diff(r) == 0) rep(0, length(x)) else round(9 * (x - r[1]) / (r[2] - r[1]))
+  }
+  l1 <- scale09(e1); l2 <- scale09(e2)
+  n <- 10L
+  thr <- .scroll_opt(params, state, "blend_threshold", 0.5)
+  two <- params$colors %||% c("#ff0000", "#00ff00")     # gene-1 / gene-2 end colours
+  cm <- .scroll_blend_matrix(n = n, col.threshold = thr, two.colors = two)
+  size  <- .scroll_opt(params, state, "point_size", 0.7)
+  raster <- isTRUE(state$raster)
+  ord <- if (isTRUE(.scroll_opt(params, state, "order", TRUE))) order(l1 + l2) else seq_along(l1)
+  asp <- state$aspect %||% 1                      # applied to every panel alike
+  f1 <- params$feature1 %||% "feature 1"; f2 <- params$feature2 %||% "feature 2"
+
+  p1 <- .scroll_blend_panel(df, embedding, cm[cbind(l1 + 1L, 1L)],        ord, f1, size, raster, asp)
+  p2 <- .scroll_blend_panel(df, embedding, cm[cbind(1L, l2 + 1L)],        ord, f2, size, raster, asp)
+  p3 <- .scroll_blend_panel(df, embedding, cm[cbind(l1 + 1L, l2 + 1L)],   ord,
+                            paste(f1, f2, sep = " + "), size, raster, asp)
+
+  # 2-D colour key: feature-1 level on x, feature-2 level on y
+  key_df <- expand.grid(x = seq_len(n) - 1L, y = seq_len(n) - 1L)
+  key_df$.col <- cm[cbind(key_df$x + 1L, key_df$y + 1L)]
+  key <- ggplot2::ggplot(key_df, ggplot2::aes(.data$x, .data$y, fill = .data$.col)) +
+    ggplot2::geom_raster(show.legend = FALSE) +
+    ggplot2::scale_fill_identity() +
+    ggplot2::scale_x_continuous(expand = c(0, 0)) +
+    ggplot2::scale_y_continuous(expand = c(0, 0)) +
+    ggplot2::labs(x = f1, y = f2, title = "Key") +
+    ggplot2::coord_fixed() +
+    ggplot2::theme_bw(base_size = 13) +
+    ggplot2::theme(panel.grid = ggplot2::element_blank(),
+                   plot.title = ggplot2::element_text(size = 12, face = "italic"))
+
+  if (!requireNamespace("patchwork", quietly = TRUE)) return(p3)  # degrade to the blend
+  # 2x2 grid (feature 1 | feature 2 / blend | key) reads far larger than a
+  # single row of four in the panel's plot area.
+  patchwork::wrap_plots(p1, p2, p3, key, ncol = 2)
+}
+
 # --- aggregate views ----------------------------------------------------------
 
 # The heavy dotplot work — aggregation, optional z-scoring, and hierarchical

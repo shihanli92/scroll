@@ -7,6 +7,24 @@ test_that("scatter views render ggplots", {
   expect_s3_class(view_feature_plot(cells, list(embedding = "umap", feature = "CD3D"), vals), "ggplot")
 })
 
+test_that("view_feature_blend reproduces Seurat's blend colours and lays out 4 panels", {
+  skip_if_not_installed("patchwork")
+  cells <- read_cells(test_project())
+  v1 <- data.frame(cell = cells$cell, value = pmax(0, stats::rnorm(nrow(cells), 1)))
+  v2 <- data.frame(cell = cells$cell, value = pmax(0, stats::rnorm(nrow(cells), 1)))
+  p <- view_feature_blend(cells, list(embedding = "umap", feature1 = "CD3D",
+                                      feature2 = "MS4A1"), v1, v2)
+  expect_s3_class(p, "patchwork")
+  expect_length(p$patches$plots, 3)                     # + the 4th plot is the top-level object
+
+  # the blend colour matrix is a faithful port of Seurat's internal BlendMatrix
+  skip_if_not_installed("Seurat")
+  ours <- scroll:::.scroll_blend_matrix(col.threshold = 0.5)
+  seur <- getFromNamespace("BlendMatrix", "Seurat")(
+    two.colors = c("#ff0000", "#00ff00"), col.threshold = 0.5, negative.color = "lightgrey")
+  expect_identical(as.vector(ours), as.vector(seur))
+})
+
 test_that("dotplot aggregates fraction and mean per group", {
   cells <- read_cells(test_project())
   feats <- c("CD3D", "MS4A1")

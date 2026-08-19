@@ -16,6 +16,15 @@ featureplot_ui <- function(id, data) {
                       c("(use gene)" = "", stats::setNames(.scroll_num_cols(m), .scroll_num_cols(m)))),
         if (length(assays) > 1)
           selectInput(ns("assay"), "Assay", assays, selected = m$default_assay)),
+      .scroll_group("Co-expression",
+        bslib::input_switch(ns("blend"), "Blend two genes", FALSE),
+        conditionalPanel(
+          condition = sprintf("input['%s']", ns("blend")),
+          selectizeInput(ns("feature2"), "Second gene", choices = NULL, multiple = FALSE,
+                         options = list(placeholder = "Search a gene...", maxOptions = 50)),
+          sliderInput(ns("blend_threshold"), "Blend threshold", 0, 1, 0.5, 0.05),
+          colourpicker::colourInput(ns("blend_c1"), "First gene colour", "#FF0000"),
+          colourpicker::colourInput(ns("blend_c2"), "Second gene colour", "#00FF00"))),
       .scroll_group("Embedding",
         selectInput(ns("reduction"), "Reduction", .scroll_view_embeddings(m, NULL),
                     selected = .scroll_default(data, "default_embedding", .scroll_view_embeddings(m, NULL)[[1]]))),
@@ -30,7 +39,7 @@ featureplot_ui <- function(id, data) {
         selectInput(ns("split"), "Split by", c("None" = "", stats::setNames(cats, cats))),
         .scroll_aspect_input(ns))
     ),
-    .scroll_plot_area(ns, "460px", csv = TRUE)
+    .scroll_plot_area(ns, "560px", csv = TRUE)
   )
 }
 
@@ -56,15 +65,28 @@ featureplot_server <- function(id, data, cells_r = reactive(data$cells),
     # not exist in the newly chosen assay (else it silently queries empty)
     observeEvent(assay(), {
       feats <- .scroll_features_of(m, assay())
-      cur <- isolate(input$feature)
-      keep <- if (!is.null(cur) && cur %in% feats) cur else character(0)
-      updateSelectizeInput(session, "feature", choices = feats, server = TRUE, selected = keep)
+      keepsel <- function(cur) if (!is.null(cur) && cur %in% feats) cur else character(0)
+      updateSelectizeInput(session, "feature", choices = feats, server = TRUE,
+                           selected = keepsel(isolate(input$feature)))
+      updateSelectizeInput(session, "feature2", choices = feats, server = TRUE,
+                           selected = keepsel(isolate(input$feature2)))
     })
     # DATA reactive: cells + the (cached) expression query. Cosmetic drags do not
     # invalidate it, so they never re-hit the store.
     data_r <- reactive({
       req(input$reduction)
       cells <- cells_r()
+      # blend mode: two genes, co-expression. Takes precedence over the numeric
+      # column (blend is gene-vs-gene) but needs both genes chosen.
+      if (isTRUE(input$blend)) {
+        f1 <- .scroll_nz(input$feature); f2 <- .scroll_nz(input$feature2)
+        validate(need(!is.null(f1) && !is.null(f2),
+                      "Pick two genes to blend their co-expression."))
+        return(list(cells = cells, embedding = input$reduction, blend = TRUE,
+                    feature = f1, feature2 = f2,
+                    values = data$query1(assay(), f1),
+                    values2 = data$query1(assay(), f2), n = nrow(cells)))
+      }
       metacol <- .scroll_nz(input$metacol)
       # a numeric metadata column is coloured like expression (same continuous
       # controls: quantile clip, order-on-top, palette) but read from `cells`,
@@ -89,13 +111,26 @@ featureplot_server <- function(id, data, cells_r = reactive(data$cells),
            aspect = input$aspect)))
     build <- function(raster) {
       d <- data_r(); st <- cosmetic_r(); st$raster <- raster
+      if (isTRUE(d$blend))
+        return(view_feature_blend(
+          d$cells,
+          list(embedding = d$embedding, feature1 = d$feature, feature2 = d$feature2,
+               blend_threshold = input$blend_threshold %||% 0.5,
+               colors = c(input$blend_c1 %||% "#FF0000", input$blend_c2 %||% "#00FF00")),
+          d$values, d$values2, st))
       view_feature_plot(d$cells, list(embedding = d$embedding, feature = d$feature),
                         d$values, st)
     }
     plot_r   <- reactive(build(.scroll_use_raster(input$raster, data_r()$n)))
     export_r <- reactive(build(FALSE))
     output$plot <- renderPlot(plot_r())
-    csv_r <- reactive({ d <- data_r(); .scroll_featureplot_source(d$cells, d$embedding, d$feature, d$values) })
+    csv_r <- reactive({
+      d <- data_r()
+      out <- .scroll_featureplot_source(d$cells, d$embedding, d$feature, d$values)
+      if (isTRUE(d$blend))
+        out[[d$feature2]] <- .scroll_expr_vector(.scroll_embedding_xy(d$cells, d$embedding), d$values2)
+      out
+    })
     .scroll_plot_downloads(output, export_r, id, csv_r = csv_r)
   })
 }
