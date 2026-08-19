@@ -68,7 +68,7 @@ remotes::install_github("shihanli1992/scroll")
 Several capabilities are optional. Install only what you need.
 
 | Package(s)               | Unlocks                                              |
-|------------------------------------|------------------------------------|
+|--------------------------|------------------------------------------------------|
 | `presto`                 | Live Wilcoxon differential expression (the DE panel) |
 | `edgeR`, `limma`         | Replicate-aware pseudobulk DE (Bioconductor)         |
 | `ggtree`, `aplot`, `ape` | Hierarchical-clustering dendrograms on the DotPlot   |
@@ -202,7 +202,7 @@ list.files("pbmc3k")
 ```
 
 | Artifact        | What it is                                                                                                         |
-|------------------------------------|------------------------------------|
+|-----------------|--------------------------------------------------------------------------------------------------------------------|
 | `cells.parquet` | One row per cell containing metadata plus embedding coordinates.                                                   |
 | `expr/`         | Expression as a sparse, zstd-compressed Parquet store, bucketed by the first letter of each gene.                  |
 | `manifest.yaml` | A machine-readable description of the build including the assays, features, embeddings, metadata and their levels. |
@@ -321,7 +321,7 @@ markers:                      # the DotPlot's default gene set
 ```
 
 | Key                 | Effect                                                                                          |
-|------------------------------------|------------------------------------|
+|---------------------|-------------------------------------------------------------------------------------------------|
 | `title`             | Text shown in the app bar. Omit it and the bar shows just the brand.                            |
 | `default_embedding` | The reduction DimPlot / FeaturePlot open on (any name from the manifest, e.g. `umap` or `pca`). |
 | `default_assay`     | The assay selected first when the object has more than one.                                     |
@@ -374,7 +374,7 @@ scroll_build(pbmc, "pbmc3k",
 ```
 
 | Argument     | What it controls                                                            |
-|------------------------------------|------------------------------------|
+|--------------|-----------------------------------------------------------------------------|
 | `meta_cols`  | Which metadata columns become app selectors.                                |
 | `assays`     | Which assays to include.                                                    |
 | `embeddings` | Which reductions to carry. Any 2-D reduction becomes a plottable embedding. |
@@ -388,7 +388,7 @@ under-count the lowest expressors. Pass `quantize = FALSE` for exact
 `float32` values.
 
 | Setting            | Store        | Precision             | Use when                               |
-|------------------|------------------|------------------|------------------|
+|--------------------|--------------|-----------------------|----------------------------------------|
 | `quantize = TRUE`  | \~4× smaller | low values floor to 0 | almost always --- the default          |
 | `quantize = FALSE` | larger       | exact                 | you need precise low-expression values |
 
