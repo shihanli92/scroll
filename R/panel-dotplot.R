@@ -1,5 +1,25 @@
 # --- DotPlot panel ------------------------------------------------------------
 
+# A <script> that lets a multi-select selectize accept a pasted, delimited gene
+# list in the SAME box: when text containing a separator is pasted into the
+# control, split it and hand it to Shiny (input `paste_id`) instead of dropping it
+# in as one token. Single tokens paste normally through selectize. Delegated on
+# document (capture) so it survives selectize re-rendering.
+.scroll_paste_handler <- function(select_id, paste_id) {
+  shiny::tags$script(shiny::HTML(sprintf("
+(function(){
+  document.addEventListener('paste', function(e){
+    var sel = document.getElementById('%s'); if(!sel) return;
+    var ctrl = sel.parentNode.querySelector('.selectize-control');
+    if(!ctrl || !ctrl.contains(e.target)) return;
+    var txt = (e.clipboardData || window.clipboardData).getData('text');
+    if(!txt || !/[\\s,;]/.test(txt)) return;   // single token: let selectize handle it
+    e.preventDefault();
+    if(window.Shiny) Shiny.setInputValue('%s', txt, {priority:'event'});
+  }, true);
+})();", select_id, paste_id)))
+}
+
 # Parse a pasted gene list (space/comma/tab/newline separated) and match it to a
 # feature set: exact first, then case-insensitively. Returns the matched features
 # in pasted order (`ok`) plus the unmatched tokens (`missing`).
@@ -23,12 +43,9 @@ dotplot_ui <- function(id, data) {
       class = "scroll-controls",
       .scroll_group("Genes",
         selectizeInput(ns("markers"), "Marker genes", choices = NULL, multiple = TRUE,
-                       options = list(placeholder = "Add genes...", maxOptions = 50,
-                                      plugins = list("remove_button"))),
-        textAreaInput(ns("marker_paste"), NULL, rows = 2,
-                      placeholder = "...or paste a list (space, comma, tab or newline separated)"),
-        actionButton(ns("marker_set"), "Set from list",
-                     class = "btn-outline-secondary btn-sm")),
+                       options = list(placeholder = "Add genes, or paste a list...",
+                                      maxOptions = 50, plugins = list("remove_button"))),
+        .scroll_paste_handler(ns("markers"), ns("marker_paste"))),
       .scroll_group("Grouping",
         selectInput(ns("group"), "Group by", stats::setNames(cats, cats), selected = cats[[1]]),
         if (length(assays) > 1)
@@ -60,16 +77,15 @@ dotplot_server <- function(id, data, cells_r = reactive(data$cells),
       updateSelectizeInput(session, "markers", choices = feats, server = TRUE,
                            selected = intersect(cur, feats))
     })
-    # paste a whitespace/comma/tab/newline-separated gene list -> the selection,
-    # in the pasted order. Unknown symbols are matched case-insensitively, then
-    # reported. This replaces the current selection (a curated marker panel is
-    # usually pasted whole).
-    observeEvent(input$marker_set, {
+    # a delimited list pasted into the marker box (see .scroll_paste_handler) is
+    # parsed and added to the current selection, in pasted order. Unknown symbols
+    # are matched case-insensitively, then reported.
+    observeEvent(input$marker_paste, {
       feats <- .scroll_features_of(m, assay())
       parsed <- .scroll_parse_gene_list(input$marker_paste, feats)
       req(length(parsed$ok) > 0 || length(parsed$missing) > 0)
-      updateSelectizeInput(session, "markers", choices = feats, server = TRUE,
-                           selected = parsed$ok)
+      sel <- unique(c(isolate(input$markers), parsed$ok))
+      updateSelectizeInput(session, "markers", choices = feats, server = TRUE, selected = sel)
       if (length(parsed$missing))
         showNotification(paste("Not in this assay:", paste(parsed$missing, collapse = ", ")),
                          type = "warning", duration = 6)
