@@ -163,6 +163,16 @@ test_that("FeaturePlot quantile caps clip the color scale", {
   expect_s3_class(p, "ggplot")
 })
 
+test_that("quantile clip is taken over expressing cells, not the zero-inflated vector", {
+  # a 95%-zero gene: the 0.5 quantile of the full vector is 0, so a naive clip
+  # would pin the lower bound at 0; over non-zero cells it is a real value.
+  ex <- c(rep(0, 950), seq_len(50))
+  lim <- scroll:::.scroll_expr_limits(ex, c(0.5, 1.0))
+  expect_false(is.null(lim))
+  expect_gt(lim[1], 0)                               # lower bound moved off zero
+  expect_equal(lim[1], unname(stats::quantile(1:50, 0.5)))
+})
+
 test_that("aspect ratio sets theme(aspect.ratio); default 1 leaves it unset", {
   cells <- read_cells(test_project())
   p <- view_umap_colorby(cells, list(embedding = "umap", color_by = "celltype"),

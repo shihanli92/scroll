@@ -18,6 +18,11 @@ polished, flat-RAM interactive single-cell explorer.
   `view_feature_blend()`. The CSV export includes every plotted gene.
 * Both features use the (Suggested) `patchwork` for their grid layout; without it
   the panel degrades to a single plot.
+* FeaturePlot's **colour quantile** cutoffs are now taken over the expressing
+  (non-zero) cells. Single-cell expression is zero-inflated, so a quantile of the
+  full vector stayed pinned at 0 until the fraction passed the (often >90%) zero
+  share — the lower cutoff had no visible effect. It now spans the real expression
+  range.
 
 ## New: reproducible CSV export for the built-in plot panels
 

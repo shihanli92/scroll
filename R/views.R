@@ -73,10 +73,17 @@
 }
 
 # Color-scale limits from min/max quantile fractions (or NULL = no clipping).
+# Quantiles are taken over the EXPRESSING (non-zero) cells: single-cell expression
+# is zero-inflated, so a quantile of the full vector stays pinned at 0 until the
+# fraction exceeds the (often >90%) zero share — making the lower cutoff useless.
+# Computing over non-zero values makes the lower quantile span the real expression
+# range. A column with no zeros (e.g. numeric metadata) is unaffected.
 .scroll_expr_limits <- function(expr, clip) {
   if (is.null(clip) || length(clip) != 2) return(NULL)
   if (clip[1] <= 0 && clip[2] >= 1) return(NULL)
-  lims <- unname(stats::quantile(expr, c(max(0, clip[1]), min(1, clip[2])), na.rm = TRUE))
+  pos <- expr[is.finite(expr) & expr != 0]
+  if (!length(pos)) return(NULL)
+  lims <- unname(stats::quantile(pos, c(max(0, clip[1]), min(1, clip[2])), na.rm = TRUE))
   if (!all(is.finite(lims)) || lims[1] >= lims[2]) return(NULL)
   lims
 }
