@@ -13,6 +13,15 @@
   of view and back does not rebuild it unless its data or controls actually
   changed while it was away.
 
+## Fix: DimPlot/FeaturePlot render once per View switch (was up to 4×)
+
+* Switching the app-bar **View** used to redraw DimPlot/FeaturePlot several times:
+  the active cells changed, then the view-driven reduction / colour-by selectors
+  round-tripped through the client and each re-render fired again. The effective
+  reduction and colour column are now deduped `reactiveVal`s resolved server-side
+  (updated at high priority, before the plot renders), so a View switch redraws
+  the panel exactly once. Measured 4 renders → 1 on the demo.
+
 # scroll 0.2.0
 
 Bigger multi-gene panels: the FeaturePlot, DotPlot and Violin panels now take

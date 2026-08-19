@@ -48,18 +48,24 @@ featureplot_server <- function(id, data, cells_r = reactive(data$cells),
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     assay <- reactive(input$assay %||% m$default_assay)
+    # Effective reduction as a deduped reactiveVal so the view-driven selectInput
+    # update does not add a second render (see panel-dimplot.R for the rationale).
+    red_rv <- reactiveVal(.scroll_default(data, "default_embedding",
+                                          .scroll_view_embeddings(m, NULL)[[1]]))
     observeEvent(view_r(), {
       reds <- .scroll_view_embeddings(m, view_r())
       sel_red <- if (is.null(view_r()))
         .scroll_default(data, "default_embedding", reds[[1]]) else reds[[1]]
       if (!sel_red %in% reds) sel_red <- reds[[1]]
+      red_rv(sel_red)
       updateSelectInput(session, "reduction", choices = reds, selected = sel_red)
       # numeric-column choices follow the view (scoped numerics appear in-view)
       nums <- .scroll_num_cols(m, view_r()); cur <- input$metacol
       updateSelectInput(session, "metacol",
                         choices = stats::setNames(nums, nums),
                         selected = intersect(cur, nums))
-    }, ignoreNULL = FALSE)
+    }, ignoreNULL = FALSE, priority = 100)
+    observeEvent(input$reduction, red_rv(input$reduction), ignoreInit = TRUE)
     .scroll_bind_view_cats(input, session, view_r, m, "split", prepend = c("None" = ""))
     # repopulate the gene list for the active assay; drop a selection that does
     # not exist in the newly chosen assay (else it silently queries empty)
@@ -72,7 +78,7 @@ featureplot_server <- function(id, data, cells_r = reactive(data$cells),
     # DATA reactive: cells + the (cached) expression query. Cosmetic drags do not
     # invalidate it, so they never re-hit the store.
     data_r <- reactive({
-      req(input$reduction)
+      req(red_rv())
       cells <- cells_r()
       clean <- function(x) { x <- x[!is.na(x) & nzchar(x)]; x }
       feats    <- clean(input$feature)                       # genes (queried)
@@ -82,7 +88,7 @@ featureplot_server <- function(id, data, cells_r = reactive(data$cells),
       if (isTRUE(input$blend)) {
         validate(need(length(feats) == 2,
                       "Blend needs exactly two genes selected."))
-        return(list(cells = cells, embedding = input$reduction, blend = TRUE,
+        return(list(cells = cells, embedding = red_rv(), blend = TRUE,
                     feature = feats[1], feature2 = feats[2],
                     values = data$query1(assay(), feats[1]),
                     values2 = data$query1(assay(), feats[2]), n = nrow(cells)))
@@ -106,7 +112,7 @@ featureplot_server <- function(id, data, cells_r = reactive(data$cells),
                      stringsAsFactors = FALSE)))
         vl <- if (is.null(vl)) mvl else rbind(vl, mvl)
       }
-      list(cells = cells, embedding = input$reduction, multi = TRUE,
+      list(cells = cells, embedding = red_rv(), multi = TRUE,
            features = items, values = vl, n = nrow(cells))
     })
     cosmetic_r <- .scroll_cosmetic(reactive(
