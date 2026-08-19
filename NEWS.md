@@ -24,12 +24,16 @@ polished, flat-RAM interactive single-cell explorer.
   share — the lower cutoff had no visible effect. It now spans the real expression
   range.
 
-## New: paste a gene list into the DotPlot marker box
+## New: multi-gene Violin, and paste a gene list into DotPlot/Violin
 
-* Paste a gene list **straight into the DotPlot marker box** — separated by
-  spaces, tabs, commas or newlines — and the genes are added to the selection in
-  the pasted order (typing one at a time still works in the same box). Symbols are
-  matched case-insensitively and any that aren't in the assay are reported.
+* The Violin gene box is now **multi-select**: pick or paste several genes and the
+  panel draws a grid of violins, one per gene (each with its own expression axis),
+  up to 12. New exported view core `view_violin_multi()`.
+
+* Paste a gene list **straight into the DotPlot or Violin gene box** — separated
+  by spaces, tabs, commas or newlines — and the genes are added to the selection
+  in the pasted order (typing one at a time still works in the same box). Symbols
+  are matched case-insensitively and any that aren't in the assay are reported.
 
 ## New: reproducible CSV export for the built-in plot panels
 

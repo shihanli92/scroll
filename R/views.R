@@ -692,6 +692,33 @@ view_violin <- function(cells, params, values = NULL, state = list()) {
   .scroll_apply_aspect(p, state$aspect %||% 1)
 }
 
+#' Violin plots for several genes, one panel per gene
+#'
+#' Draws one \code{\link{view_violin}} per gene (each with its own expression
+#' axis) and composes them into a grid — the multi-feature analogue of
+#' `Seurat::VlnPlot(features = c(...))`.
+#'
+#' @param cells The cells data.frame.
+#' @param params List with `group_by`, `features` (a character vector) and
+#'   optionally `ncol` (grid columns; default a square-ish layout).
+#' @param values_long A data.frame(feature, cell, value) for the genes, or `NULL`.
+#' @param state Optional toggle state, passed to each panel.
+#' @return A patchwork of violins (or the single panel if patchwork is
+#'   unavailable / only one gene is given).
+#' @export
+view_violin_multi <- function(cells, params, values_long, state = list()) {
+  feats <- params$features
+  panels <- lapply(feats, function(g) {
+    v <- if (!is.null(values_long) && nrow(values_long))
+           values_long[values_long$feature == g, c("cell", "value"), drop = FALSE] else NULL
+    view_violin(cells, list(feature = g, group_by = params$group_by), v, state)
+  })
+  if (length(panels) == 1 || !requireNamespace("patchwork", quietly = TRUE))
+    return(panels[[1]])
+  ncol <- params$ncol %||% ceiling(sqrt(length(panels)))
+  patchwork::wrap_plots(panels, ncol = ncol)
+}
+
 # Long data.frame of all column pairs (one facet per pair), NA rows dropped.
 # Factored out so the Shiny server can build it once in a data reactive rather
 # than re-expanding on every cosmetic change.

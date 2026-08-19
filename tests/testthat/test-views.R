@@ -73,6 +73,21 @@ test_that("dotplot accepts brewer palettes and hclust clustering", {
   expect_true(inherits(p, c("ggplot", "aplot", "patchwork")))   # trees -> aplot, else ggplot
 })
 
+test_that("view_violin_multi renders one violin panel per gene", {
+  skip_if_not_installed("patchwork")
+  cells <- read_cells(test_project())
+  feats <- c("CD3D", "MS4A1", "NKG7")
+  vl <- do.call(rbind, lapply(feats, function(g)
+    data.frame(feature = g, cell = cells$cell, value = runif(nrow(cells)))))
+  p <- view_violin_multi(cells, list(group_by = "celltype", features = feats), vl)
+  expect_s3_class(p, "patchwork")
+  expect_length(p$patches$plots, length(feats) - 1)      # + top-level = 3 panels
+  p1 <- view_violin_multi(cells, list(group_by = "celltype", features = "CD3D"),
+                          vl[vl$feature == "CD3D", ])
+  expect_s3_class(p1, "ggplot")
+  expect_false(inherits(p1, "patchwork"))
+})
+
 test_that("violin and proportions render ggplots", {
   cells <- read_cells(test_project())
   vals <- data.frame(cell = cells$cell[1:20], value = runif(20))
