@@ -1,7 +1,7 @@
-# scroll 0.1.0
+# scroll 0.2.0
 
-First tagged release. `scroll` turns a processed Seurat object into a
-polished, flat-RAM interactive single-cell explorer.
+Bigger multi-gene panels: the FeaturePlot, DotPlot and Violin panels now take
+many genes at once (grids and co-expression blend), with paste-a-list gene entry.
 
 ## New: multi-gene and co-expression blend in the FeaturePlot panel
 
@@ -34,6 +34,11 @@ polished, flat-RAM interactive single-cell explorer.
   by spaces, tabs, commas or newlines — and the genes are added to the selection
   in the pasted order (typing one at a time still works in the same box). Symbols
   are matched case-insensitively and any that aren't in the assay are reported.
+
+# scroll 0.1.0
+
+First tagged release. `scroll` turns a processed Seurat object into a
+polished, flat-RAM interactive single-cell explorer.
 
 ## New: reproducible CSV export for the built-in plot panels
 
