@@ -1,3 +1,13 @@
+# scroll 0.2.3
+
+## Fix: Pseudobulk "Aggregate by" / "Replicate" follow the active View
+
+* The Pseudobulk DE panel built its **Aggregate by** and **Replicate** column
+  menus once from the whole-dataset columns, so a subset View's own scoped
+  categorical columns (e.g. a re-clustered subset's resolutions) were missing.
+  Both menus now refresh with the active View — scoped columns appear in their
+  view, global columns stay available everywhere — matching the DE panel.
+
 # scroll 0.2.2
 
 ## Fix: DimPlot/FeaturePlot render once per View switch (was up to 4×)
@@ -8,14 +18,6 @@
   reduction and colour column are now deduped `reactiveVal`s resolved server-side
   (updated at high priority, before the plot renders), so a View switch redraws
   the panel exactly once. Measured 4 renders → 1 on the demo.
-
-## Fix: Pseudobulk "Aggregate by" / "Replicate" follow the active View
-
-* The Pseudobulk DE panel built its **Aggregate by** and **Replicate** column
-  menus once from the whole-dataset columns, so a subset View's own scoped
-  categorical columns (e.g. a re-clustered subset's resolutions) were missing.
-  Both menus now refresh with the active View — scoped columns appear in their
-  view, global columns stay available everywhere — matching the DE panel.
 
 # scroll 0.2.1
 
