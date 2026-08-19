@@ -33,7 +33,9 @@ many genes at once (grids and co-expression blend), with paste-a-list gene entry
   app-bar **View** (subset) or cell filter therefore redraws just the panels in
   view instead of every panel on the page — the on-screen panel updates
   immediately and the rest catch up as you scroll, rather than the whole page
-  re-rendering serially at once.
+  re-rendering serially at once. The build is memoized, so scrolling a panel out
+  of view and back does not rebuild it unless its data or controls actually
+  changed while it was away.
 
 ## New: multi-gene Violin, and paste a gene list into DotPlot/Violin
 

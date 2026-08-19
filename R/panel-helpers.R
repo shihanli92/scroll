@@ -216,13 +216,17 @@
 # only the panels in view; an off-screen panel refreshes when scrolled to. The
 # `onscreen` input is driven by the IntersectionObserver in .scroll_lazy_js and
 # defaults on, so a panel renders before/without JS (and under testServer).
-# `build` is a zero-arg function returning the plot; its reactive dependencies are
-# taken only on the cycles it actually runs, so an off-screen panel does not
-# invalidate on data changes.
+#
+# `build` is a zero-arg function returning the plot. It is wrapped in a memoized
+# reactive so that scrolling a panel off screen and back does NOT rebuild it: the
+# rebuild only happens if `build`'s own dependencies (data/controls) changed while
+# it was away. While off screen the gate takes no dependency on `built`, so a
+# View/filter change does not invalidate an off-screen panel until it returns.
 .scroll_lazy_plot <- function(input, build) {
+  built <- reactive(build())            # memoized: reuses its value when unchanged
   last <- NULL
   reactive({
-    if (isTRUE(input$onscreen %||% TRUE)) last <<- build()
+    if (isTRUE(input$onscreen %||% TRUE)) last <<- built()
     shiny::req(last)
     last
   })

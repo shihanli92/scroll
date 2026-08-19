@@ -101,7 +101,11 @@ test_that("off-screen panels do not recompute; they refresh when back on-screen"
     expect_equal(calls, n1)                                 # gated: no recompute
     session$setInputs(onscreen = TRUE)                      # scrolled back into view
     session$flushReact(); force(output$plot)
-    expect_gt(calls, n1)                                    # now refreshes to CD8A
+    expect_gt(calls, n1); n2 <- calls                       # now refreshes to CD8A
+    # scroll away and back with NO change -> the memoized build persists (no rebuild)
+    session$setInputs(onscreen = FALSE); session$flushReact(); force(output$plot)
+    session$setInputs(onscreen = TRUE);  session$flushReact(); force(output$plot)
+    expect_equal(calls, n2)                                 # persisted: not recomputed
   })
 })
 
