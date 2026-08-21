@@ -8,6 +8,7 @@ data/
 demo/
 pbmc3k/
 .claude/
+CLAUDE.md
 examples/*/project*/
 examples/**/*.rds
 inst/doc
