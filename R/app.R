@@ -236,6 +236,12 @@ scroll_reset_panels <- function() {
   specs
 }
 
+# A collapsible <details> section (native, no JS). open = TRUE renders it expanded.
+.scroll_details <- function(title, ..., open = TRUE)
+  tags$details(class = "scroll-ctl-details", open = if (isTRUE(open)) NA,
+    tags$summary(class = "scroll-ctl-summary", title),
+    div(class = "scroll-ctl-body", ...))
+
 .scroll_filters_ui <- function(data, ns = identity) {
   specs <- .scroll_filter_specs(data)
   if (!length(specs)) return(NULL)
@@ -249,9 +255,9 @@ scroll_reset_panels <- function() {
       div(class = "scroll-filter",
           sliderInput(ns(s$id), s$col, min = s$min, max = s$max, value = c(s$min, s$max)))
   })
-  div(class = "scroll-ctl-section",
-      div(class = "scroll-filters-head", "Filters", actionLink(ns("scroll_filter_reset"), "Reset")),
-      ctrls)
+  .scroll_details("Filters", open = TRUE,
+    div(class = "scroll-reset-row", actionLink(ns("scroll_filter_reset"), "Reset all")),
+    ctrls)
 }
 
 # ---- global theme controls (right sidebar) ----------------------------------
@@ -261,20 +267,26 @@ scroll_reset_panels <- function() {
   if (isFALSE(data$config$theme_controls)) return(NULL)
   sel <- function(id, label, choices)
     div(class = "scroll-filter", selectInput(ns(id), label, choices))
-  div(class = "scroll-ctl-section",
-      div(class = "scroll-filters-head", "Theme"),
+  .scroll_details("Theme", open = TRUE,
+    .scroll_details("Text & legend", open = TRUE,
       sel("scroll_theme_font", "Text size",
           c("Default" = "", "Small" = "10", "Medium" = "13", "Large" = "16")),
       sel("scroll_theme_legend", "Legend",
-          c("Default" = "", "Right" = "right", "Bottom" = "bottom", "Hidden" = "none")),
+          c("Default" = "", "Right" = "right", "Bottom" = "bottom", "Hidden" = "none"))),
+    .scroll_details("Axes", open = FALSE,
+      sel("scroll_theme_axes", "Axis text",
+          c("Default" = "", "Show" = "show", "Hide" = "hide")),
+      sel("scroll_theme_axis_titles", "Axis titles",
+          c("Default" = "", "Show" = "show", "Hide" = "hide")),
+      sel("scroll_theme_angle", "X label angle",
+          c("Default" = "", "0" = "0", "45" = "45", "90" = "90"))),
+    .scroll_details("Panel", open = FALSE,
       sel("scroll_theme_grid", "Gridlines",
           c("Default" = "", "On" = "on", "Off" = "off")),
       sel("scroll_theme_border", "Panel border",
           c("Default" = "", "On" = "on", "Off" = "off")),
-      sel("scroll_theme_axes", "Axis text",
-          c("Default" = "", "Show" = "show", "Hide" = "hide")),
       sel("scroll_theme_bg", "Background",
-          c("Default" = "", "White" = "white", "Grey" = "grey", "None" = "none")))
+          c("Default" = "", "White" = "white", "Grey" = "grey", "None" = "none"))))
 }
 
 # The right-hand control rail: a Theme section (always, unless disabled) plus the
@@ -292,6 +304,8 @@ scroll_reset_panels <- function() {
                 grid   = .scroll_nz(input$scroll_theme_grid),
                 border = .scroll_nz(input$scroll_theme_border),
                 axes   = .scroll_nz(input$scroll_theme_axes),
+                axis_titles = .scroll_nz(input$scroll_theme_axis_titles),
+                angle  = .scroll_nz(input$scroll_theme_angle),
                 bg     = .scroll_nz(input$scroll_theme_bg)))
 
 # Narrow `cells` by every active filter (AND). An untouched control is a no-op: an

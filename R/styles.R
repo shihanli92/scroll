@@ -75,13 +75,24 @@ body{background:var(--sc-ground); color:var(--sc-ink);
 .scroll-filters{position:sticky; top:80px; align-self:start; display:flex; flex-direction:column;
   gap:12px; max-height:calc(100vh - 100px); overflow-y:auto; padding-right:2px;}
 .scroll-multi .scroll-filters{top:123px;}
-.scroll-filters-head{display:flex; align-items:center; justify-content:space-between;
-  font-weight:700; font-size:12px; letter-spacing:.06em; text-transform:uppercase;
-  color:var(--sc-muted); padding-bottom:6px; border-bottom:1px solid var(--sc-line);}
-.scroll-filters-head a{font-size:11px; font-weight:600; text-transform:none; letter-spacing:0;
-  color:var(--sc-accent); text-decoration:none;}
-.scroll-ctl-section{display:flex; flex-direction:column; gap:10px;}
-.scroll-ctl-section + .scroll-ctl-section{margin-top:8px;}
+/* collapsible <details> sections (Theme / Filters, and Theme's sub-sections) */
+.scroll-ctl-details{border-bottom:1px solid var(--sc-line);}
+.scroll-ctl-details:last-child{border-bottom:none;}
+.scroll-ctl-summary{cursor:pointer; list-style:none; display:flex; align-items:center; gap:6px;
+  font-weight:700; font-size:12px; letter-spacing:.05em; text-transform:uppercase;
+  color:var(--sc-muted); padding:9px 0;}
+.scroll-ctl-summary::-webkit-details-marker{display:none;}
+.scroll-ctl-summary::before{content:'\\25B8'; font-size:9px; color:var(--sc-faint);
+  transition:transform .12s;}
+.scroll-ctl-details[open]>.scroll-ctl-summary::before{transform:rotate(90deg);}
+.scroll-ctl-body{display:flex; flex-direction:column; gap:10px; padding:2px 0 12px;}
+/* nested sub-sections (Text & legend / Axes / Panel inside Theme) read lighter */
+.scroll-ctl-body .scroll-ctl-details{border-bottom:none;}
+.scroll-ctl-body .scroll-ctl-summary{text-transform:none; letter-spacing:0; font-size:12px;
+  font-weight:600; color:var(--sc-ink); padding:6px 0;}
+.scroll-ctl-body .scroll-ctl-body{padding:0 0 6px 6px; gap:8px;}
+.scroll-reset-row{display:flex; justify-content:flex-end;}
+.scroll-reset-row a{font-size:11px; color:var(--sc-accent); text-decoration:none;}
 .scroll-filter{display:flex; flex-direction:column;}
 .scroll-filter .form-label,.scroll-filter label{font-size:12px; font-weight:600; margin-bottom:2px;
   color:var(--sc-ink);}

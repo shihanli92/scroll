@@ -47,10 +47,12 @@ test_that("config filters = FALSE disables the rail; a character vector curates 
   expect_identical(specs[[1]]$col, "celltype")
 })
 
-test_that("the filter rail renders and Reset is wired via the app server", {
+test_that("the control rail renders collapsible Theme + Filters sections", {
   data <- scroll:::.scroll_load(test_project())
   on.exit(scroll_disconnect(data$con))
-  ui <- scroll:::.scroll_filters_ui(data)
-  expect_true(any(grepl("scroll-filters", as.character(ui))))
-  expect_true(any(grepl("Reset", as.character(ui))))
+  aside <- as.character(scroll:::.scroll_controls_ui(data))
+  expect_true(any(grepl("scroll-filters", aside)))       # the sidebar wrapper
+  expect_true(any(grepl("<details", aside)))             # collapsible sections
+  expect_true(any(grepl("Theme", aside)) && any(grepl("Filters", aside)))
+  expect_true(any(grepl("Reset all", aside)))
 })

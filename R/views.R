@@ -200,6 +200,13 @@
   } else if (identical(ax, "show")) {
     parts$axis.text <- ggplot2::element_text(); parts$axis.ticks <- ggplot2::element_line()
   }
+  at <- gs$axis_titles %||% ""                                     # axis titles (x/y labels)
+  if (identical(at, "hide")) parts$axis.title <- ggplot2::element_blank()
+  else if (identical(at, "show")) parts$axis.title <- ggplot2::element_text()
+  ang <- suppressWarnings(as.numeric(gs$angle %||% ""))            # x-axis label rotation
+  if (!is.na(ang))
+    parts$axis.text.x <- ggplot2::element_text(angle = ang,
+      hjust = if (ang > 0) 1 else 0.5, vjust = if (ang == 90) 0.5 else 1)
   bg <- gs$bg %||% ""                                              # panel background fill
   if (nzchar(bg))
     parts$panel.background <- ggplot2::element_rect(

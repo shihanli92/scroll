@@ -2,10 +2,11 @@
 
 ## Global theme controls
 
-* The right control rail gained a **Theme** section — Text size, Legend position
-  (right/bottom/hidden), Gridlines, Panel border, Axis text (show/hide), and Background
-  (white/grey/none) — applied to *every* plot (RNA views and the VDJ/spatial/ATAC panels
-  alike) via a shared `.scroll_ggtheme()` override
+* The right control rail gained a **Theme** section, organised into collapsible
+  sub-sections — **Text & legend** (text size, legend position), **Axes** (axis text
+  show/hide, axis titles show/hide, x-label angle 0/45/90), and **Panel** (gridlines,
+  border, background). Every option is applied to *every* plot (RNA views and the
+  VDJ/spatial/ATAC panels alike) via a shared `.scroll_ggtheme()` override
   threaded through a `theme_r` reactive. Each control defaults to "Default" (a no-op),
   so rendering is unchanged until you pick something. Disable with
   `theme_controls: false` in `config.yaml`. The declarative panel builder now also

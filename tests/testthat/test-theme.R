@@ -17,6 +17,11 @@ test_that(".scroll_ggtheme is a no-op by default and overrides only what changed
   expect_identical(th2$panel.background$fill, "grey95")
   expect_s3_class(scroll:::.scroll_ggtheme(list(border = "off"))$panel.border, "element_blank")
 
+  # axis-title toggle + x-label rotation
+  th3 <- scroll:::.scroll_ggtheme(list(axis_titles = "hide", angle = "45"))
+  expect_s3_class(th3$axis.title, "element_blank")
+  expect_equal(th3$axis.text.x$angle, 45)
+
   p <- ggplot2::ggplot(mtcars, ggplot2::aes(.data$mpg, .data$wt)) + ggplot2::geom_point()
   expect_no_error(ggplot2::ggplot_build(p + scroll:::.scroll_ggtheme(NULL)))   # +NULL safe
   b <- ggplot2::ggplot_build(p + th)
