@@ -70,7 +70,7 @@ body{background:var(--sc-ground); color:var(--sc-ink);
 /* layout */
 .scroll-layout{display:grid; grid-template-columns:200px minmax(0,1fr); gap:32px;
   max-width:1320px; margin:0 auto; padding:28px;}
-.scroll-layout.has-filters{grid-template-columns:200px minmax(0,1fr) 244px; max-width:1560px;}
+.scroll-layout.has-filters{grid-template-columns:200px minmax(0,1fr) 300px; max-width:1620px;}
 /* right-hand global control rail: filters that narrow every panel */
 .scroll-filters{position:sticky; top:80px; align-self:start; display:flex; flex-direction:column;
   gap:12px; max-height:calc(100vh - 100px); overflow-y:auto; padding-right:2px;}
@@ -90,14 +90,23 @@ body{background:var(--sc-ground); color:var(--sc-ink);
 .scroll-ctl-body .scroll-ctl-details{border-bottom:none;}
 .scroll-ctl-body .scroll-ctl-summary{text-transform:none; letter-spacing:0; font-size:12px;
   font-weight:600; color:var(--sc-ink); padding:5px 0;}
-.scroll-ctl-body .scroll-ctl-body{padding:0 0 4px 6px; gap:5px;}
+/* theme sub-section controls lay out two per row (the rail is wide enough) */
+.scroll-ctl-body .scroll-ctl-body{display:grid; grid-template-columns:1fr 1fr;
+  gap:6px 10px; align-items:end; padding:0 0 6px 4px;}
 .scroll-reset-row{display:flex; justify-content:flex-end; margin-bottom:2px;}
 .scroll-reset-row a{font-size:11px; color:var(--sc-accent); text-decoration:none;}
 /* compact controls: kill the default form-group margin + shrink the selectize/slider */
-.scroll-filter{display:flex; flex-direction:column;}
+.scroll-filter{display:flex; flex-direction:column; min-width:0;}
 .scroll-filter .form-group,.scroll-filter .shiny-input-container{margin-bottom:0;}
 .scroll-filter .control-label,.scroll-filter .form-label,.scroll-filter label{
   font-size:11.5px; font-weight:600; margin-bottom:1px; color:var(--sc-ink);}
+/* colour options as a small circular swatch with the label beside it */
+.scroll-colour{flex-direction:row; align-items:center; gap:8px;}
+.scroll-colour .control-label,.scroll-colour label{flex:1; margin:0;}
+.scroll-colour .shiny-input-container{display:flex; align-items:center; gap:8px; width:100%;}
+.scroll-colour .input-group{width:auto;}
+.scroll-colour input.shiny-colour-input{width:22px; height:22px; min-height:22px; padding:0;
+  border-radius:50%; border:1px solid var(--sc-line); font-size:0; box-shadow:none; cursor:pointer;}
 .scroll-filters .selectize-input{min-height:0; padding:4px 8px; line-height:16px;}
 .scroll-filters .selectize-input.items{padding-top:4px; padding-bottom:4px;}
 .scroll-filters .selectize-dropdown{font-size:12px;}
