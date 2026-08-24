@@ -102,6 +102,9 @@ make_vdj_object <- function(n = 120, seed = 3) {
   obj$cdr3_beta  <- aa(sample(10:18, nclone, replace = TRUE))[clone]
   obj$cdr3_alpha <- aa(sample(8:15, nclone, replace = TRUE))[clone]
   obj$clonotype  <- paste0("clone", clone)
+  # an alternate, finer clonal definition (each clone splits into up to 2) — stands in
+  # for a nucleotide-vs-amino-acid clonotype, so the clone-id picker has >1 candidate
+  obj$clonotype_nt <- paste0("nt", clone, "_", sample(1:2, n, replace = TRUE))
   obj$antigen    <- factor(sample(c("gB", "B8R"), n, replace = TRUE))
   obj$tissue     <- factor(sample(c("skin", "spleen"), n, replace = TRUE))
   obj
@@ -118,7 +121,7 @@ vdj_test_project <- local({
           meta_cols = c("condition", "celltype", "antigen", "tissue"),
           vdj = vdj_spec("TCR", group_col = "celltype", clone_col = "clonotype",
                          antigen_col = "antigen", tissue_col = "tissue",
-                         cluster_col = "celltype"),
+                         cluster_col = "celltype", carry = "clonotype_nt"),
           overwrite = TRUE))
       cached <<- dir
     }
@@ -217,6 +220,49 @@ spatial_test_project <- local({
         man <- scroll_manifest(dir)
         man$images <- blk
         man$embeddings$spatial$kind <- "spatial"
+        yaml::write_yaml(man, file.path(dir, "manifest.yaml"))
+      }
+      cached <<- dir
+    }
+    cached
+  }
+})
+
+# A two-tissue-map spatial object (spatial + spatial2), to exercise the multi-FOV /
+# multi-slide embedding selector. Constructing real Seurat images in a test is
+# impractical, so — like spatial_test_project — we build two spatial reductions and
+# patch two `images` blocks + kind:spatial marks into the manifest.
+make_multifov_object <- function(n = 120, seed = 5) {
+  obj <- make_spatial_object(n, seed)                        # carries `spatial`
+  set.seed(seed + 1)
+  coord2 <- cbind(runif(n, 5, 35), runif(n, 5, 25))
+  colnames(coord2) <- c("spatial2_1", "spatial2_2"); rownames(coord2) <- colnames(obj)
+  obj[["spatial2"]] <- suppressWarnings(
+    SeuratObject::CreateDimReducObject(embeddings = coord2, key = "sp2_", assay = "RNA"))
+  obj
+}
+
+multifov_test_project <- local({
+  cached <- NULL
+  function() {
+    if (is.null(cached)) {
+      dir <- file.path(tempdir(), "scroll-multifov-proj")
+      if (!dir.exists(file.path(dir, "spatial"))) {
+        suppressMessages(scroll_build(
+          make_multifov_object(), dir, assays = "RNA",
+          embeddings = c("umap", "spatial", "spatial2"),
+          meta_cols = c("condition", "celltype"), overwrite = TRUE))
+        W <- 60L; H <- 50L; blk <- NULL
+        for (nm in c("spatial", "spatial2")) {
+          arr <- array(stats::runif(H * W * 3), dim = c(H, W, 3))
+          blk <- c(blk, scroll:::.scroll_write_spatial(
+            dir, list(name = nm, image = nm,
+                      raster = grDevices::as.raster(arr), width = W, height = H)))
+        }
+        man <- scroll_manifest(dir)
+        man$images <- blk
+        man$embeddings$spatial$kind <- "spatial"
+        man$embeddings$spatial2$kind <- "spatial"
         yaml::write_yaml(man, file.path(dir, "manifest.yaml"))
       }
       cached <<- dir

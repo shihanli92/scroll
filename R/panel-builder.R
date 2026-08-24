@@ -386,14 +386,16 @@ scroll_show_when <- function(control_spec, control, equals) {
 
 # ---- Layer 1: the builder ----------------------------------------------------
 
-# Call a control's bind, passing the optional `view_r` / `control_ids` only when
-# its formals declare them (mirrors the panel-server view_r idiom in .scroll_wire).
-# Keeps 3-arg author binds working while letting new controls opt into more.
-.scroll_call_bind <- function(bind, input, session, data, view_r, control_ids) {
+# Call a control's bind, passing the optional `view_r` / `control_ids` / `output`
+# only when its formals declare them (mirrors the panel-server view_r idiom in
+# .scroll_wire). Keeps 3-arg author binds working while letting new controls opt into
+# more — e.g. a control that renders a dynamic uiOutput needs `output`.
+.scroll_call_bind <- function(bind, input, session, data, view_r, control_ids, output = NULL) {
   fmls <- names(formals(bind))
   extra <- list()
   if ("view_r" %in% fmls)      extra$view_r <- view_r
   if ("control_ids" %in% fmls) extra$control_ids <- control_ids
+  if ("output" %in% fmls)      extra$output <- output
   do.call(bind, c(list(input, session, data), extra))
 }
 
@@ -423,6 +425,9 @@ scroll_show_when <- function(control_spec, control, equals) {
 #' @param label,title,desc,after,before As in [register_panel()].
 #' @param compute If `TRUE` (default), the plot recomputes on a Compute button;
 #'   `FALSE` makes it live (recompute on any control change).
+#' @param csv If `TRUE`, add a CSV button that exports the plot's source data. The
+#'   `plot` function opts in by attaching the table to its result, e.g.
+#'   `attr(p, "scroll_source") <- df; p`. Default `FALSE`.
 #' @return Invisibly, `id`.
 #' @examples
 #' \dontrun{
@@ -435,13 +440,14 @@ scroll_show_when <- function(control_spec, control, equals) {
 #' }
 #' @export
 register_plot_panel <- function(id, plot, controls = list(), label = id, title = label,
-                                desc = NULL, after = NULL, before = NULL, compute = TRUE) {
+                                desc = NULL, after = NULL, before = NULL, compute = TRUE,
+                                csv = FALSE) {
   if (!is.function(plot)) stop("`plot` must be a function(cells, input, data).", call. = FALSE)
   if (!is.list(controls) || (length(controls) &&
         !all(vapply(controls, function(c) is.list(c) && !is.null(c$ui), logical(1)))))
     stop("`controls` must be a list of scroll_input_*() specs.", call. = FALSE)
 
-  us <- .scroll_plot_panel_uiserver(plot, controls, compute)
+  us <- .scroll_plot_panel_uiserver(plot, controls, compute, csv = csv)
   register_panel(id, us$ui, us$server, label = label, title = title, desc = desc,
                  after = after, before = before)
 }
@@ -450,7 +456,12 @@ register_plot_panel <- function(id, plot, controls = list(), label = id, title =
 # control specs. Shared by register_plot_panel() and the built-in modality panels
 # (VDJ/spatial/ATAC), so those get the same control population / error surfacing /
 # Compute gate / downloads without re-implementing the module.
-.scroll_plot_panel_uiserver <- function(plot, controls, compute = TRUE) {
+#
+# `csv = TRUE` adds a CSV button to the plot toolbar and exports the plot's source
+# data: the plot fn opts in by attaching it as attr(p, "scroll_source") <- df, which
+# rides on the object the plot reactive already returns (no re-computation). A plot
+# that attaches nothing yields an empty CSV.
+.scroll_plot_panel_uiserver <- function(plot, controls, compute = TRUE, csv = FALSE) {
   ui <- function(id, data) {
     ns <- NS(id)
     miss <- .scroll_panel_missing(controls, data)
@@ -472,14 +483,14 @@ register_plot_panel <- function(id, plot, controls = list(), label = id, title =
       col_widths = c(3, 9), class = "scroll-panel",
       div(class = "scroll-controls",
           do.call(.scroll_group, c(list("Controls"), ctl_ui)), go),
-      .scroll_plot_area(ns))
+      .scroll_plot_area(ns, csv = isTRUE(csv)))
   }
 
   server <- function(id, data, cells_r = reactive(data$cells), view_r = reactive(NULL)) {
     moduleServer(id, function(input, output, session) {
       control_ids <- vapply(controls, function(c) c$id, character(1))
       for (ctl in controls)
-        .scroll_call_bind(ctl$bind, input, session, data, view_r, control_ids)
+        .scroll_call_bind(ctl$bind, input, session, data, view_r, control_ids, output)
       req_ctls <- Filter(function(c) isTRUE(c$required), controls)
       body <- function() {
         for (c in req_ctls)
@@ -488,7 +499,12 @@ register_plot_panel <- function(id, plot, controls = list(), label = id, title =
       }
       event <- if (isTRUE(compute)) reactive(input$scroll_compute) else NULL
       placeholder <- if (isTRUE(compute)) "Set the controls, then click Compute." else NULL
-      scroll_render_plot(output, id, body, event = event, placeholder = placeholder)
+      plot_r <- scroll_render_plot(output, id, body, event = event, placeholder = placeholder)
+      # Export the plot's source table (attached by the plot fn) when csv is on.
+      if (isTRUE(csv))
+        output$csv <- .scroll_csv_handler(
+          reactive(attr(plot_r(), "scroll_source") %||% data.frame()),
+          paste0("scroll_", id, ".csv"))
     })
   }
 
@@ -498,9 +514,9 @@ register_plot_panel <- function(id, plot, controls = list(), label = id, title =
 # A built-in modality panel spec built from the declarative builder and gated on a
 # manifest predicate (see .scroll_assemble_panels). Used by the VDJ and ATAC panels;
 # the spatial panel is hand-written instead because it owns brush-zoom state.
-.scroll_gated_panel <- function(id, label, title, desc, when, controls, plot)
+.scroll_gated_panel <- function(id, label, title, desc, when, controls, plot, csv = FALSE)
   c(list(id = id, label = label, title = title, desc = desc, when = when),
-    .scroll_plot_panel_uiserver(plot, controls, compute = FALSE))
+    .scroll_plot_panel_uiserver(plot, controls, compute = FALSE, csv = csv))
 
 # ---- Reusable render helpers (parity with the built-in panels) ---------------
 

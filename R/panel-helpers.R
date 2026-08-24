@@ -208,12 +208,15 @@
   else tag
 }
 
-# Standard plot area: a small toolbar (PNG + PDF download) above the plot output.
-.scroll_plot_area <- function(ns, height = "460px")
+# Standard plot area: a small toolbar (PNG + PDF download, and optionally a CSV of
+# the plot's source data) above the plot output. Pass csv = TRUE to add the CSV
+# button (the server must then wire output$csv, e.g. via .scroll_csv_handler()).
+.scroll_plot_area <- function(ns, height = "460px", csv = FALSE)
   div(class = "scroll-plot",
       div(class = "scroll-plot-bar",
           .scroll_dl_button(ns("png"), "PNG"),
-          .scroll_dl_button(ns("pdf"), "PDF")),
+          .scroll_dl_button(ns("pdf"), "PDF"),
+          if (isTRUE(csv)) .scroll_dl_button(ns("csv"), "CSV")),
       .scroll_spin(plotOutput(ns("plot"), height = height)))
 
 # Image downloadHandler for a plot reactive, raster (PNG) or vector (PDF). Uses

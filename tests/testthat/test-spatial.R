@@ -103,6 +103,48 @@ test_that("imaging-based (Xenium-style FOV) build extracts centroids, no image",
   })
 })
 
+test_that("multi-FOV project: >=2 spatial embeddings, images, and an embedding selector", {
+  dir <- multifov_test_project()
+  man <- scroll_manifest(dir)
+  expect_setequal(scroll:::.scroll_spatial_embeddings(man), c("spatial", "spatial2"))
+  expect_true(all(c("spatial", "spatial2") %in% names(man$images)))
+
+  data <- scroll:::.scroll_load(dir)
+  on.exit(scroll_disconnect(data$con), add = TRUE)
+  p <- Filter(function(x) identical(x$id, "spatial"),
+              scroll:::.scroll_assemble_panels(data$manifest))[[1]]
+  # the UI offers a Tissue-map (embedding) selector when >1 spatial embedding exists
+  expect_true(any(grepl("embedding", as.character(p$ui("s", data)))))
+  shiny::testServer(p$server, args = list(data = data), {
+    session$setInputs(mode = "Metadata", meta = "celltype", size = 1.4, image = TRUE,
+                      cpalette = "viridis", dpalette = "Okabe-Ito", embedding = "spatial")
+    fr1 <- frame_r(); expect_identical(fr1$emb, "spatial")
+    expect_error(force(output$plot), NA)
+    session$setInputs(embedding = "spatial2")               # switch tissue map
+    expect_identical(frame_r()$emb, "spatial2")
+    expect_error(force(output$plot), NA)
+    expect_false(is.null(output$csv))                        # CSV wired
+  })
+})
+
+test_that("scroll_build accepts a list of spatial_spec and rejects duplicate names", {
+  skip_if_not(exists("CreateFOV", where = asNamespace("SeuratObject")),
+              "SeuratObject too old for CreateFOV")
+  obj <- make_xenium_object()
+  dir <- file.path(tempdir(), "scroll-multispec-proj")
+  suppressWarnings(suppressMessages(scroll_build(
+    obj, dir, assays = "Xenium", meta_cols = "celltype",
+    spatial = list(spatial_spec(name = "spatial"), spatial_spec(name = "fov2")),
+    overwrite = TRUE)))
+  man <- scroll_manifest(dir)
+  expect_setequal(scroll:::.scroll_spatial_embeddings(man), c("spatial", "fov2"))
+
+  expect_error(suppressWarnings(suppressMessages(scroll_build(
+    obj, file.path(tempdir(), "scroll-dup-proj"), assays = "Xenium", meta_cols = "celltype",
+    spatial = list(spatial_spec(), spatial_spec()), overwrite = TRUE))),
+    "duplicate embedding name")
+})
+
 test_that("real Visium build path extracts coords + bakes the image", {
   skip_if_not_installed("stxBrain.SeuratData")
   skip_if_not_installed("Seurat")

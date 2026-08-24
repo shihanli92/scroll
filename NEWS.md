@@ -1,3 +1,47 @@
+# scroll (development version)
+
+## Multimodal panel overhaul (VDJ / spatial / ATAC)
+
+The modality panels gained depth, most improvements working on **existing built
+projects with no rebuild** (they read columns already baked into the store):
+
+* **CSV export on every modality panel.** The declarative panel builder
+  (`register_plot_panel()`, and the built-in VDJ/ATAC panels) now takes `csv = TRUE`;
+  a panel opts in by attaching its source table as `attr(p, "scroll_source")`, and a
+  CSV button appears alongside PNG/PDF.
+* **VDJ — runtime re-grouping.** Clone-overview rank-abundance and V/J gene-usage
+  frequency now group by **any** baked categorical column (group / antigen / tissue /
+  location / carried columns), not just the build-time `group_col`. The gene-usage
+  group control is hidden in the chi-square view (which stays baked-group).
+* **VDJ — clone-id column picker.** Clone overview, Diversity, and CDR3 length gained a
+  **Clone ID** control that chooses which column defines a clone — the baked `clone_id`
+  or any carried high-cardinality alternate (e.g. a nucleotide- vs amino-acid-level CDR3
+  clonotype). Clone sizes, rank-abundance, expansion categories, diversity metrics, and
+  the per-clone CDR3-length dedup all recompute under the chosen definition.
+* **VDJ — group filter + group colour picker on all group panels.** Clone overview,
+  V/J gene usage, CDR3 length, and Diversity each gained a "Groups" levels selector
+  (restrict to a subset of the group column's levels; empty = all) and a "Colour"
+  control — a colourblind-safe palette dropdown plus a **Manual** option that renders
+  one colour input per active group level (tracking the chosen group column + filter).
+* The declarative panel builder now passes `output` to a control's `bind` (when its
+  formals declare it), so a control can render a dynamic `uiOutput` — used by the VDJ
+  group colour picker's per-level Manual swatches.
+* **VDJ — group-by menus now exclude clone-scale columns.** Grouping/colour menus offer
+  only lower-cardinality categorical columns; a high-cardinality clone column (tens of
+  thousands of levels) is kept out of the group-by axes and offered as a Clone ID
+  instead. Clone-id and grouping candidates are complementary (split by cardinality
+  relative to the baked `clone_id`).
+* **VDJ — Diversity is recomputed at runtime**, so it can group by any categorical
+  column (not just the baked group / cluster) and exposes `paired_rate` as a metric;
+  the metric / group-by controls are hidden in the tissue-correlation view.
+* **Spatial — multi-FOV / multi-slide.** `scroll_build(spatial = )` accepts a **list**
+  of `spatial_spec()`s (distinct `name`s), baking several tissue maps. The Spatial
+  panel adds a tissue-map selector (when >1 exists), continuous + categorical palette
+  pickers, view-scoped metadata choices, and a CSV of the plotted coordinates.
+* **ATAC — genomic-interval region search.** A `chr:start-end` query now selects peaks
+  by coordinate **overlap** (substring match remains the fallback for other text); the
+  peak list cap is raised and truncation is surfaced in the plot subtitle, not silent.
+
 # scroll 0.1.0
 
 First tagged release. `scroll` turns a processed Seurat object into a

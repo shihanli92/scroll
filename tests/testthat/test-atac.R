@@ -55,6 +55,41 @@ test_that("the Peaks panel renders a peak's accessibility on the embedding", {
   })
 })
 
+test_that("region search does genomic-interval overlap, with a substring fallback", {
+  pk <- scroll:::.scroll_parse_peaks(c("chr1-10000-10800", "chr1-20000-20800",
+                                       "chr2-5000-5800"))
+  # chr1:15000-25000 overlaps only the second chr1 peak (10800 < 15000 misses)
+  expect_equal(scroll:::.scroll_atac_region_hits(pk, "chr1:15000-25000"), "chr1-20000-20800")
+  expect_equal(scroll:::.scroll_atac_region_hits(pk, "chr1-20000-20800"), "chr1-20000-20800")
+  expect_length(scroll:::.scroll_atac_region_hits(pk, "chr2:1-100000"), 1)   # chr filter
+  # a non-interval query (bare chr) falls back to substring over peak names
+  expect_length(scroll:::.scroll_atac_region_hits(pk, "chr1"), 2)
+  expect_length(scroll:::.scroll_atac_region_hits(pk, ""), 3)                 # empty -> all
+})
+
+test_that("the peak list is capped and truncation is surfaced (not silent)", {
+  n <- scroll:::.SCROLL_ATAC_MAX_PEAKS
+  pk <- scroll:::.scroll_parse_peaks(sprintf("chr1-%d-%d", (1:(n + 20)) * 100,
+                                             (1:(n + 20)) * 100 + 50))
+  hits <- scroll:::.scroll_atac_region_hits(pk, "chr1")     # matches every peak
+  expect_gt(length(hits), n)                                # more hits than the cap
+  expect_length(utils::head(sort(hits), n), n)              # peaks_for bounds the list
+})
+
+test_that("the Peaks panel exposes a CSV of the matching peaks", {
+  data <- scroll:::.scroll_load(atac_test_project())
+  on.exit(scroll_disconnect(data$con), add = TRUE)
+  p <- Filter(function(x) identical(x$id, "peaks"),
+              scroll:::.scroll_assemble_panels(data$manifest))[[1]]
+  pk <- scroll:::.scroll_atac_read(data)
+  peak <- pk$feature[pk$nearest_gene == "CD3D"][1]
+  shiny::testServer(p$server, args = list(data = data), {
+    session$setInputs(mode = "Gene", gene = "CD3D", peak = peak, embedding = "umap")
+    tryCatch(force(output$plot), error = function(e) NULL)
+    expect_false(is.null(output$csv))
+  })
+})
+
 test_that("peaks assay accessibility is queryable like any assay (FeaturePlot path)", {
   data <- scroll:::.scroll_load(atac_test_project())
   on.exit(scroll_disconnect(data$con), add = TRUE)

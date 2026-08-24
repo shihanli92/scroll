@@ -59,9 +59,10 @@ supplied, a compact \verb{repertoire/} store (clone table + diversity / gene-usa
 residuals / tissue correlation) is baked and the VDJ panels are enabled.}
 
 \item{spatial}{Optional \code{\link[=spatial_spec]{spatial_spec()}} (or \code{TRUE} for defaults) describing a
-tissue image. When supplied, \code{GetTissueCoordinates()} is exported as a
-\code{spatial} embedding, the H&E image is baked as a raster asset, and the Spatial
-panel is enabled.}
+tissue image, or a \strong{list} of specs for multi-FOV / multi-slide objects. For
+each spec \code{GetTissueCoordinates()} is exported as a spatial embedding, the H&E
+image is baked as a raster asset, and the Spatial panel is enabled. Multiple
+specs must have distinct \code{name}s.}
 
 \item{atac}{Optional \code{\link[=atac_spec]{atac_spec()}} (or \code{TRUE} for defaults) naming a peaks assay.
 When supplied, the assay is marked \code{kind: peaks}, each peak's coordinates are

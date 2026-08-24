@@ -44,6 +44,44 @@ test_that("built panel: placeholder, required message, inline error, render, dow
   })
 })
 
+test_that("csv = TRUE wires an output$csv from the plot's attached source; csv = FALSE does not", {
+  on.exit(scroll_reset_panels()); scroll_reset_panels()
+  src <- data.frame(k = c("a", "b"), v = c(1, 2))
+  plot_fn <- function(cells, input, data) {
+    p <- ggplot2::ggplot(cells, ggplot2::aes(.data[[input$grp]])) + ggplot2::geom_bar()
+    attr(p, "scroll_source") <- src; p
+  }
+  register_plot_panel("withcsv", compute = FALSE, csv = TRUE,
+    controls = list(scroll_input_column("grp", "Group", "categorical")), plot = plot_fn)
+  register_plot_panel("nocsv", compute = FALSE,             # csv defaults to FALSE
+    controls = list(scroll_input_column("grp", "Group", "categorical")), plot = plot_fn)
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con), add = TRUE)
+
+  pc <- Filter(function(x) identical(x$id, "withcsv"), scroll:::.scroll_assemble_panels())[[1]]
+  shiny::testServer(pc$server, args = list(data = data), {
+    session$setInputs(grp = "celltype")
+    tryCatch(force(output$plot), error = function(e) NULL)   # flush the module once
+    expect_false(is.null(output$csv))                        # CSV output wired
+  })
+  pn <- Filter(function(x) identical(x$id, "nocsv"), scroll:::.scroll_assemble_panels())[[1]]
+  shiny::testServer(pn$server, args = list(data = data), {
+    session$setInputs(grp = "celltype")
+    tryCatch(force(output$plot), error = function(e) NULL)
+    expect_error(force(output$csv))                          # no CSV output when csv = FALSE
+  })
+
+  # The plot fn attaches its source table, and .scroll_csv_handler writes exactly
+  # that — together the two halves the builder wires: attr(plot(),"scroll_source").
+  p <- plot_fn(data$cells, list(grp = "celltype"), data)
+  expect_identical(attr(p, "scroll_source"), src)
+  h <- scroll:::.scroll_csv_handler(function() attr(p, "scroll_source"), "x.csv")
+  f <- tempfile(fileext = ".csv")
+  environment(environment(h)$renderFunc)$content(f)
+  back <- utils::read.csv(f)
+  expect_equal(nrow(back), 2); expect_true(all(c("k", "v") %in% names(back)))
+})
+
 test_that("compute = FALSE makes the plot live (no Compute gate)", {
   on.exit(scroll_reset_panels()); scroll_reset_panels()
   register_plot_panel("live1", compute = FALSE,

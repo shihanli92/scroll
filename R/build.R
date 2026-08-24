@@ -39,9 +39,10 @@
 #'   supplied, a compact `repertoire/` store (clone table + diversity / gene-usage
 #'   residuals / tissue correlation) is baked and the VDJ panels are enabled.
 #' @param spatial Optional [spatial_spec()] (or `TRUE` for defaults) describing a
-#'   tissue image. When supplied, `GetTissueCoordinates()` is exported as a
-#'   `spatial` embedding, the H&E image is baked as a raster asset, and the Spatial
-#'   panel is enabled.
+#'   tissue image, or a **list** of specs for multi-FOV / multi-slide objects. For
+#'   each spec `GetTissueCoordinates()` is exported as a spatial embedding, the H&E
+#'   image is baked as a raster asset, and the Spatial panel is enabled. Multiple
+#'   specs must have distinct `name`s.
 #' @param atac Optional [atac_spec()] (or `TRUE` for defaults) naming a peaks assay.
 #'   When supplied, the assay is marked `kind: peaks`, each peak's coordinates are
 #'   parsed from its name, a peak-annotation table (with nearest gene when a Signac
@@ -84,15 +85,27 @@ scroll_build <- function(object, outdir,
   # Spatial: extract tissue coordinates into a `spatial` reduction (image-pixel
   # space) so DimPlot/FeaturePlot/the Spatial panel can plot on it. Injected
   # before validation so it counts as an exported embedding.
-  spatial_prep <- NULL
+  # Accept a single spatial_spec (or TRUE for defaults) or a LIST of specs — the
+  # latter bakes several tissue maps (multi-FOV / multi-slide) as distinct spatial
+  # embeddings, each with its own image asset.
+  spatial_preps <- list()
   if (!is.null(spatial)) {
     if (isTRUE(spatial)) spatial <- spatial_spec()
-    spatial_prep <- .scroll_prepare_spatial(object, spatial)
-    # the reduction key may collide case-insensitively with the assay key
-    # (e.g. `spatial_` vs the `Spatial` assay); harmless — coords are keyed by
-    # the reduction *name*, so silence the Seurat key-rename notice.
-    suppressWarnings(object[[spatial_prep$name]] <- spatial_prep$reduction)
-    embeddings <- union(embeddings, spatial_prep$name)
+    specs <- if (inherits(spatial, "scroll_spatial_spec")) list(spatial) else spatial
+    for (sp in specs) {
+      if (!inherits(sp, "scroll_spatial_spec"))
+        stop("spatial: each entry must be a spatial_spec().", call. = FALSE)
+      prep <- .scroll_prepare_spatial(object, sp)
+      if (!is.null(spatial_preps[[prep$name]]))
+        stop("spatial: duplicate embedding name '", prep$name,
+             "'; give each spatial_spec() a distinct `name`.", call. = FALSE)
+      # the reduction key may collide case-insensitively with the assay key
+      # (e.g. `spatial_` vs the `Spatial` assay); harmless — coords are keyed by
+      # the reduction *name*, so silence the Seurat key-rename notice.
+      suppressWarnings(object[[prep$name]] <- prep$reduction)
+      embeddings <- union(embeddings, prep$name)
+      spatial_preps[[prep$name]] <- prep
+    }
   }
 
   .scroll_check_inputs(object, assays, embeddings, meta_cols)
@@ -135,11 +148,12 @@ scroll_build <- function(object, outdir,
     vdj_block <- .scroll_bake_vdj(md, outdir, vdj)
   }
 
-  # --- Spatial tissue image (optional): bake the H&E raster asset
+  # --- Spatial tissue image(s) (optional): bake the H&E raster asset(s)
   images_block <- NULL
-  if (!is.null(spatial_prep)) {
-    .scroll_step(verbose, "Baking spatial tissue image...")
-    images_block <- .scroll_write_spatial(outdir, spatial_prep)
+  if (length(spatial_preps)) {
+    .scroll_step(verbose, "Baking spatial tissue image(s)...")
+    for (prep in spatial_preps)
+      images_block <- c(images_block, .scroll_write_spatial(outdir, prep))
   }
 
   # --- scATAC peak annotation (optional): parse coords + nearest gene
@@ -158,7 +172,7 @@ scroll_build <- function(object, outdir,
                          n_cells = nrow(cells), quantize = quantize,
                          has_counts = counts, cells = cells, subsets = subsets,
                          vdj = vdj_block, images = images_block,
-                         spatial_embeddings = if (!is.null(spatial_prep)) spatial_prep$name else character(),
+                         spatial_embeddings = if (length(spatial_preps)) names(spatial_preps) else character(),
                          atac = atac_block,
                          peaks_assay = if (!is.null(atac_block)) atac_block$assay else character(),
                          max_levels = max_levels)

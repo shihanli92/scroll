@@ -13,7 +13,8 @@ register_plot_panel(
   desc = NULL,
   after = NULL,
   before = NULL,
-  compute = TRUE
+  compute = TRUE,
+  csv = FALSE
 )
 }
 \arguments{
@@ -29,6 +30,10 @@ id; \code{data} is the handle (\code{data$query1}, \code{data$con}, \code{data$m
 
 \item{compute}{If \code{TRUE} (default), the plot recomputes on a Compute button;
 \code{FALSE} makes it live (recompute on any control change).}
+
+\item{csv}{If \code{TRUE}, add a CSV button that exports the plot's source data. The
+\code{plot} function opts in by attaching the table to its result, e.g.
+\verb{attr(p, "scroll_source") <- df; p}. Default \code{FALSE}.}
 }
 \value{
 Invisibly, \code{id}.
