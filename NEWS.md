@@ -5,10 +5,12 @@
 * The right control rail gained a comprehensive **Theme** section, organised into
   collapsible sub-sections: **Text & fonts** (base/title/axis/legend/strip sizes, font
   family, text colour, title style), **Legend** (position, direction, title show/hide,
-  key background), **Axes** (text/titles/ticks/lines show-hide, x & y label angle),
-  **Panel** (major/minor gridlines, gridline colour, line thickness & colour, border +
-  colour, panel & plot background), and **Facets & spacing** (strip background, plot
-  margin). The control rail is laid out compactly. Every option is a ggplot `theme()`
+  key background), **Axes** (text/titles/ticks/lines show-hide, a shared axis colour for
+  lines + ticks, x & y label angle), **Panel** (major/minor gridlines, gridline colour,
+  line thickness & colour, border + colour, panel & plot background), and **Facets &
+  spacing** (strip background, plot margin). Colour options are **colour pickers**
+  (`colourpicker`, with a hex text-field fallback); an empty picker means "no override".
+  The control rail is laid out compactly. Every option is a ggplot `theme()`
   element applied to *every* plot (RNA views and the VDJ/spatial/ATAC panels alike) via a
   shared `.scroll_ggtheme()` override
   threaded through a `theme_r` reactive. Each control defaults to "Default" (a no-op),

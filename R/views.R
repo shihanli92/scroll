@@ -188,7 +188,7 @@
   parts <- add(parts, "text", etext(
     size   = num("font"),
     family = switch(g("font_family") %||% "", sans = "sans", serif = "serif", mono = "mono", NULL),
-    colour = switch(g("text_colour") %||% "", black = "black", grey = "grey30", NULL)))
+    colour = g("text_colour")))
   parts <- add(parts, "plot.title", etext(size = num("title_size"),
     face = switch(g("title_style") %||% "", bold = "bold", italic = "italic", plain = "plain", NULL)))
   parts <- add(parts, "legend.text", etext(size = num("legend_text_size")))
@@ -197,7 +197,7 @@
   # --- base line element: thickness + colour (inherited by grid / axis lines / ticks) ---
   la <- Filter(Negate(is.null), list(
     linewidth = switch(g("line_size") %||% "", thin = 0.3, medium = 0.5, thick = 0.9, NULL),
-    colour    = switch(g("line_colour") %||% "", black = "black", grey = "grey50", light = "grey80", NULL)))
+    colour    = g("line_colour")))
   if (length(la)) parts$line <- do.call(ggplot2::element_line, la)
 
   # --- axes: text / titles / ticks / lines / angles ---
@@ -206,12 +206,15 @@
   parts <- add(parts, "axis.title",
     if (identical(g("axis_titles"), "hide")) ggplot2::element_blank()
     else etext(size = num("axis_title_size")))
+  acol <- g("axis_colour")                                        # shared by axis line + ticks
   tk <- g("axis_ticks")
   if (identical(tk, "hide")) parts$axis.ticks <- ggplot2::element_blank()
-  else if (identical(tk, "show")) parts$axis.ticks <- ggplot2::element_line()
+  else if (identical(tk, "show") || !is.null(acol))
+    parts$axis.ticks <- ggplot2::element_line(colour = acol)
   al <- g("axis_line")
-  if (identical(al, "show")) parts$axis.line <- ggplot2::element_line(colour = "black")
-  else if (identical(al, "hide")) parts$axis.line <- ggplot2::element_blank()
+  if (identical(al, "hide")) parts$axis.line <- ggplot2::element_blank()
+  else if (identical(al, "show") || !is.null(acol))
+    parts$axis.line <- ggplot2::element_line(colour = acol %||% "black")
   if (!identical(g("axes"), "hide")) {
     ax <- num("angle")
     if (!is.null(ax) && !is.na(ax))
@@ -233,7 +236,7 @@
     fill = switch(lk, white = "white", none = NA, "white"), colour = NA)
 
   # --- panel: gridlines, border, backgrounds ---
-  gcol <- switch(g("grid_colour") %||% "", light = "grey92", medium = "grey85", dark = "grey70", "grey92")
+  gcol <- g("grid_colour") %||% "grey92"
   gmaj <- g("grid_major")
   if (identical(gmaj, "off")) parts$panel.grid.major <- ggplot2::element_blank()
   else if (identical(gmaj, "on") || !is.null(g("grid_colour")))
@@ -241,22 +244,19 @@
   gmin <- g("grid_minor")
   if (identical(gmin, "off")) parts$panel.grid.minor <- ggplot2::element_blank()
   else if (identical(gmin, "on")) parts$panel.grid.minor <- ggplot2::element_line(colour = gcol)
-  bcol <- switch(g("border_colour") %||% "", grey = "grey60", black = "black", "black")
+  bcol <- g("border_colour") %||% "black"
   bd <- g("border")
   if (identical(bd, "on") || !is.null(g("border_colour")))
     parts$panel.border <- ggplot2::element_rect(colour = bcol, fill = NA, linewidth = 0.7)
   else if (identical(bd, "off")) parts$panel.border <- ggplot2::element_blank()
   bg <- g("bg")
-  if (!is.null(bg)) parts$panel.background <- ggplot2::element_rect(
-    fill = switch(bg, white = "white", grey = "grey95", none = NA, "white"), colour = NA)
+  if (!is.null(bg)) parts$panel.background <- ggplot2::element_rect(fill = bg, colour = NA)
   pb <- g("plot_bg")
-  if (!is.null(pb)) parts$plot.background <- ggplot2::element_rect(
-    fill = switch(pb, white = "white", none = NA, "white"), colour = NA)
+  if (!is.null(pb)) parts$plot.background <- ggplot2::element_rect(fill = pb, colour = NA)
 
   # --- facets & spacing ---
   sb <- g("strip_bg")
-  if (!is.null(sb)) parts$strip.background <- ggplot2::element_rect(
-    fill = switch(sb, grey = "grey85", none = NA, "grey85"), colour = NA)
+  if (!is.null(sb)) parts$strip.background <- ggplot2::element_rect(fill = sb, colour = NA)
   mg <- g("margin")
   if (!is.null(mg)) { m <- switch(mg, compact = 3, normal = 6, roomy = 14, 6)
                       parts$plot.margin <- ggplot2::margin(m, m, m, m) }

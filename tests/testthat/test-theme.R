@@ -11,11 +11,11 @@ test_that(".scroll_ggtheme is a no-op by default and overrides only what changed
   expect_s3_class(th$panel.grid.major, "element_blank")
   expect_equal(th$text$size, 16)
 
-  # border / axes / background overrides
-  th2 <- scroll:::.scroll_ggtheme(list(border = "on", axes = "hide", bg = "grey"))
+  # border / axes / background overrides (bg now a raw picker colour)
+  th2 <- scroll:::.scroll_ggtheme(list(border = "on", axes = "hide", bg = "#f0f0f0"))
   expect_s3_class(th2$panel.border, "element_rect")
   expect_s3_class(th2$axis.text, "element_blank")
-  expect_identical(th2$panel.background$fill, "grey95")
+  expect_identical(th2$panel.background$fill, "#f0f0f0")
   expect_s3_class(scroll:::.scroll_ggtheme(list(border = "off"))$panel.border, "element_blank")
 
   # axis-title toggle + x/y label rotation + axis line/ticks
@@ -27,30 +27,35 @@ test_that(".scroll_ggtheme is a no-op by default and overrides only what changed
   expect_s3_class(th3$axis.line, "element_line")
   expect_s3_class(th3$axis.ticks, "element_blank")
 
-  # the rest of the expansive surface: fonts, legend, panel, facets/spacing
+  # the rest of the expansive surface; colours are now raw picker values (hex/transparent)
   th4 <- scroll:::.scroll_ggtheme(list(
-    font_family = "serif", text_colour = "grey", title_style = "bold", title_size = "20",
+    font_family = "serif", text_colour = "#333333", title_style = "bold", title_size = "20",
     legend_dir = "horizontal", legend_title = "hide", legend_key = "none",
-    grid_minor = "off", grid_colour = "dark", border_colour = "grey", plot_bg = "none",
-    strip_bg = "grey", margin = "roomy", strip_text_size = "12"))
+    grid_minor = "off", grid_colour = "#cccccc", border_colour = "#999999",
+    plot_bg = "transparent", strip_bg = "#eeeeee", margin = "roomy", strip_text_size = "12"))
   expect_identical(th4$text$family, "serif")
-  expect_identical(th4$text$colour, "grey30")
+  expect_identical(th4$text$colour, "#333333")
   expect_identical(th4$plot.title$face, "bold"); expect_equal(th4$plot.title$size, 20)
   expect_identical(th4$legend.direction, "horizontal")
   expect_s3_class(th4$legend.title, "element_blank")
   expect_s3_class(th4$panel.grid.minor, "element_blank")
-  expect_identical(th4$panel.grid.major$colour, "grey70")     # gridline colour recolours majors
-  expect_identical(th4$panel.border$colour, "grey60")
-  expect_true(is.na(th4$plot.background$fill))
-  expect_identical(th4$strip.background$fill, "grey85")
+  expect_identical(th4$panel.grid.major$colour, "#cccccc")    # gridline colour recolours majors
+  expect_identical(th4$panel.border$colour, "#999999")
+  expect_identical(th4$plot.background$fill, "transparent")
+  expect_identical(th4$strip.background$fill, "#eeeeee")
   expect_false(is.null(th4$plot.margin)); expect_true(inherits(th4$plot.margin, "unit"))
   expect_equal(th4$strip.text$size, 12)
 
   # base line element: thickness + colour (inherited by grid / axis lines / ticks)
-  th5 <- scroll:::.scroll_ggtheme(list(line_size = "thick", line_colour = "grey"))
+  th5 <- scroll:::.scroll_ggtheme(list(line_size = "thick", line_colour = "#555555"))
   expect_s3_class(th5$line, "element_line")
   expect_equal(as.numeric(th5$line$linewidth), 0.9)
-  expect_identical(th5$line$colour, "grey50")
+  expect_identical(th5$line$colour, "#555555")
+
+  # axis colour: one picker shared by the axis line + ticks
+  th6 <- scroll:::.scroll_ggtheme(list(axis_colour = "#ff0000"))
+  expect_identical(th6$axis.line$colour, "#ff0000")
+  expect_identical(th6$axis.ticks$colour, "#ff0000")
 
   p <- ggplot2::ggplot(mtcars, ggplot2::aes(.data$mpg, .data$wt)) + ggplot2::geom_point()
   expect_no_error(ggplot2::ggplot_build(p + scroll:::.scroll_ggtheme(NULL)))   # +NULL safe

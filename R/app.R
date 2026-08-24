@@ -270,6 +270,14 @@ scroll_reset_panels <- function() {
   if (isFALSE(data$config$theme_controls)) return(NULL)
   sel <- function(id, label, choices)
     div(class = "scroll-filter", selectInput(ns(id), label, choices))
+  # colour picker (empty = no override, so Default stays a no-op); falls back to a hex
+  # text field when colourpicker is not installed.
+  col <- function(id, label)
+    div(class = "scroll-filter scroll-colour",
+        if (requireNamespace("colourpicker", quietly = TRUE))
+          colourpicker::colourInput(ns(id), label, value = "", showColour = "background",
+                                    allowTransparent = TRUE)
+        else textInput(ns(id), label, placeholder = "#hex or name"))
   sz <- function(s, m, l) c("Default" = "", "Small" = s, "Medium" = m, "Large" = l)
   showhide <- c("Default" = "", "Show" = "show", "Hide" = "hide")
   onoff    <- c("Default" = "", "On" = "on", "Off" = "off")
@@ -278,8 +286,7 @@ scroll_reset_panels <- function() {
       sel("scroll_theme_font", "Text size", sz("11", "13", "16")),
       sel("scroll_theme_font_family", "Font",
           c("Default" = "", "Sans" = "sans", "Serif" = "serif", "Mono" = "mono")),
-      sel("scroll_theme_text_colour", "Text colour",
-          c("Default" = "", "Black" = "black", "Grey" = "grey")),
+      col("scroll_theme_text_colour", "Text colour"),
       sel("scroll_theme_title_size", "Title size", sz("14", "18", "22")),
       sel("scroll_theme_title_style", "Title style",
           c("Default" = "", "Plain" = "plain", "Bold" = "bold", "Italic" = "italic")),
@@ -301,6 +308,7 @@ scroll_reset_panels <- function() {
       sel("scroll_theme_axis_titles", "Axis titles", showhide),
       sel("scroll_theme_axis_ticks", "Axis ticks", showhide),
       sel("scroll_theme_axis_line", "Axis lines", showhide),
+      col("scroll_theme_axis_colour", "Axis colour"),        # shared by lines + ticks
       sel("scroll_theme_angle", "X label angle",
           c("Default" = "", "0" = "0", "45" = "45", "90" = "90")),
       sel("scroll_theme_yangle", "Y label angle",
@@ -308,22 +316,16 @@ scroll_reset_panels <- function() {
     .scroll_details("Panel", open = FALSE,
       sel("scroll_theme_grid_major", "Major gridlines", onoff),
       sel("scroll_theme_grid_minor", "Minor gridlines", onoff),
-      sel("scroll_theme_grid_colour", "Gridline colour",
-          c("Default" = "", "Light" = "light", "Medium" = "medium", "Dark" = "dark")),
+      col("scroll_theme_grid_colour", "Gridline colour"),
       sel("scroll_theme_line_size", "Line thickness",
           c("Default" = "", "Thin" = "thin", "Medium" = "medium", "Thick" = "thick")),
-      sel("scroll_theme_line_colour", "Line colour",
-          c("Default" = "", "Black" = "black", "Grey" = "grey", "Light" = "light")),
+      col("scroll_theme_line_colour", "Line colour"),
       sel("scroll_theme_border", "Panel border", onoff),
-      sel("scroll_theme_border_colour", "Border colour",
-          c("Default" = "", "Grey" = "grey", "Black" = "black")),
-      sel("scroll_theme_bg", "Panel background",
-          c("Default" = "", "White" = "white", "Grey" = "grey", "None" = "none")),
-      sel("scroll_theme_plot_bg", "Plot background",
-          c("Default" = "", "White" = "white", "None" = "none"))),
+      col("scroll_theme_border_colour", "Border colour"),
+      col("scroll_theme_bg", "Panel background"),
+      col("scroll_theme_plot_bg", "Plot background")),
     .scroll_details("Facets & spacing", open = FALSE,
-      sel("scroll_theme_strip_bg", "Strip background",
-          c("Default" = "", "Grey" = "grey", "None" = "none")),
+      col("scroll_theme_strip_bg", "Strip background"),
       sel("scroll_theme_margin", "Plot margin",
           c("Default" = "", "Compact" = "compact", "Normal" = "normal", "Roomy" = "roomy"))))
 }
@@ -341,7 +343,7 @@ scroll_reset_panels <- function() {
   keys <- c("font", "font_family", "text_colour", "title_size", "title_style",
             "axis_title_size", "axis_text_size", "legend_text_size", "strip_text_size",
             "legend", "legend_dir", "legend_title", "legend_key",
-            "axes", "axis_titles", "axis_ticks", "axis_line", "angle", "yangle",
+            "axes", "axis_titles", "axis_ticks", "axis_line", "axis_colour", "angle", "yangle",
             "grid_major", "grid_minor", "grid_colour", "line_size", "line_colour",
             "border", "border_colour", "bg", "plot_bg", "strip_bg", "margin")
   reactive(stats::setNames(
