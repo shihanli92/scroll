@@ -63,11 +63,33 @@ test_that(".scroll_ggtheme is a no-op by default and overrides only what changed
   expect_identical(b$plot$theme$legend.position, "bottom")
 })
 
-test_that("the active-theme reactive maps the sidebar inputs (blank = default)", {
-  shiny::reactiveConsole(TRUE); on.exit(shiny::reactiveConsole(FALSE))
-  input <- list(scroll_theme_font = "", scroll_theme_legend = "bottom", scroll_theme_grid = "")
-  gs <- scroll:::.scroll_active_theme(input)()
-  expect_null(gs$font); expect_identical(gs$legend, "bottom"); expect_null(gs$grid)
+test_that("theme snapshot maps the sidebar inputs (blank = no override)", {
+  input <- list(scroll_theme_font = "", scroll_theme_legend = "bottom",
+                scroll_theme_grid_major = "off")
+  gs <- scroll:::.scroll_theme_values(input)
+  expect_null(gs$font); expect_identical(gs$legend, "bottom")
+  expect_identical(gs$grid_major, "off")
+})
+
+test_that("theme + filters are deferred: Apply commits, Reset clears", {
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  ui <- as.character(scroll:::.scroll_controls_ui(data))
+  expect_true(any(grepl("scroll_theme_apply", ui)))       # theme Apply button
+  expect_true(any(grepl("scroll_filter_apply", ui)))      # filter Apply button
+
+  # theme_rv only changes on Apply, and Reset clears it back to the no-op default
+  shiny::testServer(function(input, output, session) {
+    theme_rv <- shiny::reactiveVal(list())
+    scroll:::.scroll_bind_theme(input, session, data, theme_rv)
+  }, {
+    session$setInputs(scroll_theme_legend = "bottom")
+    expect_length(theme_rv(), 0)                              # not applied yet
+    session$setInputs(scroll_theme_apply = 1)
+    expect_identical(theme_rv()$legend, "bottom")             # applied on click
+    session$setInputs(scroll_theme_reset = 1)
+    expect_length(theme_rv(), 0)                              # cleared on reset
+  })
 })
 
 test_that("panels accept a theme_r and apply it (RNA scatter + modality)", {

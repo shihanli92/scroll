@@ -95,6 +95,10 @@ body{background:var(--sc-ground); color:var(--sc-ink);
   gap:6px 10px; align-items:end; padding:0 0 6px 4px;}
 .scroll-reset-row{display:flex; justify-content:flex-end; margin-bottom:2px;}
 .scroll-reset-row a{font-size:11px; color:var(--sc-accent); text-decoration:none;}
+/* Apply / Reset row at the top of the Theme and Filters sections */
+.scroll-apply-row{display:flex; align-items:center; gap:10px; margin:2px 0 8px;}
+.scroll-apply-row .btn{padding:3px 16px; font-size:12px; font-weight:600;}
+.scroll-apply-row a{font-size:11px; color:var(--sc-accent); text-decoration:none; margin-left:auto;}
 /* compact controls: kill the default form-group margin + shrink the selectize/slider */
 .scroll-filter{display:flex; flex-direction:column; min-width:0;}
 .scroll-filter .form-group,.scroll-filter .shiny-input-container{margin-bottom:0;}

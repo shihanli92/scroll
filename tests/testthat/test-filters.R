@@ -47,6 +47,24 @@ test_that("config filters = FALSE disables the rail; a character vector curates 
   expect_identical(specs[[1]]$col, "celltype")
 })
 
+test_that("filters are deferred behind Apply and cleared on Reset", {
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  cs <- Filter(function(s) s$type == "categorical", scroll:::.scroll_filter_specs(data))[[1]]
+  lvl <- as.character(stats::na.omit(data$cells[[cs$col]])[1])
+  shiny::testServer(function(input, output, session) {
+    filt_rv <- shiny::reactiveVal(list())
+    scroll:::.scroll_bind_filters(input, session, data, filt_rv)
+  }, {
+    do.call(session$setInputs, stats::setNames(list(lvl), cs$id))  # set the control
+    expect_length(filt_rv(), 0)                                    # ...but not applied yet
+    session$setInputs(scroll_filter_apply = 1)
+    expect_identical(filt_rv()[[cs$id]], lvl)                      # committed on Apply
+    session$setInputs(scroll_filter_reset = 1)
+    expect_length(filt_rv(), 0)                                    # cleared on Reset
+  })
+})
+
 test_that("the control rail renders collapsible Theme + Filters sections", {
   data <- scroll:::.scroll_load(test_project())
   on.exit(scroll_disconnect(data$con))

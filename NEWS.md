@@ -10,8 +10,9 @@
   line thickness & colour, border + colour, panel & plot background), and **Facets &
   spacing** (strip background, plot margin). Colour options are **colour pickers** shown
   as small circular swatches (`colourpicker`, with a hex text-field fallback); an empty
-  picker means "no override". The controls lay out two-per-row in a widened rail. Every
-  option is a ggplot `theme()`
+  picker means "no override". The controls lay out two-per-row in a widened rail, and are
+  **applied on an Apply button** (with Reset) so the plots don't redraw on every tweak.
+  Every option is a ggplot `theme()`
   element applied to *every* plot (RNA views and the VDJ/spatial/ATAC panels alike) via a
   shared `.scroll_ggtheme()` override
   threaded through a `theme_r` reactive. Each control defaults to "Default" (a no-op),
@@ -24,11 +25,11 @@
 * A right-hand **Filters** sidebar narrows the cells *every* panel sees. Controls are
   auto-generated from the manifest — a level multi-select for each categorical column
   and a range slider for each numeric column — and compose with AND. A high-cardinality
-  column (above the level cap, e.g. a clone id) is skipped. Includes a cell-count
-  readout ("N of total") and a Reset link. Configure via `config.yaml`: `filters: false`
+  column (above the level cap, e.g. a clone id) is skipped. Filters are **applied on an
+  Apply button** (with Reset), so dragging sliders doesn't re-narrow every panel until you
+  commit. Includes a cell-count readout ("N of total"). Configure via `config.yaml`: `filters: false`
   hides the rail, `filters: [col, col]` curates (and orders) which columns appear.
-  Composes with subset views and the existing app-bar subset filter; slider drags are
-  debounced so panels redraw once per settle.
+  Composes with subset views and the existing app-bar subset filter.
 
 ## Multimodal panel overhaul (VDJ / spatial / ATAC)
 

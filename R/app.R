@@ -256,7 +256,9 @@ scroll_reset_panels <- function() {
           sliderInput(ns(s$id), s$col, min = s$min, max = s$max, value = c(s$min, s$max)))
   })
   .scroll_details("Filters", open = TRUE,
-    div(class = "scroll-reset-row", actionLink(ns("scroll_filter_reset"), "Reset all")),
+    div(class = "scroll-apply-row",
+        actionButton(ns("scroll_filter_apply"), "Apply", class = "btn-sm btn-primary"),
+        actionLink(ns("scroll_filter_reset"), "Reset all")),
     ctrls)
 }
 
@@ -282,6 +284,9 @@ scroll_reset_panels <- function() {
   showhide <- c("Default" = "", "Show" = "show", "Hide" = "hide")
   onoff    <- c("Default" = "", "On" = "on", "Off" = "off")
   .scroll_details("Theme", open = TRUE,
+    div(class = "scroll-apply-row",
+        actionButton(ns("scroll_theme_apply"), "Apply", class = "btn-sm btn-primary"),
+        actionLink(ns("scroll_theme_reset"), "Reset")),
     .scroll_details("Text & fonts", open = TRUE,
       sel("scroll_theme_font", "Text size", sz("11", "13", "16")),
       sel("scroll_theme_font_family", "Font",
@@ -339,15 +344,39 @@ scroll_reset_panels <- function() {
 }
 
 # The global theme state as a reactive, read by panels that declare a `theme_r` formal.
-.scroll_active_theme <- function(input) {
-  keys <- c("font", "font_family", "text_colour", "title_size", "title_style",
-            "axis_title_size", "axis_text_size", "legend_text_size", "strip_text_size",
-            "legend", "legend_dir", "legend_title", "legend_key",
-            "axes", "axis_titles", "axis_ticks", "axis_line", "axis_colour", "angle", "yangle",
-            "grid_major", "grid_minor", "grid_colour", "line_size", "line_colour",
-            "border", "border_colour", "bg", "plot_bg", "strip_bg", "margin")
-  reactive(stats::setNames(
-    lapply(keys, function(k) .scroll_nz(input[[paste0("scroll_theme_", k)]])), keys))
+.scroll_theme_keys <- function()
+  c("font", "font_family", "text_colour", "title_size", "title_style",
+    "axis_title_size", "axis_text_size", "legend_text_size", "strip_text_size",
+    "legend", "legend_dir", "legend_title", "legend_key",
+    "axes", "axis_titles", "axis_ticks", "axis_line", "axis_colour", "angle", "yangle",
+    "grid_major", "grid_minor", "grid_colour", "line_size", "line_colour",
+    "border", "border_colour", "bg", "plot_bg", "strip_bg", "margin")
+
+# which theme keys are colour pickers (reset differently from the selects)
+.scroll_theme_colour_keys <- function()
+  c("text_colour", "axis_colour", "grid_colour", "line_colour", "border_colour",
+    "bg", "plot_bg", "strip_bg")
+
+# snapshot the current theme control values into a plain named list (for .scroll_ggtheme)
+.scroll_theme_values <- function(input)
+  stats::setNames(lapply(.scroll_theme_keys(),
+    function(k) .scroll_nz(input[[paste0("scroll_theme_", k)]])), .scroll_theme_keys())
+
+# Deferred theme: only commit the controls to `theme_rv` on Apply; Reset clears the
+# controls and reverts to the default (no-op) theme.
+.scroll_bind_theme <- function(input, session, data, theme_rv) {
+  if (isFALSE(data$config$theme_controls)) return(invisible())
+  observeEvent(input$scroll_theme_apply, theme_rv(.scroll_theme_values(input)))
+  observeEvent(input$scroll_theme_reset, {
+    cols <- .scroll_theme_colour_keys()
+    have_cp <- requireNamespace("colourpicker", quietly = TRUE)
+    for (k in .scroll_theme_keys()) {
+      id <- paste0("scroll_theme_", k)
+      if (k %in% cols && have_cp) colourpicker::updateColourInput(session, id, value = "")
+      else updateSelectInput(session, id, selected = "")
+    }
+    theme_rv(list())
+  })
 }
 
 # Narrow `cells` by every active filter (AND). An untouched control is a no-op: an
@@ -369,16 +398,22 @@ scroll_reset_panels <- function() {
   cells[keep, , drop = FALSE]
 }
 
-# Reset every filter control to its "all" default on the Reset link.
-.scroll_bind_filters <- function(input, session, data) {
+# Deferred filters: commit the controls to `filt_rv` (a snapshot named by input id)
+# only on Apply; Reset clears the controls and the applied snapshot (reverts to all
+# cells). Panels don't re-narrow until Apply, so dragging sliders is free.
+.scroll_bind_filters <- function(input, session, data, filt_rv) {
   specs <- .scroll_filter_specs(data)
   if (!length(specs)) return(invisible())
+  observeEvent(input$scroll_filter_apply,
+    filt_rv(stats::setNames(lapply(specs, function(s) input[[s$id]]),
+                            vapply(specs, `[[`, "", "id"))))
   observeEvent(input$scroll_filter_reset, {
     for (s in specs)
       if (identical(s$type, "categorical"))
         updateSelectizeInput(session, s$id, selected = character(0))
       else
         updateSliderInput(session, s$id, value = c(s$min, s$max))
+    filt_rv(list())
   })
 }
 
@@ -479,25 +514,27 @@ scroll_reset_panels <- function() {
 # `input`/`output`/`session` carry the right namespace in both.
 .scroll_wire <- function(input, output, session, data, panels) {
   active_view <- reactive(.scroll_nz(input$scroll_view))
-  active_cells <- .scroll_active_cells(input, data, active_view)
-  active_theme <- .scroll_active_theme(input)
+  # deferred filters + theme: committed only on their Apply buttons (Reset clears both)
+  filt_rv  <- reactiveVal(list())
+  theme_rv <- reactiveVal(list())
+  active_cells <- .scroll_active_cells(input, data, active_view, filt_rv)
   .scroll_bind_subset_control(input, session, data)
-  .scroll_bind_filters(input, session, data)
+  .scroll_bind_filters(input, session, data, filt_rv)
+  .scroll_bind_theme(input, session, data, theme_rv)
   .scroll_render_ncells(output, data$manifest, active_cells, active_view)
-  .scroll_mount_panels(data, panels, active_cells, active_view, active_theme)
+  .scroll_mount_panels(data, panels, active_cells, active_view, theme_rv)
 }
 
 # The active cell set as a reactive: the selected subset view, then narrowed by the
 # app-bar categorical filter.
-.scroll_active_cells <- function(input, data, active_view) {
+.scroll_active_cells <- function(input, data, active_view, filt_rv) {
   m <- data$manifest
-  # debounced so dragging a filter slider coalesces into one redraw of the panels
-  shiny::debounce(reactive({
+  reactive({
     base <- .scroll_view_cells(data$cells, m, active_view())
     base <- .scroll_subset_cells(base, .scroll_nz(input$scroll_subset_col),
                                  input$scroll_subset_val)
-    .scroll_filter_cells(base, data, input)          # right-rail global filters
-  }), 150)
+    .scroll_filter_cells(base, data, filt_rv())      # applied on the filter Apply button
+  })
 }
 
 # Repopulate the app-bar subset-value selectize when its column changes.
