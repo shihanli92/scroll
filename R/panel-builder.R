@@ -486,7 +486,8 @@ register_plot_panel <- function(id, plot, controls = list(), label = id, title =
       .scroll_plot_area(ns, csv = isTRUE(csv)))
   }
 
-  server <- function(id, data, cells_r = reactive(data$cells), view_r = reactive(NULL)) {
+  server <- function(id, data, cells_r = reactive(data$cells), view_r = reactive(NULL),
+                     theme_r = reactive(NULL)) {
     moduleServer(id, function(input, output, session) {
       control_ids <- vapply(controls, function(c) c$id, character(1))
       for (ctl in controls)
@@ -495,7 +496,10 @@ register_plot_panel <- function(id, plot, controls = list(), label = id, title =
       body <- function() {
         for (c in req_ctls)
           validate(need(length(input[[c$id]]) > 0, paste0("Select ", c$label, ".")))
-        plot(cells_r(), input, data)
+        p <- plot(cells_r(), input, data)
+        # apply the global theme controls to bare ggplots (not aplot/patchwork composites)
+        if (inherits(p, "ggplot")) p <- p + .scroll_ggtheme(theme_r())
+        p
       }
       event <- if (isTRUE(compute)) reactive(input$scroll_compute) else NULL
       placeholder <- if (isTRUE(compute)) "Set the controls, then click Compute." else NULL

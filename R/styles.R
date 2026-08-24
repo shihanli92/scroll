@@ -80,6 +80,8 @@ body{background:var(--sc-ground); color:var(--sc-ink);
   color:var(--sc-muted); padding-bottom:6px; border-bottom:1px solid var(--sc-line);}
 .scroll-filters-head a{font-size:11px; font-weight:600; text-transform:none; letter-spacing:0;
   color:var(--sc-accent); text-decoration:none;}
+.scroll-ctl-section{display:flex; flex-direction:column; gap:10px;}
+.scroll-ctl-section + .scroll-ctl-section{margin-top:8px;}
 .scroll-filter{display:flex; flex-direction:column;}
 .scroll-filter .form-label,.scroll-filter label{font-size:12px; font-weight:600; margin-bottom:2px;
   color:var(--sc-ink);}

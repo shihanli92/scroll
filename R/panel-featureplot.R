@@ -35,7 +35,7 @@ featureplot_ui <- function(id, data) {
 }
 
 featureplot_server <- function(id, data, cells_r = reactive(data$cells),
-                               view_r = reactive(NULL)) {
+                               view_r = reactive(NULL), theme_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     assay <- reactive(input$assay %||% m$default_assay)
@@ -83,7 +83,7 @@ featureplot_server <- function(id, data, cells_r = reactive(data$cells),
            values = data$query1(assay(), feat), n = nrow(cells))
     })
     cosmetic_r <- .scroll_cosmetic(reactive(
-      list(palette = input$palette, point_size = input$size,
+      list(theme = theme_r(), palette = input$palette, point_size = input$size,
            order = isTRUE(input$order), legend = isTRUE(input$legend),
            clip = input$clip / 100, split_by = .scroll_nz(input$split),
            aspect = input$aspect)))

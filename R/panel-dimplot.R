@@ -35,7 +35,7 @@ dimplot_ui <- function(id, data) {
 }
 
 dimplot_server <- function(id, data, cells_r = reactive(data$cells),
-                           view_r = reactive(NULL)) {
+                           view_r = reactive(NULL), theme_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     is_cat <- reactive(identical(m$meta[[input$colorby]]$type, "categorical"))
@@ -89,7 +89,7 @@ dimplot_server <- function(id, data, cells_r = reactive(data$cells),
     })
     # COSMETIC reactive, debounced; restyle-only inputs (incl. highlight/manual).
     cosmetic_r <- .scroll_cosmetic(reactive(
-      list(palette = input$palette, point_size = input$size, alpha = input$alpha,
+      list(theme = theme_r(), palette = input$palette, point_size = input$size, alpha = input$alpha,
            show_labels = isTRUE(input$labels), legend = isTRUE(input$legend),
            split_by = .scroll_nz(input$split), aspect = input$aspect,
            highlight = input$highlight, manual_colors = manual_colors())))

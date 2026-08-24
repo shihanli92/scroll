@@ -31,7 +31,7 @@ dotplot_ui <- function(id, data) {
 }
 
 dotplot_server <- function(id, data, cells_r = reactive(data$cells),
-                           view_r = reactive(NULL)) {
+                           view_r = reactive(NULL), theme_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     .scroll_bind_view_cats(input, session, view_r, m, "group")
@@ -58,7 +58,7 @@ dotplot_server <- function(id, data, cells_r = reactive(data$cells),
              scale = isTRUE(input$scale), cluster = input$cluster))
     })
     cosmetic_r <- .scroll_cosmetic(reactive(
-      list(palette = input$palette, dot_size = input$dotrange, aspect = input$aspect)))
+      list(theme = theme_r(), palette = input$palette, dot_size = input$dotrange, aspect = input$aspect)))
     plot_r <- reactive({
       d <- data_r()
       view_dotplot(d$cells, list(group_by = d$group_by, features = d$features),

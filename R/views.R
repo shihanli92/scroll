@@ -155,19 +155,42 @@
 # reshapes WITHIN the fixed-size plot canvas (letterboxing) rather than growing
 # it — a tall aspect never forces the page to scroll. Left off at 1 so the
 # default fills the canvas as before.
-.scroll_apply_aspect <- function(p, aspect = 1) {
+.scroll_apply_aspect <- function(p, aspect = 1, theme = NULL) {
   if (is.numeric(aspect) && length(aspect) == 1 && abs(aspect - 1) > 1e-6)
     p <- p + ggplot2::theme(aspect.ratio = aspect)
-  p
+  p + .scroll_ggtheme(theme)
 }
 
-# Scatter finish: facet, then aspect.
+# Scatter finish: facet, then aspect (+ the global theme override).
 .scroll_finish_scatter <- function(p, df, state) {
   # Embedding scatters honour aspect.ratio even at 1, so aspect = 1 is a *square*
   # UMAP (unlike .scroll_apply_aspect, which leaves 1 unconstrained -- kept for
   # the bar/violin/dot panels where filling the width is the sensible default).
   .scroll_maybe_facet(p, df, state) +
-    ggplot2::theme(aspect.ratio = state$aspect %||% 1)
+    ggplot2::theme(aspect.ratio = state$aspect %||% 1, state$theme) +
+    .scroll_ggtheme(state$theme)
+}
+
+# A trailing ggplot2 theme() from the global theme controls (font size, legend
+# position, gridlines). Each field defaults to "" = "leave as the panel set it", so a
+# Default selection yields NULL and `+ NULL` leaves the plot untouched. Applied last,
+# so it overrides only the elements the user actually changed.
+.scroll_ggtheme <- function(gs = NULL) {
+  if (is.null(gs)) return(NULL)
+  parts <- list()
+  lp <- gs$legend %||% ""
+  if (nzchar(lp)) parts$legend.position <- lp                      # right / bottom / none
+  gr <- gs$grid %||% ""
+  if (identical(gr, "off")) {
+    parts$panel.grid.major <- ggplot2::element_blank()
+    parts$panel.grid.minor <- ggplot2::element_blank()
+  } else if (identical(gr, "on")) {
+    parts$panel.grid.major <- ggplot2::element_line(colour = "grey92")
+  }
+  ft <- suppressWarnings(as.numeric(gs$font %||% ""))
+  if (!is.na(ft)) parts$text <- ggplot2::element_text(size = ft)
+  if (!length(parts)) return(NULL)
+  do.call(ggplot2::theme, parts)
 }
 
 # Per-group centroid labels for a categorical scatter.
@@ -473,7 +496,7 @@ view_dotplot <- function(cells, params, expr_long, state = list(), assembly = NU
   # aspect.ratio letterboxes the panel, which would detach the aplot trees, so
   # apply it only to the plain (untreed) dot plot; with dendrograms the composite
   # fills the fixed canvas.
-  if (is.null(hr) && is.null(hc)) p <- .scroll_apply_aspect(p, state$aspect %||% 1)
+  if (is.null(hr) && is.null(hc)) p <- .scroll_apply_aspect(p, state$aspect %||% 1, state$theme)
   .scroll_dotplot_trees(p, hr, hc)
 }
 
@@ -545,7 +568,7 @@ view_violin <- function(cells, params, values = NULL, state = list()) {
     ggplot2::scale_fill_manual(values = cols) +
     ggplot2::labs(x = group_by, y = params$feature %||% "expression", fill = group_by) +
     .scroll_box_theme(.scroll_opt(params, state, "legend", FALSE))
-  .scroll_apply_aspect(p, state$aspect %||% 1)
+  .scroll_apply_aspect(p, state$aspect %||% 1, state$theme)
 }
 
 # Long data.frame of all column pairs (one facet per pair), NA rows dropped.
@@ -599,7 +622,7 @@ view_biaxial <- function(cells, params, state = list(), df = NULL) {
       override.aes = list(size = 2, alpha = 1))) +
     .scroll_box_theme(.scroll_opt(params, state, "legend", TRUE))
   # each facet defaults to SQUARE (aspect.ratio = 1); state$aspect overrides
-  p + ggplot2::theme(aspect.ratio = state$aspect %||% 1)
+  p + ggplot2::theme(aspect.ratio = state$aspect %||% 1, state$theme)
 }
 
 #' Stacked composition of one categorical within another
@@ -639,7 +662,7 @@ view_proportions <- function(cells, params, state = list()) {
     yscale +
     ggplot2::labs(x = x, y = ylab, fill = fill)
   p <- p + .scroll_box_theme(.scroll_opt(params, state, "legend", TRUE))
-  .scroll_apply_aspect(p, state$aspect %||% 1)
+  .scroll_apply_aspect(p, state$aspect %||% 1, state$theme)
 }
 
 #' Differential-expression table for a contrast
@@ -701,7 +724,7 @@ view_volcano <- function(de, params = list(), state = list()) {
       ggplot2::geom_text(data = lab, mapping = aes_lab, inherit.aes = FALSE,
                          size = 3, color = "black", vjust = -0.6)
   }
-  .scroll_apply_aspect(p, state$aspect %||% 1)
+  .scroll_apply_aspect(p, state$aspect %||% 1, state$theme)
 }
 
 #' Stability plot for pseudobulk DE across random pseudo-replicate draws
@@ -746,7 +769,7 @@ view_stability <- function(df, params = list(), state = list()) {
       ggplot2::geom_text(data = lab, mapping = aes_lab, inherit.aes = FALSE,
                          size = 3, color = "black", vjust = -0.6)
   }
-  .scroll_apply_aspect(p, state$aspect %||% 1)
+  .scroll_apply_aspect(p, state$aspect %||% 1, state$theme)
 }
 
 # --- dispatch -----------------------------------------------------------------

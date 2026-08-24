@@ -102,7 +102,7 @@ spatial_ui <- function(id, data) {
 }
 
 spatial_server <- function(id, data, cells_r = shiny::reactive(data$cells),
-                           view_r = shiny::reactive(NULL)) {
+                           view_r = shiny::reactive(NULL), theme_r = shiny::reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     updateSelectizeInput(session, "gene", server = TRUE,
@@ -131,7 +131,8 @@ spatial_server <- function(id, data, cells_r = shiny::reactive(data$cells),
       img <- if (show_img) .scroll_spatial_image(data, fr$emb) else NULL
       .scroll_spatial_plot(fr$df, img, fr$values, fr$is_num,
                            input$size %||% 1.4, fr$lab, zoom(),
-                           input$cpalette %||% "viridis", input$dpalette %||% "Tableau 10")
+                           input$cpalette %||% "viridis", input$dpalette %||% "Tableau 10") +
+        .scroll_ggtheme(theme_r())
     })
     output$plot <- renderPlot(plot_r())
     .scroll_plot_downloads(output, plot_r, id)

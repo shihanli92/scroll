@@ -53,7 +53,7 @@ biaxial_ui <- function(id, data) {
 }
 
 biaxial_server <- function(id, data, cells_r = reactive(data$cells),
-                           view_r = reactive(NULL)) {
+                           view_r = reactive(NULL), theme_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     .scroll_bind_view_cats(input, session, view_r, m, "colorby")
@@ -99,7 +99,7 @@ biaxial_server <- function(id, data, cells_r = reactive(data$cells),
       list(params = params, df = .scroll_biaxial_df(cells, params))
     })
     cosmetic_r <- .scroll_cosmetic(reactive(
-      list(palette = input$palette, point_size = input$size,
+      list(theme = theme_r(), palette = input$palette, point_size = input$size,
            alpha = input$alpha, legend = isTRUE(input$legend), aspect = input$aspect,
            ncol = input$ncol, nrow = input$nrow, manual_colors = manual_colors())))
     build <- function(raster) {

@@ -70,7 +70,7 @@ pseudobulk_de_ui <- function(id, data) {
 }
 
 pseudobulk_de_server <- function(id, data, cells_r = reactive(data$cells),
-                                 view_r = reactive(NULL)) {
+                                 view_r = reactive(NULL), theme_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     assay <- reactive(input$assay %||% m$default_assay)
@@ -162,10 +162,10 @@ pseudobulk_de_server <- function(id, data, cells_r = reactive(data$cells),
       d <- de_df()
       if ("sel_freq" %in% names(d))
         view_stability(d, params = list(lfc = input$lfc, cut = input$stabcut,
-                                        label_n = input$labeln), state = list(aspect = input$aspect))
+                                        label_n = input$labeln), state = list(aspect = input$aspect, theme = theme_r()))
       else
         view_volcano(d, params = list(lfc = input$lfc, padj = input$padj,
-                                      label_n = input$labeln), state = list(aspect = input$aspect))
+                                      label_n = input$labeln), state = list(aspect = input$aspect, theme = theme_r()))
     })
     output$plot <- renderPlot(plot_r())
     .scroll_plot_downloads(output, plot_r, id)

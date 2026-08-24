@@ -24,7 +24,7 @@ proportions_ui <- function(id, data) {
 }
 
 proportions_server <- function(id, data, cells_r = reactive(data$cells),
-                               view_r = reactive(NULL)) {
+                               view_r = reactive(NULL), theme_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     .scroll_bind_view_cats(input, session, view_r, m, c("group", "fill"))
@@ -39,7 +39,7 @@ proportions_server <- function(id, data, cells_r = reactive(data$cells),
       list(cells = cells_r(), group_by = input$group, fill_by = input$fill)
     })
     cosmetic_r <- .scroll_cosmetic(reactive(
-      list(palette = input$palette, normalize = isTRUE(input$normalize),
+      list(theme = theme_r(), palette = input$palette, normalize = isTRUE(input$normalize),
            legend = isTRUE(input$legend), aspect = input$aspect,
            manual_colors = manual_colors())))
     plot_r <- reactive({

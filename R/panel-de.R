@@ -59,7 +59,7 @@ de_ui <- function(id, data) {
 .scroll_has_dt <- function() requireNamespace("DT", quietly = TRUE)
 
 de_server <- function(id, data, cells_r = reactive(data$cells),
-                      view_r = reactive(NULL)) {
+                      view_r = reactive(NULL), theme_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     assay <- reactive(input$assay %||% m$default_assay)
@@ -132,7 +132,7 @@ de_server <- function(id, data, cells_r = reactive(data$cells),
     volcano_r <- reactive({
       view_volcano(de_df(),
                    params = list(lfc = input$lfc, padj = input$padj, label_n = input$labeln),
-                   state = list(aspect = input$aspect))
+                   state = list(aspect = input$aspect, theme = theme_r()))
     })
     output$plot <- renderPlot(volcano_r())
     .scroll_plot_downloads(output, volcano_r, id)

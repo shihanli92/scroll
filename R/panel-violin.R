@@ -39,7 +39,7 @@ violin_ui <- function(id, data) {
 }
 
 violin_server <- function(id, data, cells_r = reactive(data$cells),
-                          view_r = reactive(NULL)) {
+                          view_r = reactive(NULL), theme_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     .scroll_bind_view_cats(input, session, view_r, m, "group")
@@ -80,7 +80,7 @@ violin_server <- function(id, data, cells_r = reactive(data$cells),
       }
     })
     cosmetic_r <- .scroll_cosmetic(reactive(
-      list(palette = input$palette, jitter = isTRUE(input$jitter),
+      list(theme = theme_r(), palette = input$palette, jitter = isTRUE(input$jitter),
            legend = isTRUE(input$legend), aspect = input$aspect,
            manual_colors = manual_colors())))
     plot_r <- reactive({

@@ -1,5 +1,15 @@
 # scroll (development version)
 
+## Global theme controls
+
+* The right control rail gained a **Theme** section — Text size, Legend position
+  (right/bottom/hidden), and Gridlines (on/off) — applied to *every* plot (RNA views
+  and the VDJ/spatial/ATAC panels alike) via a shared `.scroll_ggtheme()` override
+  threaded through a `theme_r` reactive. Each control defaults to "Default" (a no-op),
+  so rendering is unchanged until you pick something. Disable with
+  `theme_controls: false` in `config.yaml`. The declarative panel builder now also
+  threads `theme_r`, so custom `register_plot_panel()` panels inherit the global theme.
+
 ## Global filter rail
 
 * A right-hand **Filters** sidebar narrows the cells *every* panel sees. Controls are

@@ -249,11 +249,41 @@ scroll_reset_panels <- function() {
       div(class = "scroll-filter",
           sliderInput(ns(s$id), s$col, min = s$min, max = s$max, value = c(s$min, s$max)))
   })
-  tags$aside(
-    class = "scroll-filters",
-    div(class = "scroll-filters-head", "Filters", actionLink(ns("scroll_filter_reset"), "Reset")),
-    ctrls)
+  div(class = "scroll-ctl-section",
+      div(class = "scroll-filters-head", "Filters", actionLink(ns("scroll_filter_reset"), "Reset")),
+      ctrls)
 }
+
+# ---- global theme controls (right sidebar) ----------------------------------
+# Font size / legend position / gridlines applied to every plot via .scroll_ggtheme().
+# Each defaults to "Default" (a no-op), so rendering is unchanged until the user picks.
+.scroll_theme_ui <- function(data, ns = identity) {
+  if (isFALSE(data$config$theme_controls)) return(NULL)
+  sel <- function(id, label, choices)
+    div(class = "scroll-filter", selectInput(ns(id), label, choices))
+  div(class = "scroll-ctl-section",
+      div(class = "scroll-filters-head", "Theme"),
+      sel("scroll_theme_font", "Text size",
+          c("Default" = "", "Small" = "10", "Medium" = "13", "Large" = "16")),
+      sel("scroll_theme_legend", "Legend",
+          c("Default" = "", "Right" = "right", "Bottom" = "bottom", "Hidden" = "none")),
+      sel("scroll_theme_grid", "Gridlines",
+          c("Default" = "", "On" = "on", "Off" = "off")))
+}
+
+# The right-hand control rail: a Theme section (always, unless disabled) plus the
+# Filters section (when the project has filterable columns).
+.scroll_controls_ui <- function(data, ns = identity) {
+  th <- .scroll_theme_ui(data, ns); fl <- .scroll_filters_ui(data, ns)
+  if (is.null(th) && is.null(fl)) return(NULL)
+  tags$aside(class = "scroll-filters", th, fl)
+}
+
+# The global theme state as a reactive, read by panels that declare a `theme_r` formal.
+.scroll_active_theme <- function(input)
+  reactive(list(font   = .scroll_nz(input$scroll_theme_font),
+                legend = .scroll_nz(input$scroll_theme_legend),
+                grid   = .scroll_nz(input$scroll_theme_grid)))
 
 # Narrow `cells` by every active filter (AND). An untouched control is a no-op: an
 # empty categorical selection means "all", a full-range slider means "all". Numeric
@@ -358,15 +388,15 @@ scroll_reset_panels <- function() {
 # through `ns` so multiple datasets can coexist in one page (see scroll_multi_app).
 # Does NOT include page_fluid/theme/head -- those wrap it once at the page level.
 .scroll_body <- function(data, title, panels, ns = identity) {
-  filters <- .scroll_filters_ui(data, ns)
+  controls <- .scroll_controls_ui(data, ns)
   tagList(
     .scroll_appbar(data, title, ns),
     div(
-      class = paste0("scroll-layout", if (!is.null(filters)) " has-filters"),
+      class = paste0("scroll-layout", if (!is.null(controls)) " has-filters"),
       .scroll_rail(panels, ns),
       div(class = "scroll-content",
           lapply(panels, function(s) .scroll_panel_card(s, data, ns))),
-      filters                                        # right-hand global filter rail
+      controls                                       # right-hand global control rail
     )
   )
 }
@@ -385,10 +415,11 @@ scroll_reset_panels <- function() {
 .scroll_wire <- function(input, output, session, data, panels) {
   active_view <- reactive(.scroll_nz(input$scroll_view))
   active_cells <- .scroll_active_cells(input, data, active_view)
+  active_theme <- .scroll_active_theme(input)
   .scroll_bind_subset_control(input, session, data)
   .scroll_bind_filters(input, session, data)
   .scroll_render_ncells(output, data$manifest, active_cells, active_view)
-  .scroll_mount_panels(data, panels, active_cells, active_view)
+  .scroll_mount_panels(data, panels, active_cells, active_view, active_theme)
 }
 
 # The active cell set as a reactive: the selected subset view, then narrowed by the
@@ -429,10 +460,12 @@ scroll_reset_panels <- function() {
 
 # Mount each panel's server, threading `active_view` only to panels that declare a
 # `view_r` formal (keeping register_panel()'s 3-arg server contract compatible).
-.scroll_mount_panels <- function(data, panels, active_cells, active_view) {
+.scroll_mount_panels <- function(data, panels, active_cells, active_view, active_theme = reactive(NULL)) {
   for (sec in panels) {
-    args <- list(sec$id, data, active_cells)
-    if ("view_r" %in% names(formals(sec$server))) args <- c(args, list(active_view))
+    fmls <- names(formals(sec$server))
+    args <- list(sec$id, data, cells_r = active_cells)      # named so formal order can vary
+    if ("view_r" %in% fmls)  args$view_r  <- active_view
+    if ("theme_r" %in% fmls) args$theme_r <- active_theme
     do.call(sec$server, args)
   }
 }
