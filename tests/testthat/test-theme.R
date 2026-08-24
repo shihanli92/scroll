@@ -10,6 +10,13 @@ test_that(".scroll_ggtheme is a no-op by default and overrides only what changed
   expect_identical(th$legend.position, "bottom")
   expect_s3_class(th$panel.grid.major, "element_blank")
 
+  # border / axes / background overrides
+  th2 <- scroll:::.scroll_ggtheme(list(border = "on", axes = "hide", bg = "grey"))
+  expect_s3_class(th2$panel.border, "element_rect")
+  expect_s3_class(th2$axis.text, "element_blank")
+  expect_identical(th2$panel.background$fill, "grey95")
+  expect_s3_class(scroll:::.scroll_ggtheme(list(border = "off"))$panel.border, "element_blank")
+
   p <- ggplot2::ggplot(mtcars, ggplot2::aes(.data$mpg, .data$wt)) + ggplot2::geom_point()
   expect_no_error(ggplot2::ggplot_build(p + scroll:::.scroll_ggtheme(NULL)))   # +NULL safe
   b <- ggplot2::ggplot_build(p + th)

@@ -268,7 +268,13 @@ scroll_reset_panels <- function() {
       sel("scroll_theme_legend", "Legend",
           c("Default" = "", "Right" = "right", "Bottom" = "bottom", "Hidden" = "none")),
       sel("scroll_theme_grid", "Gridlines",
-          c("Default" = "", "On" = "on", "Off" = "off")))
+          c("Default" = "", "On" = "on", "Off" = "off")),
+      sel("scroll_theme_border", "Panel border",
+          c("Default" = "", "On" = "on", "Off" = "off")),
+      sel("scroll_theme_axes", "Axis text",
+          c("Default" = "", "Show" = "show", "Hide" = "hide")),
+      sel("scroll_theme_bg", "Background",
+          c("Default" = "", "White" = "white", "Grey" = "grey", "None" = "none")))
 }
 
 # The right-hand control rail: a Theme section (always, unless disabled) plus the
@@ -283,7 +289,10 @@ scroll_reset_panels <- function() {
 .scroll_active_theme <- function(input)
   reactive(list(font   = .scroll_nz(input$scroll_theme_font),
                 legend = .scroll_nz(input$scroll_theme_legend),
-                grid   = .scroll_nz(input$scroll_theme_grid)))
+                grid   = .scroll_nz(input$scroll_theme_grid),
+                border = .scroll_nz(input$scroll_theme_border),
+                axes   = .scroll_nz(input$scroll_theme_axes),
+                bg     = .scroll_nz(input$scroll_theme_bg)))
 
 # Narrow `cells` by every active filter (AND). An untouched control is a no-op: an
 # empty categorical selection means "all", a full-range slider means "all". Numeric

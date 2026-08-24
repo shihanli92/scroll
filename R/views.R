@@ -189,6 +189,21 @@
   }
   ft <- suppressWarnings(as.numeric(gs$font %||% ""))
   if (!is.na(ft)) parts$text <- ggplot2::element_text(size = ft)
+  bd <- gs$border %||% ""                                          # panel box border
+  if (identical(bd, "on"))
+    parts$panel.border <- ggplot2::element_rect(colour = "black", fill = NA, linewidth = 0.7)
+  else if (identical(bd, "off"))
+    parts$panel.border <- ggplot2::element_blank()
+  ax <- gs$axes %||% ""                                            # axis text + ticks
+  if (identical(ax, "hide")) {
+    parts$axis.text <- ggplot2::element_blank(); parts$axis.ticks <- ggplot2::element_blank()
+  } else if (identical(ax, "show")) {
+    parts$axis.text <- ggplot2::element_text(); parts$axis.ticks <- ggplot2::element_line()
+  }
+  bg <- gs$bg %||% ""                                              # panel background fill
+  if (nzchar(bg))
+    parts$panel.background <- ggplot2::element_rect(
+      fill = switch(bg, white = "white", grey = "grey95", none = NA, "white"), colour = NA)
   if (!length(parts)) return(NULL)
   do.call(ggplot2::theme, parts)
 }
