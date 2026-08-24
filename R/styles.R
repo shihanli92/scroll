@@ -70,6 +70,21 @@ body{background:var(--sc-ground); color:var(--sc-ink);
 /* layout */
 .scroll-layout{display:grid; grid-template-columns:200px minmax(0,1fr); gap:32px;
   max-width:1320px; margin:0 auto; padding:28px;}
+.scroll-layout.has-filters{grid-template-columns:200px minmax(0,1fr) 244px; max-width:1560px;}
+/* right-hand global control rail: filters that narrow every panel */
+.scroll-filters{position:sticky; top:80px; align-self:start; display:flex; flex-direction:column;
+  gap:12px; max-height:calc(100vh - 100px); overflow-y:auto; padding-right:2px;}
+.scroll-multi .scroll-filters{top:123px;}
+.scroll-filters-head{display:flex; align-items:center; justify-content:space-between;
+  font-weight:700; font-size:12px; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--sc-muted); padding-bottom:6px; border-bottom:1px solid var(--sc-line);}
+.scroll-filters-head a{font-size:11px; font-weight:600; text-transform:none; letter-spacing:0;
+  color:var(--sc-accent); text-decoration:none;}
+.scroll-filter{display:flex; flex-direction:column;}
+.scroll-filter .form-label,.scroll-filter label{font-size:12px; font-weight:600; margin-bottom:2px;
+  color:var(--sc-ink);}
+.scroll-filter .irs{font-size:10px;}
+.scroll-filters-empty{font-size:11px; color:var(--sc-faint);}
 .scroll-rail{position:sticky; top:80px; align-self:start; display:flex; flex-direction:column; gap:4px;}
 .scroll-rail-item{display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:9px;
   color:var(--sc-muted); text-decoration:none; font-weight:600; font-size:14px;
@@ -137,10 +152,11 @@ body{background:var(--sc-ground); color:var(--sc-ink);
 .scroll-dl.btn .fa,.scroll-dl.btn svg{margin-right:5px; opacity:.7;}
 
 @media (max-width:900px){
-  .scroll-layout{grid-template-columns:1fr; gap:16px;}
+  .scroll-layout,.scroll-layout.has-filters{grid-template-columns:1fr; gap:16px;}
   .scroll-rail{position:static; flex-direction:row; overflow-x:auto; top:auto;}
   .scroll-rail-foot{display:none;}
   .scroll-stats{display:none;}
+  .scroll-filters{position:static; top:auto; max-height:none;}
 }
 "
 

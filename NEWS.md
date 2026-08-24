@@ -1,5 +1,16 @@
 # scroll (development version)
 
+## Global filter rail
+
+* A right-hand **Filters** sidebar narrows the cells *every* panel sees. Controls are
+  auto-generated from the manifest — a level multi-select for each categorical column
+  and a range slider for each numeric column — and compose with AND. A high-cardinality
+  column (above the level cap, e.g. a clone id) is skipped. Includes a cell-count
+  readout ("N of total") and a Reset link. Configure via `config.yaml`: `filters: false`
+  hides the rail, `filters: [col, col]` curates (and orders) which columns appear.
+  Composes with subset views and the existing app-bar subset filter; slider drags are
+  debounced so panels redraw once per settle.
+
 ## Multimodal panel overhaul (VDJ / spatial / ATAC)
 
 The modality panels gained depth, most improvements working on **existing built
