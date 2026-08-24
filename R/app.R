@@ -310,6 +310,10 @@ scroll_reset_panels <- function() {
       sel("scroll_theme_grid_minor", "Minor gridlines", onoff),
       sel("scroll_theme_grid_colour", "Gridline colour",
           c("Default" = "", "Light" = "light", "Medium" = "medium", "Dark" = "dark")),
+      sel("scroll_theme_line_size", "Line thickness",
+          c("Default" = "", "Thin" = "thin", "Medium" = "medium", "Thick" = "thick")),
+      sel("scroll_theme_line_colour", "Line colour",
+          c("Default" = "", "Black" = "black", "Grey" = "grey", "Light" = "light")),
       sel("scroll_theme_border", "Panel border", onoff),
       sel("scroll_theme_border_colour", "Border colour",
           c("Default" = "", "Grey" = "grey", "Black" = "black")),
@@ -338,8 +342,8 @@ scroll_reset_panels <- function() {
             "axis_title_size", "axis_text_size", "legend_text_size", "strip_text_size",
             "legend", "legend_dir", "legend_title", "legend_key",
             "axes", "axis_titles", "axis_ticks", "axis_line", "angle", "yangle",
-            "grid_major", "grid_minor", "grid_colour", "border", "border_colour",
-            "bg", "plot_bg", "strip_bg", "margin")
+            "grid_major", "grid_minor", "grid_colour", "line_size", "line_colour",
+            "border", "border_colour", "bg", "plot_bg", "strip_bg", "margin")
   reactive(stats::setNames(
     lapply(keys, function(k) .scroll_nz(input[[paste0("scroll_theme_", k)]])), keys))
 }

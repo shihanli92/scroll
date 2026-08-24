@@ -46,6 +46,12 @@ test_that(".scroll_ggtheme is a no-op by default and overrides only what changed
   expect_false(is.null(th4$plot.margin)); expect_true(inherits(th4$plot.margin, "unit"))
   expect_equal(th4$strip.text$size, 12)
 
+  # base line element: thickness + colour (inherited by grid / axis lines / ticks)
+  th5 <- scroll:::.scroll_ggtheme(list(line_size = "thick", line_colour = "grey"))
+  expect_s3_class(th5$line, "element_line")
+  expect_equal(as.numeric(th5$line$linewidth), 0.9)
+  expect_identical(th5$line$colour, "grey50")
+
   p <- ggplot2::ggplot(mtcars, ggplot2::aes(.data$mpg, .data$wt)) + ggplot2::geom_point()
   expect_no_error(ggplot2::ggplot_build(p + scroll:::.scroll_ggtheme(NULL)))   # +NULL safe
   b <- ggplot2::ggplot_build(p + th)

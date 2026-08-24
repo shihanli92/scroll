@@ -194,6 +194,12 @@
   parts <- add(parts, "legend.text", etext(size = num("legend_text_size")))
   parts <- add(parts, "strip.text",  etext(size = num("strip_text_size")))
 
+  # --- base line element: thickness + colour (inherited by grid / axis lines / ticks) ---
+  la <- Filter(Negate(is.null), list(
+    linewidth = switch(g("line_size") %||% "", thin = 0.3, medium = 0.5, thick = 0.9, NULL),
+    colour    = switch(g("line_colour") %||% "", black = "black", grey = "grey50", light = "grey80", NULL)))
+  if (length(la)) parts$line <- do.call(ggplot2::element_line, la)
+
   # --- axes: text / titles / ticks / lines / angles ---
   if (identical(g("axes"), "hide")) parts$axis.text <- ggplot2::element_blank()
   else parts <- add(parts, "axis.text", etext(size = num("axis_text_size")))

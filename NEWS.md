@@ -6,10 +6,11 @@
   collapsible sub-sections: **Text & fonts** (base/title/axis/legend/strip sizes, font
   family, text colour, title style), **Legend** (position, direction, title show/hide,
   key background), **Axes** (text/titles/ticks/lines show-hide, x & y label angle),
-  **Panel** (major/minor gridlines, gridline colour, border + colour, panel & plot
-  background), and **Facets & spacing** (strip background, plot margin). Every option is
-  a ggplot `theme()` element applied to *every* plot (RNA views and the VDJ/spatial/ATAC
-  panels alike) via a shared `.scroll_ggtheme()` override
+  **Panel** (major/minor gridlines, gridline colour, line thickness & colour, border +
+  colour, panel & plot background), and **Facets & spacing** (strip background, plot
+  margin). The control rail is laid out compactly. Every option is a ggplot `theme()`
+  element applied to *every* plot (RNA views and the VDJ/spatial/ATAC panels alike) via a
+  shared `.scroll_ggtheme()` override
   threaded through a `theme_r` reactive. Each control defaults to "Default" (a no-op),
   so rendering is unchanged until you pick something. Disable with
   `theme_controls: false` in `config.yaml`. The declarative panel builder now also
