@@ -263,30 +263,65 @@ scroll_reset_panels <- function() {
 # ---- global theme controls (right sidebar) ----------------------------------
 # Font size / legend position / gridlines applied to every plot via .scroll_ggtheme().
 # Each defaults to "Default" (a no-op), so rendering is unchanged until the user picks.
+# Every scroll_theme_* input id here must be mirrored in .scroll_active_theme() below
+# and handled in .scroll_ggtheme(). Each control is independent + no-op at Default, so
+# trimming any is a clean three-line deletion (control, reactive read, ggtheme block).
 .scroll_theme_ui <- function(data, ns = identity) {
   if (isFALSE(data$config$theme_controls)) return(NULL)
   sel <- function(id, label, choices)
     div(class = "scroll-filter", selectInput(ns(id), label, choices))
+  sz <- function(s, m, l) c("Default" = "", "Small" = s, "Medium" = m, "Large" = l)
+  showhide <- c("Default" = "", "Show" = "show", "Hide" = "hide")
+  onoff    <- c("Default" = "", "On" = "on", "Off" = "off")
   .scroll_details("Theme", open = TRUE,
-    .scroll_details("Text & legend", open = TRUE,
-      sel("scroll_theme_font", "Text size",
-          c("Default" = "", "Small" = "10", "Medium" = "13", "Large" = "16")),
-      sel("scroll_theme_legend", "Legend",
-          c("Default" = "", "Right" = "right", "Bottom" = "bottom", "Hidden" = "none"))),
+    .scroll_details("Text & fonts", open = TRUE,
+      sel("scroll_theme_font", "Text size", sz("11", "13", "16")),
+      sel("scroll_theme_font_family", "Font",
+          c("Default" = "", "Sans" = "sans", "Serif" = "serif", "Mono" = "mono")),
+      sel("scroll_theme_text_colour", "Text colour",
+          c("Default" = "", "Black" = "black", "Grey" = "grey")),
+      sel("scroll_theme_title_size", "Title size", sz("14", "18", "22")),
+      sel("scroll_theme_title_style", "Title style",
+          c("Default" = "", "Plain" = "plain", "Bold" = "bold", "Italic" = "italic")),
+      sel("scroll_theme_axis_title_size", "Axis-title size", sz("11", "13", "15")),
+      sel("scroll_theme_axis_text_size", "Axis-text size", sz("9", "11", "13")),
+      sel("scroll_theme_legend_text_size", "Legend-text size", sz("9", "11", "13")),
+      sel("scroll_theme_strip_text_size", "Strip-text size", sz("10", "12", "14"))),
+    .scroll_details("Legend", open = FALSE,
+      sel("scroll_theme_legend", "Position",
+          c("Default" = "", "Right" = "right", "Left" = "left", "Top" = "top",
+            "Bottom" = "bottom", "Hidden" = "none")),
+      sel("scroll_theme_legend_dir", "Direction",
+          c("Default" = "", "Horizontal" = "horizontal", "Vertical" = "vertical")),
+      sel("scroll_theme_legend_title", "Legend title", showhide),
+      sel("scroll_theme_legend_key", "Key background",
+          c("Default" = "", "White" = "white", "None" = "none"))),
     .scroll_details("Axes", open = FALSE,
-      sel("scroll_theme_axes", "Axis text",
-          c("Default" = "", "Show" = "show", "Hide" = "hide")),
-      sel("scroll_theme_axis_titles", "Axis titles",
-          c("Default" = "", "Show" = "show", "Hide" = "hide")),
+      sel("scroll_theme_axes", "Axis text", showhide),
+      sel("scroll_theme_axis_titles", "Axis titles", showhide),
+      sel("scroll_theme_axis_ticks", "Axis ticks", showhide),
+      sel("scroll_theme_axis_line", "Axis lines", showhide),
       sel("scroll_theme_angle", "X label angle",
-          c("Default" = "", "0" = "0", "45" = "45", "90" = "90"))),
+          c("Default" = "", "0" = "0", "45" = "45", "90" = "90")),
+      sel("scroll_theme_yangle", "Y label angle",
+          c("Default" = "", "0" = "0", "90" = "90"))),
     .scroll_details("Panel", open = FALSE,
-      sel("scroll_theme_grid", "Gridlines",
-          c("Default" = "", "On" = "on", "Off" = "off")),
-      sel("scroll_theme_border", "Panel border",
-          c("Default" = "", "On" = "on", "Off" = "off")),
-      sel("scroll_theme_bg", "Background",
-          c("Default" = "", "White" = "white", "Grey" = "grey", "None" = "none"))))
+      sel("scroll_theme_grid_major", "Major gridlines", onoff),
+      sel("scroll_theme_grid_minor", "Minor gridlines", onoff),
+      sel("scroll_theme_grid_colour", "Gridline colour",
+          c("Default" = "", "Light" = "light", "Medium" = "medium", "Dark" = "dark")),
+      sel("scroll_theme_border", "Panel border", onoff),
+      sel("scroll_theme_border_colour", "Border colour",
+          c("Default" = "", "Grey" = "grey", "Black" = "black")),
+      sel("scroll_theme_bg", "Panel background",
+          c("Default" = "", "White" = "white", "Grey" = "grey", "None" = "none")),
+      sel("scroll_theme_plot_bg", "Plot background",
+          c("Default" = "", "White" = "white", "None" = "none"))),
+    .scroll_details("Facets & spacing", open = FALSE,
+      sel("scroll_theme_strip_bg", "Strip background",
+          c("Default" = "", "Grey" = "grey", "None" = "none")),
+      sel("scroll_theme_margin", "Plot margin",
+          c("Default" = "", "Compact" = "compact", "Normal" = "normal", "Roomy" = "roomy"))))
 }
 
 # The right-hand control rail: a Theme section (always, unless disabled) plus the
@@ -298,15 +333,16 @@ scroll_reset_panels <- function() {
 }
 
 # The global theme state as a reactive, read by panels that declare a `theme_r` formal.
-.scroll_active_theme <- function(input)
-  reactive(list(font   = .scroll_nz(input$scroll_theme_font),
-                legend = .scroll_nz(input$scroll_theme_legend),
-                grid   = .scroll_nz(input$scroll_theme_grid),
-                border = .scroll_nz(input$scroll_theme_border),
-                axes   = .scroll_nz(input$scroll_theme_axes),
-                axis_titles = .scroll_nz(input$scroll_theme_axis_titles),
-                angle  = .scroll_nz(input$scroll_theme_angle),
-                bg     = .scroll_nz(input$scroll_theme_bg)))
+.scroll_active_theme <- function(input) {
+  keys <- c("font", "font_family", "text_colour", "title_size", "title_style",
+            "axis_title_size", "axis_text_size", "legend_text_size", "strip_text_size",
+            "legend", "legend_dir", "legend_title", "legend_key",
+            "axes", "axis_titles", "axis_ticks", "axis_line", "angle", "yangle",
+            "grid_major", "grid_minor", "grid_colour", "border", "border_colour",
+            "bg", "plot_bg", "strip_bg", "margin")
+  reactive(stats::setNames(
+    lapply(keys, function(k) .scroll_nz(input[[paste0("scroll_theme_", k)]])), keys))
+}
 
 # Narrow `cells` by every active filter (AND). An untouched control is a no-op: an
 # empty categorical selection means "all", a full-range slider means "all". Numeric

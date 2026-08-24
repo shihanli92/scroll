@@ -171,46 +171,90 @@
     .scroll_ggtheme(state$theme)
 }
 
-# A trailing ggplot2 theme() from the global theme controls (font size, legend
-# position, gridlines). Each field defaults to "" = "leave as the panel set it", so a
-# Default selection yields NULL and `+ NULL` leaves the plot untouched. Applied last,
-# so it overrides only the elements the user actually changed.
+# A trailing ggplot2 theme() from the global theme controls. Every field defaults to
+# "" = "leave as the panel set it", so an all-Default state yields NULL and `+ NULL`
+# leaves the plot untouched. Applied LAST, so it overrides only the elements the user
+# actually changed. Purely element-level theme() overrides (no base-theme swap).
 .scroll_ggtheme <- function(gs = NULL) {
   if (is.null(gs)) return(NULL)
+  g   <- function(k) { v <- gs[[k]] %||% ""; if (nzchar(v)) v else NULL }   # "" -> NULL
+  num <- function(k) { v <- g(k); if (is.null(v)) NULL else suppressWarnings(as.numeric(v)) }
+  etext <- function(...) { a <- Filter(Negate(is.null), list(...))
+                           if (length(a)) do.call(ggplot2::element_text, a) else NULL }
+  add <- function(parts, name, val) { if (!is.null(val)) parts[[name]] <- val; parts }
   parts <- list()
-  lp <- gs$legend %||% ""
-  if (nzchar(lp)) parts$legend.position <- lp                      # right / bottom / none
-  gr <- gs$grid %||% ""
-  if (identical(gr, "off")) {
-    parts$panel.grid.major <- ggplot2::element_blank()
-    parts$panel.grid.minor <- ggplot2::element_blank()
-  } else if (identical(gr, "on")) {
-    parts$panel.grid.major <- ggplot2::element_line(colour = "grey92")
+
+  # --- text & fonts ---
+  parts <- add(parts, "text", etext(
+    size   = num("font"),
+    family = switch(g("font_family") %||% "", sans = "sans", serif = "serif", mono = "mono", NULL),
+    colour = switch(g("text_colour") %||% "", black = "black", grey = "grey30", NULL)))
+  parts <- add(parts, "plot.title", etext(size = num("title_size"),
+    face = switch(g("title_style") %||% "", bold = "bold", italic = "italic", plain = "plain", NULL)))
+  parts <- add(parts, "legend.text", etext(size = num("legend_text_size")))
+  parts <- add(parts, "strip.text",  etext(size = num("strip_text_size")))
+
+  # --- axes: text / titles / ticks / lines / angles ---
+  if (identical(g("axes"), "hide")) parts$axis.text <- ggplot2::element_blank()
+  else parts <- add(parts, "axis.text", etext(size = num("axis_text_size")))
+  parts <- add(parts, "axis.title",
+    if (identical(g("axis_titles"), "hide")) ggplot2::element_blank()
+    else etext(size = num("axis_title_size")))
+  tk <- g("axis_ticks")
+  if (identical(tk, "hide")) parts$axis.ticks <- ggplot2::element_blank()
+  else if (identical(tk, "show")) parts$axis.ticks <- ggplot2::element_line()
+  al <- g("axis_line")
+  if (identical(al, "show")) parts$axis.line <- ggplot2::element_line(colour = "black")
+  else if (identical(al, "hide")) parts$axis.line <- ggplot2::element_blank()
+  if (!identical(g("axes"), "hide")) {
+    ax <- num("angle")
+    if (!is.null(ax) && !is.na(ax))
+      parts$axis.text.x <- ggplot2::element_text(angle = ax,
+        hjust = if (ax > 0) 1 else 0.5, vjust = if (ax == 90) 0.5 else 1)
+    ay <- num("yangle")
+    if (!is.null(ay) && !is.na(ay))
+      parts$axis.text.y <- ggplot2::element_text(angle = ay, hjust = 1)
   }
-  ft <- suppressWarnings(as.numeric(gs$font %||% ""))
-  if (!is.na(ft)) parts$text <- ggplot2::element_text(size = ft)
-  bd <- gs$border %||% ""                                          # panel box border
-  if (identical(bd, "on"))
-    parts$panel.border <- ggplot2::element_rect(colour = "black", fill = NA, linewidth = 0.7)
-  else if (identical(bd, "off"))
-    parts$panel.border <- ggplot2::element_blank()
-  ax <- gs$axes %||% ""                                            # axis text + ticks
-  if (identical(ax, "hide")) {
-    parts$axis.text <- ggplot2::element_blank(); parts$axis.ticks <- ggplot2::element_blank()
-  } else if (identical(ax, "show")) {
-    parts$axis.text <- ggplot2::element_text(); parts$axis.ticks <- ggplot2::element_line()
-  }
-  at <- gs$axis_titles %||% ""                                     # axis titles (x/y labels)
-  if (identical(at, "hide")) parts$axis.title <- ggplot2::element_blank()
-  else if (identical(at, "show")) parts$axis.title <- ggplot2::element_text()
-  ang <- suppressWarnings(as.numeric(gs$angle %||% ""))            # x-axis label rotation
-  if (!is.na(ang))
-    parts$axis.text.x <- ggplot2::element_text(angle = ang,
-      hjust = if (ang > 0) 1 else 0.5, vjust = if (ang == 90) 0.5 else 1)
-  bg <- gs$bg %||% ""                                              # panel background fill
-  if (nzchar(bg))
-    parts$panel.background <- ggplot2::element_rect(
-      fill = switch(bg, white = "white", grey = "grey95", none = NA, "white"), colour = NA)
+
+  # --- legend ---
+  parts <- add(parts, "legend.position", g("legend"))            # right/left/top/bottom/none
+  parts <- add(parts, "legend.direction", g("legend_dir"))       # horizontal/vertical
+  lt <- g("legend_title")
+  if (identical(lt, "hide")) parts$legend.title <- ggplot2::element_blank()
+  else if (identical(lt, "show")) parts$legend.title <- ggplot2::element_text()
+  lk <- g("legend_key")
+  if (!is.null(lk)) parts$legend.key <- ggplot2::element_rect(
+    fill = switch(lk, white = "white", none = NA, "white"), colour = NA)
+
+  # --- panel: gridlines, border, backgrounds ---
+  gcol <- switch(g("grid_colour") %||% "", light = "grey92", medium = "grey85", dark = "grey70", "grey92")
+  gmaj <- g("grid_major")
+  if (identical(gmaj, "off")) parts$panel.grid.major <- ggplot2::element_blank()
+  else if (identical(gmaj, "on") || !is.null(g("grid_colour")))
+    parts$panel.grid.major <- ggplot2::element_line(colour = gcol)
+  gmin <- g("grid_minor")
+  if (identical(gmin, "off")) parts$panel.grid.minor <- ggplot2::element_blank()
+  else if (identical(gmin, "on")) parts$panel.grid.minor <- ggplot2::element_line(colour = gcol)
+  bcol <- switch(g("border_colour") %||% "", grey = "grey60", black = "black", "black")
+  bd <- g("border")
+  if (identical(bd, "on") || !is.null(g("border_colour")))
+    parts$panel.border <- ggplot2::element_rect(colour = bcol, fill = NA, linewidth = 0.7)
+  else if (identical(bd, "off")) parts$panel.border <- ggplot2::element_blank()
+  bg <- g("bg")
+  if (!is.null(bg)) parts$panel.background <- ggplot2::element_rect(
+    fill = switch(bg, white = "white", grey = "grey95", none = NA, "white"), colour = NA)
+  pb <- g("plot_bg")
+  if (!is.null(pb)) parts$plot.background <- ggplot2::element_rect(
+    fill = switch(pb, white = "white", none = NA, "white"), colour = NA)
+
+  # --- facets & spacing ---
+  sb <- g("strip_bg")
+  if (!is.null(sb)) parts$strip.background <- ggplot2::element_rect(
+    fill = switch(sb, grey = "grey85", none = NA, "grey85"), colour = NA)
+  mg <- g("margin")
+  if (!is.null(mg)) { m <- switch(mg, compact = 3, normal = 6, roomy = 14, 6)
+                      parts$plot.margin <- ggplot2::margin(m, m, m, m) }
+
   if (!length(parts)) return(NULL)
   do.call(ggplot2::theme, parts)
 }
