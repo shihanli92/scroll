@@ -140,8 +140,7 @@
           ggplot2::facet_wrap(stats::as.formula(paste0("~`", grp, "`")), scales = "free_x") +
           ggplot2::labs(x = "Clone rank", y = "Clone size (cells, log10)", colour = grp,
                         title = "Clone rank-abundance") +
-          ggplot2::theme_minimal() +
-          ggplot2::theme(legend.position = "none", panel.grid.minor = ggplot2::element_blank())
+          .scroll_base_theme(legend = FALSE)
         attr(p, "scroll_source") <- as.data.frame(d); p
       } else {
         # Clone size + each clone's dominant group. Vectorized: one grouped (clone x
@@ -162,8 +161,7 @@
           ggplot2::scale_fill_brewer(palette = "YlOrRd") +
           ggplot2::labs(x = grp, y = "Fraction of clones", fill = "Expansion",
                         title = "Expansion-category composition") +
-          ggplot2::theme_minimal() +
-          ggplot2::theme(panel.grid.major.x = ggplot2::element_blank())
+          .scroll_base_theme()
         attr(p, "scroll_source") <- as.data.frame(cl); p
       }
     })
@@ -202,9 +200,8 @@
                                         midpoint = 0, limits = c(-3, 3)) +
           ggplot2::labs(x = seg, y = NULL, fill = "std\nresidual",
                         title = paste(seg, "usage vs group")) +
-          ggplot2::theme_minimal() +
-          ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 60, hjust = 1, size = 8),
-                         panel.grid = ggplot2::element_blank())
+          .scroll_base_theme() +
+          ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 60, hjust = 1, size = 8))
         attr(p, "scroll_source") <- as.data.frame(ch); p
       } else {
         grp <- if (!is.null(input$group) && input$group %in% names(d) &&
@@ -224,9 +221,8 @@
           ggplot2::scale_fill_manual(values = .scroll_vdj_colours(input, lv), name = grp) +
           ggplot2::labs(x = seg, y = "Frequency (within group)", fill = grp,
                         title = paste(seg, "usage")) +
-          ggplot2::theme_minimal() +
-          ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 60, hjust = 1, size = 7),
-                         panel.grid.major.x = ggplot2::element_blank())
+          .scroll_base_theme() +
+          ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 60, hjust = 1, size = 7))
         attr(p, "scroll_source") <- as.data.frame(f); p
       }
     })
@@ -262,7 +258,7 @@
           ggplot2::scale_colour_manual(values = cols, name = col) +
           ggplot2::labs(x = "CDR3 length", y = "Density", colour = col,
                         title = paste(input$chain, "CDR3 length")) +
-          ggplot2::theme_minimal() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank())
+          .scroll_base_theme()
         attr(p, "scroll_source") <- data.frame(length = d$len, group = d$col,
                                                clone = d[[cid]]); p
       } else {
@@ -276,7 +272,7 @@
           ggplot2::scale_fill_manual(values = cols, name = col) +
           ggplot2::labs(x = "CDR3 length", y = "Frequency (within group)", fill = col,
                         title = paste(input$chain, "CDR3 length")) +
-          ggplot2::theme_minimal() + ggplot2::theme(panel.grid = ggplot2::element_blank())
+          .scroll_base_theme()
         attr(p, "scroll_source") <- as.data.frame(h); p
       }
     })
@@ -317,9 +313,7 @@
           ggplot2::scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B",
                                         midpoint = 0, limits = c(-1, 1)) +
           ggplot2::labs(x = NULL, y = NULL, fill = "Pearson r", title = "Clone-frequency correlation") +
-          ggplot2::coord_fixed() + ggplot2::theme_minimal() +
-          ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1),
-                         panel.grid = ggplot2::element_blank())
+          ggplot2::coord_fixed() + .scroll_base_theme(x_angle = 45)
         attr(p, "scroll_source") <- as.data.frame(tc); return(p)
       }
       rc <- .scroll_vdj_read(data, "rep_cells.parquet")
@@ -342,10 +336,7 @@
         ggplot2::geom_col(colour = "black", linewidth = 0.3) +
         ggplot2::scale_fill_manual(values = .scroll_vdj_colours(input, lv)) +
         ggplot2::labs(x = by_col, y = metric, title = paste(metric, "by", by_col)) +
-        ggplot2::theme_minimal() +
-        ggplot2::theme(legend.position = "none",
-                       axis.text.x = ggplot2::element_text(angle = 30, hjust = 1),
-                       panel.grid.major.x = ggplot2::element_blank())
+        .scroll_base_theme(legend = FALSE, x_angle = 30)
       attr(p, "scroll_source") <- as.data.frame(d); p
     })
 

@@ -100,9 +100,8 @@
       .scroll_point_layer(size = 0.6, raster = isTRUE(nrow(df) > .scroll_raster_threshold)) +
       .scroll_continuous_scale("viridis", name = "accessibility") +
       ggplot2::labs(title = peak, subtitle = sub, x = paste0(emb, "_1"), y = paste0(emb, "_2")) +
-      ggplot2::theme_minimal() +
-      ggplot2::theme(plot.title = ggplot2::element_text(face = "bold"),
-                     panel.grid.minor = ggplot2::element_blank())
+      .scroll_base_theme(axis_text = FALSE) +
+      ggplot2::theme(plot.title = ggplot2::element_text(face = "bold"))
     # CSV exports the peaks matching the current search (bounded), with their coords.
     hit_tab <- pk[pk$feature %in% peaks_for(input, data), , drop = FALSE]
     attr(p, "scroll_source") <- as.data.frame(hit_tab); p
