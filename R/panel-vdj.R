@@ -142,6 +142,45 @@
       })
     })
 
+# One slider, three knobs: the max-Small / max-Medium / max-Large cut points as QUANTILES
+# of the expanded (size >= 2) clones. Single (size 1) stays a fixed category. Uses a
+# noUiSlider (multi-handle) when shinyWidgets is installed, else three plain sliders.
+.scroll_expansion_quantile_control <- function()
+  scroll_input_custom("exp_q", "Category cut quantiles",
+    ui = function(ns, data) {
+      if (requireNamespace("shinyWidgets", quietly = TRUE))
+        shinyWidgets::noUiSliderInput(ns("exp_q"),
+          "Small / Medium / Large max (quantile of expanded clones)",
+          min = 0, max = 1, value = c(0.5, 0.8, 0.95), step = 0.01,
+          format = shinyWidgets::wNumbFormat(decimals = 2))
+      else tagList(
+        sliderInput(ns("exp_q1"), "Small max (quantile)",  0, 1, 0.5,  step = 0.01),
+        sliderInput(ns("exp_q2"), "Medium max (quantile)", 0, 1, 0.8,  step = 0.01),
+        sliderInput(ns("exp_q3"), "Large max (quantile)",  0, 1, 0.95, step = 0.01))
+    })
+
+# The three cut quantiles from the control (multi-handle slider, or the three-slider
+# fallback), sorted ascending.
+.scroll_expansion_quantiles <- function(input) {
+  q <- if (length(input$exp_q) == 3) as.numeric(input$exp_q)
+       else c(input$exp_q1 %||% 0.5, input$exp_q2 %||% 0.8, input$exp_q3 %||% 0.95)
+  sort(q)
+}
+
+# Assign each clone an expansion category by the quantile of its size among the EXPANDED
+# (size >= 2) clones. Single (size 1) is fixed; clones sharing a size share a category
+# (ties by lower edge). `q` = c(max_small, max_medium, max_large), strictly increasing.
+.scroll_expansion_cut <- function(count, q) {
+  cat <- rep("Single", length(count))
+  ex <- which(count > 1)
+  if (length(ex)) {
+    pos <- (rank(count[ex], ties.method = "min") - 1) / length(ex)   # frac strictly smaller
+    cat[ex] <- as.character(cut(pos, c(-Inf, q, Inf),
+      labels = c("Small", "Medium", "Large", "Hyperexpanded")))
+  }
+  factor(cat, levels = .SCROLL_EXPANSION_LEVELS)
+}
+
 # ---- the four panels --------------------------------------------------------
 
 # Assembled as built-in panels gated on manifest$vdj (see .scroll_assemble_panels).
@@ -168,13 +207,9 @@
          # palette + manual per-group colour picker (rank-abundance colours by group)
          scroll_show_when(.scroll_vdj_colour_control("group", "group_levels"),
                           control = "view", equals = "Rank-abundance"),
-         # expansion category thresholds (max clone size for each; Single = 1 cell,
-         # Hyperexpanded = above Large). Shown only in the Expansion composition view.
-         scroll_show_when(scroll_input_numeric("exp_small", "Small: max cells", 4, min = 2, step = 1),
-                          control = "view", equals = "Expansion composition"),
-         scroll_show_when(scroll_input_numeric("exp_medium", "Medium: max cells", 19, min = 3, step = 1),
-                          control = "view", equals = "Expansion composition"),
-         scroll_show_when(scroll_input_numeric("exp_large", "Large: max cells", 99, min = 4, step = 1),
+         # expansion category cut points, as quantiles of the expanded clones (one slider,
+         # three knobs). Single = 1 cell; Hyperexpanded = above the Large quantile.
+         scroll_show_when(.scroll_expansion_quantile_control(),
                           control = "view", equals = "Expansion composition"),
          # ordered palette + manual pickers for the five expansion categories
          scroll_show_when(.scroll_expansion_colour_control(),
@@ -221,12 +256,11 @@
         cl  <- dplyr::left_join(dplyr::count(rc, .data[[cid]], name = "count"),
                                 dom, by = cid)
         names(cl)[names(cl) == grp] <- "g"
-        # category thresholds (max clone size per category); Single = 1, Hyper = above Large
-        sm <- input$exp_small %||% 4; md <- input$exp_medium %||% 19; lg <- input$exp_large %||% 99
-        if (!all(is.finite(c(sm, md, lg))) || !(1 < sm && sm < md && md < lg))
-          stop("Expansion thresholds must satisfy 1 < Small < Medium < Large.")
-        cl$expansion <- cut(cl$count, c(0, 1, sm, md, lg, Inf),
-          labels = c("Single", "Small", "Medium", "Large", "Hyperexpanded"))
+        # cut into categories by quantile of clone size (Single = 1 cell is fixed)
+        q <- .scroll_expansion_quantiles(input)
+        if (!all(is.finite(q)) || !(0 < q[1] && q[1] < q[2] && q[2] < q[3] && q[3] < 1))
+          stop("Cut quantiles must satisfy 0 < Small < Medium < Large < 1.")
+        cl$expansion <- .scroll_expansion_cut(cl$count, q)
         p <- ggplot2::ggplot(cl, ggplot2::aes(.data$g, fill = .data$expansion)) +
           ggplot2::geom_bar(position = "fill", colour = "white", linewidth = 0.2) +
           ggplot2::scale_y_continuous(labels = scales::percent,

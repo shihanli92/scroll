@@ -40,6 +40,7 @@ Suggests:
     Signac,
     scattermore,
     shinycssloaders,
+    shinyWidgets,
     ggtree,
     aplot,
     ape,
