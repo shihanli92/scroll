@@ -71,6 +71,25 @@ test_that("theme snapshot maps the sidebar inputs (blank = no override)", {
   expect_identical(gs$grid_major, "off")
 })
 
+test_that("theme controls are native dropdowns showing the current value (no 'Default')", {
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  ui <- as.character(scroll:::.scroll_theme_ui(data))
+
+  # the greyed "Default" placeholder option is gone from every select
+  expect_false(any(grepl(">Default<", ui)))
+  # native <select> (selectize = FALSE) -> no typeable selectize widget in the theme rail
+  expect_false(any(grepl("selectize", ui)))
+
+  # every non-colour control has a concrete default, so the select shows a real value
+  defs <- scroll:::.scroll_theme_defaults()
+  sel_keys <- setdiff(scroll:::.scroll_theme_keys(), scroll:::.scroll_theme_colour_keys())
+  expect_true(all(nzchar(unlist(defs[sel_keys]))))
+  # ...and that default is the one marked selected in the rendered HTML
+  expect_true(any(grepl('value="13"[^>]*selected', ui)))     # Text size default = Medium
+  expect_true(any(grepl('value="right"[^>]*selected', ui)))  # Legend default = Right
+})
+
 test_that("theme + filters are deferred: Apply commits, Reset clears", {
   data <- scroll:::.scroll_load(test_project())
   on.exit(scroll_disconnect(data$con))

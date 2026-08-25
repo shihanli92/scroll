@@ -270,19 +270,24 @@ scroll_reset_panels <- function() {
 # trimming any is a clean three-line deletion (control, reactive read, ggtheme block).
 .scroll_theme_ui <- function(data, ns = identity) {
   if (isFALSE(data$config$theme_controls)) return(NULL)
+  defs <- .scroll_theme_defaults()
+  # native <select> (selectize = FALSE): click-to-pick, not a typeable box, and it shows
+  # the current value (defs[[id-suffix]]) instead of a greyed "Default" placeholder.
   sel <- function(id, label, choices)
-    div(class = "scroll-filter", selectInput(ns(id), label, choices))
-  # colour picker (empty = no override, so Default stays a no-op); falls back to a hex
-  # text field when colourpicker is not installed.
+    div(class = "scroll-filter",
+        selectInput(ns(id), label, choices,
+                    selected = defs[[sub("^scroll_theme_", "", id)]], selectize = FALSE))
+  # colour picker (empty = no override); falls back to a hex text field when
+  # colourpicker is not installed.
   col <- function(id, label)
     div(class = "scroll-filter scroll-colour",
         if (requireNamespace("colourpicker", quietly = TRUE))
           colourpicker::colourInput(ns(id), label, value = "", showColour = "background",
                                     allowTransparent = TRUE)
         else textInput(ns(id), label, placeholder = "#hex or name"))
-  sz <- function(s, m, l) c("Default" = "", "Small" = s, "Medium" = m, "Large" = l)
-  showhide <- c("Default" = "", "Show" = "show", "Hide" = "hide")
-  onoff    <- c("Default" = "", "On" = "on", "Off" = "off")
+  sz <- function(s, m, l) c("Small" = s, "Medium" = m, "Large" = l)
+  showhide <- c("Show" = "show", "Hide" = "hide")
+  onoff    <- c("On" = "on", "Off" = "off")
   .scroll_details("Theme", open = TRUE,
     div(class = "scroll-apply-row",
         actionButton(ns("scroll_theme_apply"), "Apply", class = "btn-sm btn-primary"),
@@ -290,24 +295,24 @@ scroll_reset_panels <- function() {
     .scroll_details("Text & fonts", open = TRUE,
       sel("scroll_theme_font", "Text size", sz("11", "13", "16")),
       sel("scroll_theme_font_family", "Font",
-          c("Default" = "", "Sans" = "sans", "Serif" = "serif", "Mono" = "mono")),
+          c("Sans" = "sans", "Serif" = "serif", "Mono" = "mono")),
       col("scroll_theme_text_colour", "Text colour"),
       sel("scroll_theme_title_size", "Title size", sz("14", "18", "22")),
       sel("scroll_theme_title_style", "Title style",
-          c("Default" = "", "Plain" = "plain", "Bold" = "bold", "Italic" = "italic")),
+          c("Plain" = "plain", "Bold" = "bold", "Italic" = "italic")),
       sel("scroll_theme_axis_title_size", "Axis-title size", sz("11", "13", "15")),
       sel("scroll_theme_axis_text_size", "Axis-text size", sz("9", "11", "13")),
       sel("scroll_theme_legend_text_size", "Legend-text size", sz("9", "11", "13")),
       sel("scroll_theme_strip_text_size", "Strip-text size", sz("10", "12", "14"))),
     .scroll_details("Legend", open = FALSE,
       sel("scroll_theme_legend", "Position",
-          c("Default" = "", "Right" = "right", "Left" = "left", "Top" = "top",
+          c("Right" = "right", "Left" = "left", "Top" = "top",
             "Bottom" = "bottom", "Hidden" = "none")),
       sel("scroll_theme_legend_dir", "Direction",
-          c("Default" = "", "Horizontal" = "horizontal", "Vertical" = "vertical")),
+          c("Horizontal" = "horizontal", "Vertical" = "vertical")),
       sel("scroll_theme_legend_title", "Legend title", showhide),
       sel("scroll_theme_legend_key", "Key background",
-          c("Default" = "", "White" = "white", "None" = "none"))),
+          c("White" = "white", "None" = "none"))),
     .scroll_details("Axes", open = FALSE,
       sel("scroll_theme_axes", "Axis text", showhide),
       sel("scroll_theme_axis_titles", "Axis titles", showhide),
@@ -315,15 +320,15 @@ scroll_reset_panels <- function() {
       sel("scroll_theme_axis_line", "Axis lines", showhide),
       col("scroll_theme_axis_colour", "Axis colour"),        # shared by lines + ticks
       sel("scroll_theme_angle", "X label angle",
-          c("Default" = "", "0" = "0", "45" = "45", "90" = "90")),
+          c("0" = "0", "45" = "45", "90" = "90")),
       sel("scroll_theme_yangle", "Y label angle",
-          c("Default" = "", "0" = "0", "90" = "90"))),
+          c("0" = "0", "90" = "90"))),
     .scroll_details("Panel", open = FALSE,
       sel("scroll_theme_grid_major", "Major gridlines", onoff),
       sel("scroll_theme_grid_minor", "Minor gridlines", onoff),
       col("scroll_theme_grid_colour", "Gridline colour"),
       sel("scroll_theme_line_size", "Line thickness",
-          c("Default" = "", "Thin" = "thin", "Medium" = "medium", "Thick" = "thick")),
+          c("Thin" = "thin", "Medium" = "medium", "Thick" = "thick")),
       col("scroll_theme_line_colour", "Line colour"),
       sel("scroll_theme_border", "Panel border", onoff),
       col("scroll_theme_border_colour", "Border colour"),
@@ -332,7 +337,7 @@ scroll_reset_panels <- function() {
     .scroll_details("Facets & spacing", open = FALSE,
       col("scroll_theme_strip_bg", "Strip background"),
       sel("scroll_theme_margin", "Plot margin",
-          c("Default" = "", "Compact" = "compact", "Normal" = "normal", "Roomy" = "roomy"))))
+          c("Compact" = "compact", "Normal" = "normal", "Roomy" = "roomy"))))
 }
 
 # The right-hand control rail: a Theme section (always, unless disabled) plus the
@@ -357,23 +362,40 @@ scroll_reset_panels <- function() {
   c("text_colour", "axis_colour", "grid_colour", "line_colour", "border_colour",
     "bg", "plot_bg", "strip_bg")
 
+# The value each control starts on -- chosen to match the plots' baseline look, so a
+# control shows "what the style/size is now" rather than a blank "Default" placeholder.
+# Colour pickers start empty (no colour override). Reset returns every control here.
+.scroll_theme_defaults <- function()
+  list(font = "13", font_family = "sans", text_colour = "",
+       title_size = "18", title_style = "plain",
+       axis_title_size = "13", axis_text_size = "11", legend_text_size = "11",
+       strip_text_size = "12",
+       legend = "right", legend_dir = "vertical", legend_title = "show",
+       legend_key = "white",
+       axes = "show", axis_titles = "show", axis_ticks = "show", axis_line = "hide",
+       axis_colour = "", angle = "0", yangle = "0",
+       grid_major = "on", grid_minor = "on", grid_colour = "",
+       line_size = "medium", line_colour = "",
+       border = "off", border_colour = "", bg = "", plot_bg = "",
+       strip_bg = "", margin = "normal")
+
 # snapshot the current theme control values into a plain named list (for .scroll_ggtheme)
 .scroll_theme_values <- function(input)
   stats::setNames(lapply(.scroll_theme_keys(),
     function(k) .scroll_nz(input[[paste0("scroll_theme_", k)]])), .scroll_theme_keys())
 
-# Deferred theme: only commit the controls to `theme_rv` on Apply; Reset clears the
-# controls and reverts to the default (no-op) theme.
+# Deferred theme: only commit the controls to `theme_rv` on Apply; Reset returns every
+# control to its default value and reverts the plots to their own (un-themed) look.
 .scroll_bind_theme <- function(input, session, data, theme_rv) {
   if (isFALSE(data$config$theme_controls)) return(invisible())
   observeEvent(input$scroll_theme_apply, theme_rv(.scroll_theme_values(input)))
   observeEvent(input$scroll_theme_reset, {
-    cols <- .scroll_theme_colour_keys()
+    cols <- .scroll_theme_colour_keys(); defs <- .scroll_theme_defaults()
     have_cp <- requireNamespace("colourpicker", quietly = TRUE)
     for (k in .scroll_theme_keys()) {
       id <- paste0("scroll_theme_", k)
       if (k %in% cols && have_cp) colourpicker::updateColourInput(session, id, value = "")
-      else updateSelectInput(session, id, selected = "")
+      else updateSelectInput(session, id, selected = defs[[k]])
     }
     theme_rv(list())
   })
