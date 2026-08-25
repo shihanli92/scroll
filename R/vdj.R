@@ -148,7 +148,9 @@ vdj_spec <- function(chain_type = c("TCR", "BCR"), group_col, clone_col = NULL,
   m <- md[keep, , drop = FALSE]; clone <- clone[keep]
 
   gv <- function(col) if (!is.null(col) && col %in% names(m)) as.character(m[[col]]) else NA_character_
-  rep_cells <- data.frame(clone_id = clone, group = as.character(m[[gcol]]),
+  # `cell` is the barcode (== cells.parquet$cell), so the runtime panels can narrow the
+  # per-cell table to the app's active cells (global filter + subset view).
+  rep_cells <- data.frame(cell = rownames(m), clone_id = clone, group = as.character(m[[gcol]]),
                           antigen = gv(spec$antigen_col), tissue = gv(spec$tissue_col),
                           loc = gv(spec$loc_col), stringsAsFactors = FALSE)
   rep_cells$clone_count <- if (!is.null(spec$count_col) && spec$count_col %in% names(m))

@@ -228,3 +228,28 @@ test_that("diversity recomputes at runtime, matching the baked group-level table
     expect_false(is.null(output$csv))
   })
 })
+
+test_that("VDJ panels honour the active cell filter (rep_cells cell key)", {
+  data <- scroll:::.scroll_load(vdj_test_project())
+  on.exit(scroll_disconnect(data$con))
+  rc <- scroll:::.scroll_vdj_read(data, "rep_cells.parquet")
+  expect_true("cell" %in% names(rc))            # baked cell key enables scoping
+  # `cell` must not surface as a group-by or clone-id option (it's a barcode)
+  expect_false("cell" %in% scroll:::.scroll_vdj_split_cols(data))
+  expect_false("cell" %in% scroll:::.scroll_vdj_clone_cols(data))
+
+  cp <- Filter(function(x) identical(x$id, "clone_overview"),
+               scroll:::.scroll_assemble_panels(data$manifest))[[1]]
+  n_clones <- function(sub) {
+    out <- NULL
+    shiny::testServer(cp$server, args = list(data = data, cells_r = shiny::reactive(sub)), {
+      session$setInputs(view = "Rank-abundance", clone_col = "clone_id", group = "group",
+                        group_levels = character(0), yscale = "Log",
+                        palette = "Tableau 10", aspect = 1)
+      out <<- nrow(attr(plot_r(), "scroll_source"))
+    })
+    out
+  }
+  half <- data$cells[seq_len(nrow(data$cells) %/% 2), , drop = FALSE]
+  expect_gt(n_clones(data$cells), n_clones(half))    # fewer cells -> fewer clones
+})

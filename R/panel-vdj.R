@@ -6,13 +6,23 @@
 
 .scroll_vdj_read <- function(data, f)
   .scroll_read_asset(file.path(data$dir, "repertoire", f), "parquet")
+# Narrow the baked per-cell repertoire table to the app's ACTIVE cells (global filter +
+# subset view) by barcode, when the store carries a `cell` key. So the runtime-computed
+# repertoire views (rank-abundance, expansion, gene frequency, CDR3 length, diversity
+# metric) follow the filter/view. Stores baked before the `cell` key (or the baked
+# chi-square / tissue-correlation tables) are whole-dataset and left untouched.
+.scroll_vdj_scope <- function(rc, cells) {
+  if (is.null(rc) || is.null(cells) || !"cell" %in% names(rc) || !"cell" %in% names(cells))
+    return(rc)
+  rc[rc$cell %in% cells$cell, , drop = FALSE]
+}
 # Distinct non-NA values of a vector.
 .scroll_ndistinct <- function(v) length(unique(v[!is.na(v)]))
 
 # Categorical rep_cells columns that are candidates for grouping or as a clone id
 # (excludes the segment genes, CDR3 lengths, and the clone-size count).
 .scroll_vdj_cat_cols <- function(rc, segments) {
-  cand <- setdiff(names(rc), c("clone_id", "clone_count", "cdr3_combined",
+  cand <- setdiff(names(rc), c("cell", "clone_id", "clone_count", "cdr3_combined",
                                grep("_len$", names(rc), value = TRUE), unlist(segments)))
   cand[vapply(cand, function(c) is.character(rc[[c]]) && any(!is.na(rc[[c]])), logical(1))]
 }
@@ -165,6 +175,7 @@
     function(cells, input, data) {
       rc <- .scroll_vdj_read(data, "rep_cells.parquet")
       if (is.null(rc) || !nrow(rc)) stop("No repertoire store; rebuild with vdj =.")
+      rc <- .scroll_vdj_scope(rc, cells)          # honour the global filter / subset view
       # Clone id column drives what counts as a clone; Group-by drives the split/facet.
       cid <- if (!is.null(input$clone_col) && input$clone_col %in% names(rc)) input$clone_col else "clone_id"
       grp <- if (!is.null(input$group) && input$group %in% names(rc) &&
@@ -238,6 +249,7 @@
     function(cells, input, data) {
       rc <- .scroll_vdj_read(data, "rep_cells.parquet"); seg <- input$segment
       if (is.null(rc) || !seg %in% names(rc)) stop("Segment '", seg, "' not baked.")
+      rc <- .scroll_vdj_scope(rc, cells)          # honour the global filter / subset view
       d <- rc[!is.na(rc[[seg]]), , drop = FALSE]; d$gene <- as.character(d[[seg]])
       if (identical(input$view, "Chi-square residuals")) {
         ch <- .scroll_vdj_read(data, "chisq.parquet")
@@ -296,6 +308,7 @@
       rc <- .scroll_vdj_read(data, "rep_cells.parquet")
       lc <- if (identical(input$chain, "Combined")) "cdr3_combined" else paste0("cdr3_", input$chain, "_len")
       if (is.null(rc) || !lc %in% names(rc)) stop("CDR3 length for '", input$chain, "' not baked.")
+      rc <- .scroll_vdj_scope(rc, cells)          # honour the global filter / subset view
       col <- if (!is.null(input$colorby) && input$colorby %in% names(rc)) input$colorby else "group"
       cid <- if (!is.null(input$clone_col) && input$clone_col %in% names(rc)) input$clone_col else "clone_id"
       d <- rc[!is.na(rc[[lc]]) & !is.na(rc[[col]]), , drop = FALSE]
@@ -372,6 +385,7 @@
       }
       rc <- .scroll_vdj_read(data, "rep_cells.parquet")
       if (is.null(rc) || !nrow(rc)) stop("No repertoire store; rebuild with vdj =.")
+      rc <- .scroll_vdj_scope(rc, cells)          # honour the global filter / subset view
       by_col <- if (!is.null(input$by) && input$by %in% names(rc)) input$by else "group"
       cid <- if (!is.null(input$clone_col) && input$clone_col %in% names(rc)) input$clone_col else "clone_id"
       if (length(input$group_levels))                               # optional group filter
