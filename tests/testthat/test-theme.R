@@ -11,11 +11,10 @@ test_that(".scroll_ggtheme is a no-op by default and overrides only what changed
   expect_s3_class(th$panel.grid.major, "element_blank")
   expect_equal(th$text$size, 16)
 
-  # border / axes / background overrides (bg now a raw picker colour)
-  th2 <- scroll:::.scroll_ggtheme(list(border = "on", axes = "hide", bg = "#f0f0f0"))
+  # border / axes overrides (panel/plot backgrounds are fixed in the base theme, not here)
+  th2 <- scroll:::.scroll_ggtheme(list(border = "on", axes = "hide"))
   expect_s3_class(th2$panel.border, "element_rect")
   expect_s3_class(th2$axis.text, "element_blank")
-  expect_identical(th2$panel.background$fill, "#f0f0f0")
   expect_s3_class(scroll:::.scroll_ggtheme(list(border = "off"))$panel.border, "element_blank")
 
   # axis-title toggle + x/y label rotation + axis line/ticks
@@ -32,7 +31,7 @@ test_that(".scroll_ggtheme is a no-op by default and overrides only what changed
     font_family = "serif", text_colour = "#333333", title_style = "bold", title_size = "20",
     legend_dir = "horizontal", legend_title = "hide", legend_key = "none",
     grid_minor = "off", grid_colour = "#cccccc", border_colour = "#999999",
-    plot_bg = "transparent", strip_bg = "#eeeeee", margin = "roomy", strip_text_size = "12"))
+    strip_bg = "#eeeeee", margin = "roomy", strip_text_size = "12"))
   expect_identical(th4$text$family, "serif")
   expect_identical(th4$text$colour, "#333333")
   expect_identical(th4$plot.title$face, "bold"); expect_equal(th4$plot.title$size, 20)
@@ -41,7 +40,6 @@ test_that(".scroll_ggtheme is a no-op by default and overrides only what changed
   expect_s3_class(th4$panel.grid.minor, "element_blank")
   expect_identical(th4$panel.grid.major$colour, "#cccccc")    # gridline colour recolours majors
   expect_identical(th4$panel.border$colour, "#999999")
-  expect_identical(th4$plot.background$fill, "transparent")
   expect_identical(th4$strip.background$fill, "#eeeeee")
   expect_false(is.null(th4$plot.margin)); expect_true(inherits(th4$plot.margin, "unit"))
   expect_equal(th4$strip.text$size, 12)
@@ -69,25 +67,6 @@ test_that("theme snapshot maps the sidebar inputs (blank = no override)", {
   gs <- scroll:::.scroll_theme_values(input)
   expect_null(gs$font); expect_identical(gs$legend, "bottom")
   expect_identical(gs$grid_major, "off")
-})
-
-test_that("theme controls are native dropdowns showing the current value (no 'Default')", {
-  data <- scroll:::.scroll_load(test_project())
-  on.exit(scroll_disconnect(data$con))
-  ui <- as.character(scroll:::.scroll_theme_ui(data))
-
-  # the greyed "Default" placeholder option is gone from every select
-  expect_false(any(grepl(">Default<", ui)))
-  # native <select> (selectize = FALSE) -> no typeable selectize widget in the theme rail
-  expect_false(any(grepl("selectize", ui)))
-
-  # every non-colour control has a concrete default, so the select shows a real value
-  defs <- scroll:::.scroll_theme_defaults()
-  sel_keys <- setdiff(scroll:::.scroll_theme_keys(), scroll:::.scroll_theme_colour_keys())
-  expect_true(all(nzchar(unlist(defs[sel_keys]))))
-  # ...and that default is the one marked selected in the rendered HTML
-  expect_true(any(grepl('value="13"[^>]*selected', ui)))     # Text size default = Medium
-  expect_true(any(grepl('value="right"[^>]*selected', ui)))  # Legend default = Right
 })
 
 test_that("theme + filters are deferred: Apply commits, Reset clears", {

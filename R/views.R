@@ -130,17 +130,49 @@
     ggplot2::geom_point(mapping = mapping, size = size, alpha = alpha, ...)
 }
 
+# The built-in views' base theme, written out element-by-element (no theme_bw()) so the
+# global theme controls own every element directly. Monochrome scheme: every foreground
+# colour (text, axis text, ticks, titles, border) is BLACK; the gridlines are WHITE and the
+# panel / plot backgrounds are element_blank() (transparent, not user-editable). Strip +
+# legend-key backgrounds are white so their black text stays legible. sans 13pt, black 0.7
+# border. Two flags cover what the panels differ on:
+#   axis_text = FALSE  -> hide tick text + ticks (the clean UMAP/feature scatter)
+#   x_angle   = 45     -> rotate x tick labels (dot/violin/proportions/biaxial)
+# `legend` places or hides the legend. The trailing .scroll_ggtheme(state$theme) in each
+# finisher then layers the user's global-control overrides on top of this.
+.scroll_base_theme <- function(legend = TRUE, axis_text = TRUE, x_angle = 0, base_size = 13) {
+  parts <- list(
+    text             = ggplot2::element_text(family = "sans", size = base_size, colour = "black"),
+    panel.background = ggplot2::element_blank(),
+    panel.border     = ggplot2::element_rect(fill = NA, colour = "black", linewidth = 0.7),
+    panel.grid.major = ggplot2::element_line(colour = "white"),
+    panel.grid.minor = ggplot2::element_line(colour = "white"),
+    plot.background  = ggplot2::element_blank(),
+    axis.title       = ggplot2::element_text(size = base_size, colour = "black"),
+    axis.line        = ggplot2::element_blank(),
+    legend.position  = if (isTRUE(legend)) "right" else "none",
+    legend.key       = ggplot2::element_rect(fill = "white", colour = NA),
+    legend.text      = ggplot2::element_text(size = base_size * 0.8, colour = "black"),
+    legend.title     = ggplot2::element_text(size = base_size, colour = "black"),
+    strip.background = ggplot2::element_rect(fill = "white", colour = "black", linewidth = 0.7),
+    strip.text       = ggplot2::element_text(size = base_size * 0.8, colour = "black")
+  )
+  if (isTRUE(axis_text)) {
+    parts$axis.text  <- ggplot2::element_text(size = base_size * 0.8, colour = "black")
+    parts$axis.ticks <- ggplot2::element_line(colour = "black")
+    if (x_angle != 0)
+      parts$axis.text.x <- ggplot2::element_text(angle = x_angle, hjust = 1)
+  } else {
+    parts$axis.text  <- ggplot2::element_blank()
+    parts$axis.ticks <- ggplot2::element_blank()
+  }
+  do.call(ggplot2::theme, parts)
+}
+
 .scroll_base_scatter <- function(df, embedding, legend = TRUE) {
   ggplot2::ggplot(df, ggplot2::aes(x = .data$.x, y = .data$.y)) +
     ggplot2::labs(x = sprintf("%s 1", embedding), y = sprintf("%s 2", embedding)) +
-    ggplot2::theme_bw(base_size = 13) +
-    ggplot2::theme(
-      panel.grid = ggplot2::element_blank(),
-      panel.border = ggplot2::element_rect(color = "black", linewidth = 0.7, fill = NA),
-      axis.text = ggplot2::element_blank(),
-      axis.ticks = ggplot2::element_blank(),
-      legend.position = if (isTRUE(legend)) "right" else "none"
-    )
+    .scroll_base_theme(legend = legend, axis_text = FALSE)
 }
 
 # Optional facet by a categorical toggle column.
@@ -249,10 +281,7 @@
   if (identical(bd, "on") || !is.null(g("border_colour")))
     parts$panel.border <- ggplot2::element_rect(colour = bcol, fill = NA, linewidth = 0.7)
   else if (identical(bd, "off")) parts$panel.border <- ggplot2::element_blank()
-  bg <- g("bg")
-  if (!is.null(bg)) parts$panel.background <- ggplot2::element_rect(fill = bg, colour = NA)
-  pb <- g("plot_bg")
-  if (!is.null(pb)) parts$plot.background <- ggplot2::element_rect(fill = pb, colour = NA)
+  # panel/plot backgrounds are fixed to element_blank() in the base theme -- not user-editable.
 
   # --- facets & spacing ---
   sb <- g("strip_bg")
@@ -560,10 +589,7 @@ view_dotplot <- function(cells, params, expr_long, state = list(), assembly = NU
                         name = "% expressing") +
     .scroll_continuous_scale(pal, if (scaled) "z-score" else "mean expr.") +
     ggplot2::labs(x = group_by, y = NULL) +
-    ggplot2::theme_bw(base_size = 13) +
-    ggplot2::theme(panel.grid = ggplot2::element_blank(),
-                   panel.border = ggplot2::element_rect(color = "black", linewidth = 0.7, fill = NA),
-                   axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
+    .scroll_base_theme(axis_text = TRUE, x_angle = 45)
 
   # aspect.ratio letterboxes the panel, which would detach the aplot trees, so
   # apply it only to the plain (untreed) dot plot; with dendrograms the composite
@@ -594,17 +620,10 @@ view_dotplot <- function(cells, params, expr_long, state = list(), assembly = NU
   pp
 }
 
-# Shared theme for the bar/violin panels: black box, no vertical gridlines, a
-# faint horizontal guide for reading values, optional legend.
+# Shared theme for the bar/violin/biaxial panels: black box, no gridlines, rotated
+# x labels, optional legend. The explicit base theme (no theme_bw).
 .scroll_box_theme <- function(legend = TRUE) {
-  list(
-    ggplot2::theme_bw(base_size = 13),
-    ggplot2::theme(
-      panel.grid = ggplot2::element_blank(),
-      panel.border = ggplot2::element_rect(color = "black", linewidth = 0.7, fill = NA),
-      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1),
-      legend.position = if (isTRUE(legend)) "right" else "none")
-  )
+  .scroll_base_theme(legend = legend, axis_text = TRUE, x_angle = 45)
 }
 
 #' Violin: a feature's per-group distribution
@@ -780,9 +799,7 @@ view_volcano <- function(de, params = list(), state = list()) {
     ggplot2::geom_vline(xintercept = c(-lfc, lfc), linetype = "dashed", color = "grey60") +
     ggplot2::geom_hline(yintercept = -log10(pcut), linetype = "dashed", color = "grey60") +
     ggplot2::labs(x = "logFC", y = "-log10 adjusted p") +
-    ggplot2::theme_bw(base_size = 13) +
-    ggplot2::theme(panel.grid = ggplot2::element_blank(),
-                   panel.border = ggplot2::element_rect(color = "black", linewidth = 0.7, fill = NA))
+    .scroll_base_theme(axis_text = TRUE)
 
   n <- params$label_n %||% 15
   lab <- d[d$sig != "ns", , drop = FALSE]
@@ -827,9 +844,7 @@ view_stability <- function(df, params = list(), state = list()) {
     ggplot2::geom_hline(yintercept = cut, linetype = "dashed", color = "grey60") +
     ggplot2::labs(x = "median logFC", y = "selection frequency") +
     ggplot2::coord_cartesian(ylim = c(0, 1)) +
-    ggplot2::theme_bw(base_size = 13) +
-    ggplot2::theme(panel.grid = ggplot2::element_blank(),
-                   panel.border = ggplot2::element_rect(color = "black", linewidth = 0.7, fill = NA))
+    .scroll_base_theme(axis_text = TRUE)
   lab <- df[df$consistent, , drop = FALSE]
   lab <- utils::head(lab[order(-lab$sel_freq, -abs(lab$median_logFC)), , drop = FALSE], n)
   if (n > 0 && nrow(lab)) {
