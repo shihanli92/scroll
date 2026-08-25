@@ -92,6 +92,28 @@ test_that("theme + filters are deferred: Apply commits, Reset clears", {
   })
 })
 
+test_that("the global theme reaches every view finisher (scatter, bar, biaxial)", {
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  nums <- scroll:::.scroll_num_cols(data$manifest)
+  legpos <- function(p) ggplot2::ggplot_build(p)$plot$theme$legend.position
+
+  # scatter finisher
+  expect_identical(legpos(view_umap_colorby(data$cells,
+    list(embedding = "umap", color_by = "celltype"),
+    list(legend = TRUE, theme = list(legend = "bottom")))), "bottom")
+  # apply-aspect finisher (bars)
+  expect_identical(legpos(view_proportions(data$cells,
+    list(group_by = "celltype", fill_by = "condition"),
+    list(theme = list(legend = "bottom")))), "bottom")
+  # biaxial hand-rolls its finish (regression: the global theme used to be dropped here)
+  p <- view_biaxial(data$cells, list(features = nums[1:2], color_by = "celltype"),
+                    list(theme = list(legend = "bottom", grid_major = "off")))
+  th <- ggplot2::ggplot_build(p)$plot$theme
+  expect_identical(th$legend.position, "bottom")
+  expect_s3_class(th$panel.grid.major, "element_blank")
+})
+
 test_that("panels accept a theme_r and apply it (RNA scatter + modality)", {
   data <- scroll:::.scroll_load(vdj_test_project())
   on.exit(scroll_disconnect(data$con), add = TRUE)

@@ -167,7 +167,7 @@
   # UMAP (unlike .scroll_apply_aspect, which leaves 1 unconstrained -- kept for
   # the bar/violin/dot panels where filling the width is the sensible default).
   .scroll_maybe_facet(p, df, state) +
-    ggplot2::theme(aspect.ratio = state$aspect %||% 1, state$theme) +
+    ggplot2::theme(aspect.ratio = state$aspect %||% 1) +
     .scroll_ggtheme(state$theme)
 }
 
@@ -694,7 +694,7 @@ view_biaxial <- function(cells, params, state = list(), df = NULL) {
       override.aes = list(size = 2, alpha = 1))) +
     .scroll_box_theme(.scroll_opt(params, state, "legend", TRUE))
   # each facet defaults to SQUARE (aspect.ratio = 1); state$aspect overrides
-  p + ggplot2::theme(aspect.ratio = state$aspect %||% 1, state$theme)
+  p + ggplot2::theme(aspect.ratio = state$aspect %||% 1) + .scroll_ggtheme(state$theme)
 }
 
 #' Stacked composition of one categorical within another
