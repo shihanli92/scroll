@@ -565,6 +565,10 @@ scroll_reset_panels <- function() {
                                  format(tot, big.mark = ",")) else format(tot, big.mark = ",")
     if (!is.null(lab)) paste0(base, " \u00b7 ", lab) else base
   })
+  # The cell-count sits in the app bar's flex row, which can have zero layout size
+  # when the output first binds -- Shiny then treats it as hidden and suspends it, so
+  # it stays blank ("recalculating") forever. Force it to always render.
+  outputOptions(output, "scroll_ncells", suspendWhenHidden = FALSE)
 }
 
 # Mount each panel's server, threading `active_view` only to panels that declare a
