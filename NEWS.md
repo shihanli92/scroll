@@ -1,4 +1,4 @@
-# scroll (development version)
+# scroll 0.2.4
 
 ## Collapsible control rail
 
