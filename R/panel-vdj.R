@@ -168,6 +168,14 @@
          # palette + manual per-group colour picker (rank-abundance colours by group)
          scroll_show_when(.scroll_vdj_colour_control("group", "group_levels"),
                           control = "view", equals = "Rank-abundance"),
+         # expansion category thresholds (max clone size for each; Single = 1 cell,
+         # Hyperexpanded = above Large). Shown only in the Expansion composition view.
+         scroll_show_when(scroll_input_numeric("exp_small", "Small: max cells", 4, min = 2, step = 1),
+                          control = "view", equals = "Expansion composition"),
+         scroll_show_when(scroll_input_numeric("exp_medium", "Medium: max cells", 19, min = 3, step = 1),
+                          control = "view", equals = "Expansion composition"),
+         scroll_show_when(scroll_input_numeric("exp_large", "Large: max cells", 99, min = 4, step = 1),
+                          control = "view", equals = "Expansion composition"),
          # ordered palette + manual pickers for the five expansion categories
          scroll_show_when(.scroll_expansion_colour_control(),
                           control = "view", equals = "Expansion composition"),
@@ -213,7 +221,11 @@
         cl  <- dplyr::left_join(dplyr::count(rc, .data[[cid]], name = "count"),
                                 dom, by = cid)
         names(cl)[names(cl) == grp] <- "g"
-        cl$expansion <- cut(cl$count, c(0, 1, 4, 19, 99, Inf),
+        # category thresholds (max clone size per category); Single = 1, Hyper = above Large
+        sm <- input$exp_small %||% 4; md <- input$exp_medium %||% 19; lg <- input$exp_large %||% 99
+        if (!all(is.finite(c(sm, md, lg))) || !(1 < sm && sm < md && md < lg))
+          stop("Expansion thresholds must satisfy 1 < Small < Medium < Large.")
+        cl$expansion <- cut(cl$count, c(0, 1, sm, md, lg, Inf),
           labels = c("Single", "Small", "Medium", "Large", "Hyperexpanded"))
         p <- ggplot2::ggplot(cl, ggplot2::aes(.data$g, fill = .data$expansion)) +
           ggplot2::geom_bar(position = "fill", colour = "white", linewidth = 0.2) +
