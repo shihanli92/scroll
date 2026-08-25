@@ -62,6 +62,48 @@ test_that("featureplot_server renders a protein feature from the ADT assay", {
   })
 })
 
+test_that("featureplot_server blends two genes into a co-expression layout", {
+  skip_if_not_installed("patchwork")
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  shiny::testServer(scroll:::featureplot_server, args = list(data = data), {
+    session$setInputs(reduction = "umap", assay = "RNA", feature = c("CD3D", "MS4A1"),
+                      blend = TRUE, blend_threshold = 0.5, blend_c1 = "#FF0000",
+                      blend_c2 = "#00FF00", palette = "grey-purple", size = 0.7,
+                      clip = c(0, 100), order = TRUE, legend = TRUE, split = "", aspect = 1)
+    d <- data_r()
+    expect_true(isTRUE(d$blend))
+    expect_false(is.null(d$values2))                       # second gene queried
+    expect_s3_class(plot_r(), "patchwork")
+    expect_true(all(c("CD3D", "MS4A1") %in% names(csv_r())))  # both genes exported
+  })
+
+  # multiple genes (no blend) -> a per-gene grid
+  shiny::testServer(scroll:::featureplot_server, args = list(data = data), {
+    session$setInputs(reduction = "umap", assay = "RNA", feature = c("CD3D", "MS4A1", "CD8A"),
+                      blend = FALSE, metacol = "", palette = "grey-purple", size = 0.7,
+                      clip = c(0, 100), order = TRUE, legend = TRUE, split = "", aspect = 1)
+    d <- data_r()
+    expect_true(isTRUE(d$multi))
+    expect_length(d$features, 3)
+    expect_s3_class(plot_r(), "patchwork")
+    expect_true(all(c("CD3D", "MS4A1", "CD8A") %in% names(csv_r())))
+  })
+
+  # genes AND numeric metadata columns shown together in one grid
+  shiny::testServer(scroll:::featureplot_server, args = list(data = data), {
+    session$setInputs(reduction = "umap", assay = "RNA", feature = c("CD3D", "MS4A1"),
+                      metacol = "nCount_RNA", blend = FALSE, palette = "grey-purple",
+                      size = 0.7, clip = c(0, 100), order = TRUE, legend = TRUE,
+                      split = "", aspect = 1)
+    d <- data_r()
+    expect_setequal(d$features, c("CD3D", "MS4A1", "nCount_RNA"))
+    expect_setequal(unique(d$values$feature), c("CD3D", "MS4A1", "nCount_RNA"))
+    expect_s3_class(plot_r(), "patchwork")
+    expect_true(all(c("CD3D", "MS4A1", "nCount_RNA") %in% names(csv_r())))
+  })
+})
+
 test_that("scroll_de runs a two-group contrast on the ADT assay", {
   skip_if_not_installed("presto")
   data <- scroll:::.scroll_load(test_project())

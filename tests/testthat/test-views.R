@@ -7,6 +7,48 @@ test_that("scatter views render ggplots", {
   expect_s3_class(view_feature_plot(cells, list(embedding = "umap", feature = "CD3D"), vals), "ggplot")
 })
 
+test_that("view_feature_blend reproduces Seurat's blend colours and lays out 4 panels", {
+  skip_if_not_installed("patchwork")
+  cells <- read_cells(test_project())
+  v1 <- data.frame(cell = cells$cell, value = pmax(0, stats::rnorm(nrow(cells), 1)))
+  v2 <- data.frame(cell = cells$cell, value = pmax(0, stats::rnorm(nrow(cells), 1)))
+  p <- view_feature_blend(cells, list(embedding = "umap", feature1 = "CD3D",
+                                      feature2 = "MS4A1"), v1, v2)
+  expect_s3_class(p, "patchwork")
+  expect_length(p$patches$plots, 3)                     # + the 4th plot is the top-level object
+
+  # the blend colour matrix is a faithful port of Seurat's internal BlendMatrix
+  skip_if_not_installed("Seurat")
+  ours <- scroll:::.scroll_blend_matrix(col.threshold = 0.5)
+  seur <- getFromNamespace("BlendMatrix", "Seurat")(
+    two.colors = c("#ff0000", "#00ff00"), col.threshold = 0.5, negative.color = "lightgrey")
+  expect_identical(as.vector(ours), as.vector(seur))
+})
+
+test_that("view_feature_multi renders a grid, one panel per gene", {
+  skip_if_not_installed("patchwork")
+  cells <- read_cells(test_project())
+  feats <- c("CD3D", "MS4A1", "CD8A")
+  vl <- do.call(rbind, lapply(feats, function(g)
+    data.frame(feature = g, cell = cells$cell, value = runif(nrow(cells)))))
+  p <- view_feature_multi(cells, list(embedding = "umap", features = feats), vl)
+  expect_s3_class(p, "patchwork")
+  expect_length(p$patches$plots, length(feats) - 1)     # + top-level object = 3 panels
+  # a single gene collapses to one plain feature plot, not a patchwork
+  p1 <- view_feature_multi(cells, list(embedding = "umap", features = "CD3D"),
+                           vl[vl$feature == "CD3D", ])
+  expect_s3_class(p1, "ggplot")
+  expect_false(inherits(p1, "patchwork"))
+})
+
+test_that(".scroll_parse_gene_list splits on any whitespace/comma, matches case-insensitively", {
+  feats <- c("CD3D", "CD8A", "MS4A1", "NKG7")
+  res <- scroll:::.scroll_parse_gene_list("CD3D, cd8a\tMS4A1\nNKG7 CD3D foo", feats)
+  expect_equal(res$ok, c("CD3D", "CD8A", "MS4A1", "NKG7"))   # pasted order, deduped, canonical case
+  expect_equal(res$missing, "foo")
+  expect_equal(scroll:::.scroll_parse_gene_list("", feats)$ok, character(0))
+})
+
 test_that("dotplot aggregates fraction and mean per group", {
   cells <- read_cells(test_project())
   feats <- c("CD3D", "MS4A1")
@@ -29,6 +71,21 @@ test_that("dotplot accepts brewer palettes and hclust clustering", {
   p <- view_dotplot(cells, list(group_by = "celltype", features = feats), el,
                     state = list(cluster = "both", palette = "RdBu", aspect = 1.2, scale = TRUE))
   expect_true(inherits(p, c("ggplot", "aplot", "patchwork")))   # trees -> aplot, else ggplot
+})
+
+test_that("view_violin_multi renders one violin panel per gene", {
+  skip_if_not_installed("patchwork")
+  cells <- read_cells(test_project())
+  feats <- c("CD3D", "MS4A1", "NKG7")
+  vl <- do.call(rbind, lapply(feats, function(g)
+    data.frame(feature = g, cell = cells$cell, value = runif(nrow(cells)))))
+  p <- view_violin_multi(cells, list(group_by = "celltype", features = feats), vl)
+  expect_s3_class(p, "patchwork")
+  expect_length(p$patches$plots, length(feats) - 1)      # + top-level = 3 panels
+  p1 <- view_violin_multi(cells, list(group_by = "celltype", features = "CD3D"),
+                          vl[vl$feature == "CD3D", ])
+  expect_s3_class(p1, "ggplot")
+  expect_false(inherits(p1, "patchwork"))
 })
 
 test_that("violin and proportions render ggplots", {
@@ -129,6 +186,16 @@ test_that("FeaturePlot quantile caps clip the color scale", {
   expect_s3_class(p, "ggplot")
 })
 
+test_that("quantile clip is taken over expressing cells, not the zero-inflated vector", {
+  # a 95%-zero gene: the 0.5 quantile of the full vector is 0, so a naive clip
+  # would pin the lower bound at 0; over non-zero cells it is a real value.
+  ex <- c(rep(0, 950), seq_len(50))
+  lim <- scroll:::.scroll_expr_limits(ex, c(0.5, 1.0))
+  expect_false(is.null(lim))
+  expect_gt(lim[1], 0)                               # lower bound moved off zero
+  expect_equal(lim[1], unname(stats::quantile(1:50, 0.5)))
+})
+
 test_that("aspect ratio sets theme(aspect.ratio); default 1 leaves it unset", {
   cells <- read_cells(test_project())
   p <- view_umap_colorby(cells, list(embedding = "umap", color_by = "celltype"),
@@ -193,4 +260,35 @@ test_that("view_contrast_medoids emits exactly one point per sample", {
   expect_s3_class(p, "ggplot")
   b <- ggplot2::ggplot_build(p)
   expect_equal(nrow(b$data[[length(b$data)]]), 6L)   # medoid layer: one point per sample
+})
+
+test_that("plot-source CSV builders carry barcodes + reproducer columns", {
+  skip_if_not_installed("SeuratObject")
+  dir <- test_project()
+  cells <- as.data.frame(arrow::read_parquet(file.path(dir, "cells.parquet")))
+  cells$.gidx <- seq_len(nrow(cells))
+  emb <- "umap"
+
+  # DimPlot source: cell barcode + the two embedding coords + the color-by column
+  d <- .scroll_dimplot_source(cells, emb, "celltype")
+  expect_true(all(c("cell", paste0(emb, c("_1", "_2")), "celltype") %in% names(d)))
+  expect_true(all(d$cell %in% cells$cell))              # barcodes are real
+  expect_equal(anyNA(d[[paste0(emb, "_1")]]), FALSE)    # NA-coord rows dropped
+
+  # FeaturePlot source: barcode + coords + a feature-expression column, 0-filled
+  con <- scroll_connect(dir); on.exit(scroll_disconnect(con))
+  vals <- scroll_query_feature(con, "RNA", "CD3D")
+  f <- .scroll_featureplot_source(cells, emb, "CD3D", vals)
+  expect_true(all(c("cell", "CD3D") %in% names(f)))
+  expect_false(anyNA(f$CD3D))
+
+  # Violin source: barcode-first, group column, feature column
+  v <- .scroll_violin_source(cells, "celltype", "CD3D", vals, value_col = NULL)
+  expect_identical(names(v)[1], "cell")
+  expect_true(all(c("celltype", "CD3D") %in% names(v)))
+
+  # Aggregated panels: no per-cell barcode, the plotted summary instead
+  p <- .scroll_proportions_source(cells, "celltype", "condition")
+  expect_setequal(names(p), c("group", "category", "n_cells", "proportion"))
+  expect_false("cell" %in% names(p))
 })

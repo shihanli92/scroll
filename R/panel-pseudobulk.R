@@ -75,6 +75,25 @@ pseudobulk_de_server <- function(id, data, cells_r = reactive(data$cells),
     m <- data$manifest
     assay <- reactive(input$assay %||% m$default_assay)
 
+    # Aggregate-by / Replicate follow the active view: subset-scoped categorical
+    # columns (e.g. a subset's own clustering resolutions) surface only in their
+    # view, and global columns stay available everywhere. The UI builds these from
+    # the whole-dataset columns; refresh them when the view changes.
+    observeEvent(view_r(), {
+      cats_v <- .scroll_cat_cols(m, view_r())
+      cur_agg <- intersect(isolate(input$aggregate_by), cats_v)
+      if (!length(cur_agg) && length(cats_v)) cur_agg <- cats_v[[1]]
+      updateSelectizeInput(session, "aggregate_by",
+                           choices = stats::setNames(cats_v, cats_v), selected = cur_agg)
+      cur_rep <- isolate(input$replicate)
+      sel_rep <- if (!is.null(cur_rep) && (identical(cur_rep, "no_replicate") || cur_rep %in% cats_v))
+                   cur_rep else "no_replicate"
+      updateSelectInput(session, "replicate",
+                        choices = c("No replicate (pseudo)" = "no_replicate",
+                                    stats::setNames(cats_v, cats_v)),
+                        selected = sel_rep)
+    }, ignoreNULL = FALSE)
+
     # combined levels depend on the chosen aggregate-by columns + active subset
     observeEvent(list(input$aggregate_by, cells_r()), {
       combos <- .scroll_combo_choices(cells_r(), input$aggregate_by)

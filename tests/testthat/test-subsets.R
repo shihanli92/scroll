@@ -160,3 +160,20 @@ test_that("dimplot_server switches reduction + colorby when the view changes", {
     expect_true("tsub" %in% scroll:::.scroll_cat_cols(data$manifest, "tcell"))
   })
 })
+
+test_that("pseudobulk aggregate-by exposes subset-scoped columns in a subset view", {
+  data <- scroll:::.scroll_load(subset_test_project())
+  on.exit(scroll_disconnect(data$con))
+  # scoped column is out of scope whole-dataset, in scope in the T-cell view
+  expect_false("tsub" %in% scroll:::.scroll_cat_cols(data$manifest, NULL))
+  expect_true("tsub" %in% scroll:::.scroll_cat_cols(data$manifest, "tcell"))
+  view <- shiny::reactiveVal(NULL)
+  shiny::testServer(scroll:::pseudobulk_de_server,
+                    args = list(data = data, view_r = view), {
+    view("tcell"); session$flushReact()
+    # in-view, the scoped column can drive aggregation (combos come from cells)
+    session$setInputs(aggregate_by = "tsub", ident1 = character(0), replicate = "no_replicate")
+    session$flushReact()
+    expect_gt(length(.scroll_combo_choices(cells_r(), "tsub")), 0)
+  })
+})

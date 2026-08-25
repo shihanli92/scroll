@@ -30,7 +30,7 @@ dimplot_ui <- function(id, data) {
                     c("None" = "", stats::setNames(cats, cats))),
         .scroll_aspect_input(ns))
     ),
-    .scroll_plot_area(ns, "460px")
+    .scroll_plot_area(ns, "460px", csv = TRUE)
   )
 }
 
@@ -38,24 +38,37 @@ dimplot_server <- function(id, data, cells_r = reactive(data$cells),
                            view_r = reactive(NULL), theme_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
-    is_cat <- reactive(identical(m$meta[[input$colorby]]$type, "categorical"))
-    levels_of <- reactive(if (is_cat()) .scroll_meta_levels(data, input$colorby) else character(0))
+    cats0 <- .scroll_cat_cols(m)
+    first_cat <- if (length(cats0)) cats0[[1]] else .scroll_num_cols(m)[[1]]
 
     # When the active view changes: restrict reductions to that view's embeddings
     # (subset views default to the primary sub-embedding) and add the subset's
     # scoped columns to Color-by. Split-by follows the same scoped-column rule.
+    # Effective reduction / colour column as deduped reactiveVals. The plot reads
+    # these, not input$reduction/input$colorby, so the selectInput updates a View
+    # switch triggers (which round-trip through the client) do NOT each re-render:
+    # the values are resolved server-side and set once. The view observer runs at
+    # high priority so they are updated before the plot renders (avoiding a stale
+    # first draw), and manual dropdown changes feed the same reactiveVals (a set to
+    # the current value is a no-op, so the echoed round-trip does not re-render).
+    red_rv <- reactiveVal(.scroll_default(data, "default_embedding",
+                                          .scroll_view_embeddings(m, NULL)[[1]]))
+    cb_rv  <- reactiveVal(first_cat)
     observeEvent(view_r(), {
       reds <- .scroll_view_embeddings(m, view_r())
       sel_red <- if (is.null(view_r()))
         .scroll_default(data, "default_embedding", reds[[1]]) else reds[[1]]
       if (!sel_red %in% reds) sel_red <- reds[[1]]
+      cb <- .scroll_colorby_choices(m, view_r()); flat <- unlist(cb, use.names = FALSE)
+      cur <- cb_rv(); sel_cb <- if (!is.null(cur) && cur %in% flat) cur else flat[[1]]
+      red_rv(sel_red); cb_rv(sel_cb)
       updateSelectInput(session, "reduction", choices = reds, selected = sel_red)
-      cb <- .scroll_colorby_choices(m, view_r())
-      flat <- unlist(cb, use.names = FALSE)
-      cur <- input$colorby
-      updateSelectInput(session, "colorby", choices = cb,
-                        selected = if (!is.null(cur) && cur %in% flat) cur else flat[[1]])
-    }, ignoreNULL = FALSE)
+      updateSelectInput(session, "colorby", choices = cb, selected = sel_cb)
+    }, ignoreNULL = FALSE, priority = 100)
+    observeEvent(input$reduction, red_rv(input$reduction), ignoreInit = TRUE)
+    observeEvent(input$colorby,   cb_rv(input$colorby),    ignoreInit = TRUE)
+    is_cat <- reactive(identical(m$meta[[cb_rv()]]$type, "categorical"))
+    levels_of <- reactive(if (is_cat()) .scroll_meta_levels(data, cb_rv()) else character(0))
     .scroll_bind_view_cats(input, session, view_r, m, "split", prepend = c("None" = ""))
 
     observeEvent(input$colorby, {
@@ -82,9 +95,9 @@ dimplot_server <- function(id, data, cells_r = reactive(data$cells),
 
     # DATA reactive (cells + params) invalidates only on data-input changes.
     data_r <- reactive({
-      req(input$reduction, input$colorby)
+      req(red_rv(), cb_rv())
       cells <- cells_r()
-      list(cells = cells, embedding = input$reduction, color_by = input$colorby,
+      list(cells = cells, embedding = red_rv(), color_by = cb_rv(),
            n = nrow(cells))
     })
     # COSMETIC reactive, debounced; restyle-only inputs (incl. highlight/manual).
@@ -97,10 +110,11 @@ dimplot_server <- function(id, data, cells_r = reactive(data$cells),
       d <- data_r(); st <- cosmetic_r(); st$raster <- raster
       view_umap_colorby(d$cells, list(embedding = d$embedding, color_by = d$color_by), st)
     }
-    plot_r   <- reactive(build(.scroll_use_raster(input$raster, data_r()$n)))  # rasterized on screen
+    plot_r   <- .scroll_lazy_plot(input, function() build(.scroll_use_raster(input$raster, data_r()$n)))  # rasterized on screen; recomputed only on-screen
     export_r <- reactive(build(FALSE))                                         # vector for downloads
     output$plot <- renderPlot(plot_r())
-    .scroll_plot_downloads(output, export_r, id)
+    csv_r <- reactive({ d <- data_r(); .scroll_dimplot_source(d$cells, d$embedding, d$color_by) })
+    .scroll_plot_downloads(output, export_r, id, csv_r = csv_r)
   })
 }
 

@@ -48,7 +48,7 @@ biaxial_ui <- function(id, data) {
         numericInput(ns("ncol"), "Facet columns (blank = auto)", value = NA, min = 1, step = 1),
         numericInput(ns("nrow"), "Facet rows (blank = auto)", value = NA, min = 1, step = 1))
     ),
-    .scroll_plot_area(ns, "460px")
+    .scroll_plot_area(ns, "460px", csv = TRUE)
   )
 }
 
@@ -96,7 +96,9 @@ biaxial_server <- function(id, data, cells_r = reactive(data$cells),
         validate(need(length(feats) >= 2, "Pick at least two numeric columns."))
       }
       params <- list(features = feats, color_by = input$colorby)
-      list(params = params, df = .scroll_biaxial_df(cells, params))
+      # `cells` here carries the gene-augmented columns (Genes mode) so the CSV
+      # source builder can read the plotted feature values per cell.
+      list(params = params, df = .scroll_biaxial_df(cells, params), cells = cells)
     })
     cosmetic_r <- .scroll_cosmetic(reactive(
       list(theme = theme_r(), palette = input$palette, point_size = input$size,
@@ -106,10 +108,11 @@ biaxial_server <- function(id, data, cells_r = reactive(data$cells),
       d <- data_r(); st <- cosmetic_r(); st$raster <- raster
       view_biaxial(NULL, d$params, st, df = d$df)
     }
-    plot_r   <- reactive(build(.scroll_use_raster(input$raster, nrow(data_r()$df))))
+    plot_r   <- .scroll_lazy_plot(input, function() build(.scroll_use_raster(input$raster, nrow(data_r()$df))))
     export_r <- reactive(build(FALSE))
     output$plot <- renderPlot(plot_r())
-    .scroll_plot_downloads(output, export_r, id)
+    csv_r <- reactive({ d <- data_r(); .scroll_biaxial_source(d$cells, d$params$features, d$params$color_by) })
+    .scroll_plot_downloads(output, export_r, id, csv_r = csv_r)
   })
 }
 

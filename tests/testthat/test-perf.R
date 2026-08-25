@@ -85,6 +85,30 @@ test_that("cosmetic changes do not re-query; data changes do (featureplot)", {
   })
 })
 
+test_that("off-screen panels do not recompute; they refresh when back on-screen", {
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  calls <- 0L; orig <- data$query1
+  data$query1 <- function(assay, feature) { calls <<- calls + 1L; orig(assay, feature) }
+  shiny::testServer(scroll:::featureplot_server, args = list(data = data), {
+    session$setInputs(reduction = "umap", feature = "CD3D", assay = "RNA", onscreen = TRUE,
+                      palette = "grey-purple", size = 0.7, order = TRUE, legend = TRUE,
+                      clip = c(0, 100), split = "", aspect = 1)
+    session$flushReact(); force(output$plot); n1 <- calls
+    expect_gte(n1, 1L)
+    session$setInputs(onscreen = FALSE, feature = "CD8A")   # data change while off-screen
+    session$flushReact(); force(output$plot)
+    expect_equal(calls, n1)                                 # gated: no recompute
+    session$setInputs(onscreen = TRUE)                      # scrolled back into view
+    session$flushReact(); force(output$plot)
+    expect_gt(calls, n1); n2 <- calls                       # now refreshes to CD8A
+    # scroll away and back with NO change -> the memoized build persists (no rebuild)
+    session$setInputs(onscreen = FALSE); session$flushReact(); force(output$plot)
+    session$setInputs(onscreen = TRUE);  session$flushReact(); force(output$plot)
+    expect_equal(calls, n2)                                 # persisted: not recomputed
+  })
+})
+
 test_that("featureplot colours a numeric metadata column without querying", {
   data <- scroll:::.scroll_load(test_project())
   on.exit(scroll_disconnect(data$con))

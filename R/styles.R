@@ -187,6 +187,9 @@ body{background:var(--sc-ground); color:var(--sc-ink);
 .scroll-plot .shiny-plot-output,
 .scroll-plot .shiny-spinner-output-container{width:round(down, 100%, 1px); min-width:0;}
 .scroll-plot-bar{display:flex; justify-content:flex-end; padding:0 2px 8px;}
+/* .scroll-plot-hold reserves the plot height so panels keep a stable size; the
+   lazy-rendering gate (.scroll_lazy_js + .scroll_lazy_plot) recomputes a panel
+   only while it is on screen. */
 .scroll-dl.btn{padding:3px 10px; font-size:12px; font-weight:600; color:var(--sc-muted);
   background:var(--sc-card); border:1px solid var(--sc-line); border-radius:8px;}
 .scroll-dl.btn:hover{color:var(--sc-accent-deep); border-color:var(--sc-accent);
@@ -225,5 +228,24 @@ window.scrollToggleControls=function(btn){
     secs.forEach(function(s){io.observe(s);});
   }
   if(document.readyState!=='loading') spy(); else document.addEventListener('DOMContentLoaded',spy);
+})();
+"
+
+# Lazy panel rendering: report each panel card's on-screen state (viewport + a
+# margin) to its module as input$onscreen. .scroll_lazy_plot uses that to recompute
+# a panel only while it is on screen, so a View/filter change redraws just the
+# panels in view; an off-screen one refreshes when scrolled to. The card id is the
+# module id, so `<id>-onscreen` lands on the module's input$onscreen.
+.scroll_lazy_js <- function() "
+(function(){
+  function lazy(){
+    var cards=document.querySelectorAll('.scroll-panel-card');
+    if(!cards.length || !window.Shiny) return;
+    var io=new IntersectionObserver(function(es){
+      es.forEach(function(e){ Shiny.setInputValue(e.target.id+'-onscreen', e.isIntersecting); });
+    },{rootMargin:'300px 0px 300px 0px'});
+    cards.forEach(function(c){io.observe(c);});
+  }
+  if(document.readyState!=='loading') lazy(); else document.addEventListener('DOMContentLoaded',lazy);
 })();
 "

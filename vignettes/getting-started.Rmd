@@ -1,0 +1,455 @@
+---
+title: "Getting started: from a Seurat object to a running app"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteEncoding{UTF-8}
+  %\VignetteIndexEntry{Getting started: from a Seurat object to a running app}
+  %\VignetteEngine{knitr::rmarkdown}
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE          # every chunk is narrated: it needs SeuratData, writes
+)                       # files, or launches a server, so none run at build time
+```
+
+scroll turns a processed Seurat object with clustering, an embedding,
+and normalized expression into an extendable interactive Shiny app. The
+objective of this article is to introduce the basic workflow of the app
+package using the classic 3K PBMC dataset.
+
+## 1. Introduction
+
+scroll works in two separate phases. First, the build call reads the
+object and writes small, flat files to disk. The light *runtime* app
+reads only those files.
+
+With a pre-processed single-cell object, an app can be created through
+two function calls.
+
+```{r}
+library(scroll)
+
+# Phase 1 — offline, run once: extract flat artifacts from the object
+scroll_build(obj, "pbmc3k")
+
+# Phase 2 — the running app: reads only those artifacts
+scroll_app("pbmc3k")
+```
+
+To preserve memory, count tables are converted into parquet tables which
+are accessed in-time. While this significantly reduces RAM usage after
+deployment, the build times can be quite slow, specifically for larger
+Seurat objects.
+
+### What you'll need
+
+-   R 4.1 or newer. scroll is an R package; you will work from an R
+    console throughout.
+-   A processed Seurat object
+
+## 2. Install scroll and its dependencies
+
+scroll is installed from GitHub using `remotes`. Its required
+dependencies are all on CRAN and are pulled in automatically.
+
+```{r}
+install.packages("remotes")
+remotes::install_github("shihanli1992/scroll")
+```
+
+### Optional features
+
+Several capabilities are optional. Install only what you need.
+
+| Package(s)               | Unlocks                                              |
+|--------------------------|------------------------------------------------------|
+| `presto`                 | Live Wilcoxon differential expression (the DE panel) |
+| `edgeR`, `limma`         | Replicate-aware pseudobulk DE (Bioconductor)         |
+| `ggtree`, `aplot`, `ape` | Hierarchical-clustering dendrograms on the DotPlot   |
+| `scattermore`            | Rasterized scatter                                   |
+| `shinycssloaders`        | Loading spinners while plots render                  |
+| `DT`, `ggrepel`          | Interactive DE tables and gene labels on the volcano |
+| `Signac`                 | scATAC-seq (peaks) support                           |
+
+```{r}
+# Bioconductor packages (edgeR/limma -> pseudobulk DE; ggtree -> dendrograms; Signac -> ATAC)
+install.packages("BiocManager")
+BiocManager::install(c("edgeR", "limma", "ggtree", "Signac"))
+
+# CRAN packages
+install.packages(c("aplot", "ape", "scattermore", "shinycssloaders", "DT", "ggrepel"))
+
+# presto — live Wilcoxon DE (from GitHub)
+remotes::install_github("immunogenomics/presto")
+```
+
+### Packages for this tutorial
+
+The worked example in the next steps builds from a small public dataset,
+which needs Seurat's object class and the example-data package:
+
+```{r}
+install.packages("SeuratObject")
+remotes::install_github("satijalab/seurat-data")
+```
+
+> Only for the build phase. `SeuratObject` is needed to *read* your
+> object during `scroll_build()`. It is not required to run a built app,
+> so a deployment server never needs Seurat installed.
+
+Finally, load scroll and confirm the version:
+
+```{r}
+library(scroll)
+packageVersion("scroll")
+```
+
+```         
+#> [1] '0.2.3'
+```
+
+## 3. Loading an example object
+
+```{r}
+library(SeuratData)
+
+InstallData("pbmc3k")
+pbmc <- LoadData("pbmc3k", type = "pbmc3k.final")
+pbmc <- UpdateSeuratObject(pbmc)
+pbmc
+```
+
+```         
+#> An object of class Seurat
+#> 13714 features across 2638 samples within 1 assay
+#> Active assay: RNA (13714 features, 2000 variable features)
+#>  3 layers present: counts, data, scale.data
+#>  2 dimensional reductions calculated: pca, umap
+```
+
+That print-out already tells you the three things scroll cares about: an
+assay with a `data` layer, and two reductions (`pca` and `umap`).
+
+For scroll to run, it requires a "processed" object containing all three
+of the following:
+
+-   At least one dimensional reduction (an embedding).
+-   A normalized `data` layer in the assay.
+-   Cell metadata.
+
+```{r}
+Reductions(pbmc)          # embeddings scroll can plot
+```
+
+```         
+#> [1] "pca"  "umap"
+```
+
+```{r}
+Layers(pbmc[["RNA"]])     # need a normalized "data" layer, not just counts
+```
+
+```         
+#> [1] "counts"     "data"       "scale.data"
+```
+
+```{r}
+colnames(pbmc[[]])        # the metadata columns
+```
+
+```         
+#> [1] "orig.ident"         "nCount_RNA"         "nFeature_RNA"
+#> [4] "seurat_annotations" "RNA_snn_res.0.5"    "seurat_clusters"
+```
+
+The exact metadata columns vary by object; in the pbmc3k dataset,
+`seurat_annotations` holds the cell-type labels. You don't need to
+curate this list now: in the next step scroll infers sensible reductions
+and metadata automatically, and step 7 shows how to choose them
+explicitly.
+
+> Multiple assays and reductions are fine. If your object carries
+> several assays (e.g. an ADT or ATAC assay) or extra reductions, these
+> are automatically or manually added to the app.
+
+## 4. Build a project with `scroll_build()`
+
+`scroll_build()` reads the object and writes a self-contained project
+directory. Without additional inputs, the function uses the object's
+default assay, includes every reduction, and infers which metadata
+columns to expose.
+
+```{r}
+library(scroll)
+
+scroll_build(pbmc, "pbmc3k")
+```
+
+### What got written
+
+```{r}
+list.files("pbmc3k")
+```
+
+```         
+#> [1] "app.R"         "cells.parquet" "config.yaml"   "expr"          "manifest.yaml"
+```
+
+| Artifact        | What it is                                                                                                         |
+|-----------------|--------------------------------------------------------------------------------------------------------------------|
+| `cells.parquet` | One row per cell containing metadata plus embedding coordinates.                                                   |
+| `expr/`         | Expression as a sparse, zstd-compressed Parquet store, bucketed by the first letter of each gene.                  |
+| `manifest.yaml` | A machine-readable description of the build including the assays, features, embeddings, metadata and their levels. |
+| `config.yaml`   | Hand-editable app settings                                                                                         |
+| `app.R`         | The ready-to-run entry point: `library(scroll); scroll_app(".")`.                                                  |
+
+> Rebuilding. If the output directory already exists and isn't empty,
+> `scroll_build()` will stop by default. Pass `overwrite = TRUE` to
+> rebuild.
+
+### Inspect the manifest
+
+You rarely need to open the manifest by hand, but it's a good way to
+confirm the build captured what you expected. `scroll_manifest()` reads
+it back as a plain list.
+
+```{r}
+m <- scroll_manifest("pbmc3k")
+m$n_cells
+names(m$embeddings)
+```
+
+```         
+#> [1] 2638
+#> [1] "pca"  "umap"
+```
+
+## 5. Running the app
+
+`scroll_serve()` starts the app locally and opens it in your browser.
+
+```{r}
+scroll_serve("pbmc3k")                 # launches locally, opens a browser
+scroll_serve("pbmc3k", port = 8080)    # extra args pass through to shiny::runApp()
+```
+
+The project's own `app.R` does the same thing
+(`library(scroll); scroll_app(".")`), so you can also open
+`pbmc3k/app.R` in RStudio and click Run App, or run
+`shiny::runApp("pbmc3k")`.
+
+The window has three parts:
+
+-   An app bar across the top displays the dataset title, a live cell
+    count, and a global subset filter that narrows *every* panel at
+    once.
+-   A panel rail down the side for quick access to each panel.
+-   The active panel with its own controls on the left, the plot on the
+    right.
+
+### The built-in panels
+
+The following panels are pre-built and generated by default:
+
+-   DimPlot: the embedding coloured by a metadata column.
+-   FeaturePlot: the embedding coloured by a gene's expression.
+-   Biaxial: a scatter of one numeric axis against another: two QC
+    metrics, or two genes.
+-   DotPlot: marker genes by group and dot size.
+-   Violin: the distribution of a gene's expression across groups.
+-   Proportions: stacked composition bars of one categorical column
+    within another.
+-   DE: live differential expression between groups (Wilcoxon, via
+    `presto`), shown as a sortable table and a volcano plot.
+
+> Panels that require uninstalled packages will show a message instead
+> of a plot. For example, the DE panel needs `presto`. Without it the
+> panel loads but reports that live DE is unavailable.
+
+## 6. Customize the app with `config.yaml`
+
+The app auto-populates every control from the manifest, so it works with
+no configuration at all. `config.yaml` only sets *defaults* and labels.
+Because it's read at runtime, editing it needs no rebuild: change the
+file, restart the app, done. The expression store is never touched.
+
+Here's the starter file scroll wrote for `pbmc3k`:
+
+``` yaml
+default_assay: RNA
+default_embedding: umap
+markers:
+- CD3D
+- CD8A
+- IL7R
+- CCR7
+- MS4A1
+- CD79A
+- CD14
+- LYZ
+```
+
+scroll picked those marker genes automatically from a list of common
+ones present in the data. Note there's no `title` --- that's the first
+thing worth adding.
+
+### Title, defaults, and markers
+
+Open `pbmc3k/config.yaml` in any text editor and edit it.
+
+For example, add a title and curate the DotPlot's default genes:
+
+``` yaml
+title: PBMC 3k                # labels the app bar (add this)
+default_assay: RNA
+default_embedding: umap       # which reduction opens first
+markers:                      # the DotPlot's default gene set
+- MS4A1
+- CD79A
+- CD3D
+- CD8A
+- GNLY
+- NKG7
+- CD14
+- LYZ
+```
+
+| Key                 | Effect                                                                                          |
+|---------------------|-------------------------------------------------------------------------------------------------|
+| `title`             | Text shown in the app bar. Omit it and the bar shows just the brand.                            |
+| `default_embedding` | The reduction DimPlot / FeaturePlot open on (any name from the manifest, e.g. `umap` or `pca`). |
+| `default_assay`     | The assay selected first when the object has more than one.                                     |
+| `markers`           | The genes pre-loaded into the DotPlot. Any gene present in the assay.                           |
+
+Restart the app to see the changes:
+
+```{r}
+scroll_serve("pbmc3k")   # the app bar now reads "PBMC 3k"; DotPlot opens on your genes
+```
+
+### Which panels appear
+
+By default the panels are chosen automatically. Two optional keys let
+you take over. `panels:` lists the exact panels to show, in this order,
+overriding the automatic gating entirely. `exclude_panels:` instead
+keeps the automatic set but hides a few.
+
+``` yaml
+# show exactly these, in this order:
+panels:
+- dimplot
+- featureplot
+- dotplot
+- de
+
+# — or — keep the automatic set but hide some:
+exclude_panels:
+- biaxial
+```
+
+Panel ids are the lowercase names: `dimplot`, `featureplot`, `biaxial`,
+`dotplot`, `violin`, `proportions`, `de`, `pseudobulk`. You'd typically
+use one key or the other, not both.
+
+## 7. Customising the build
+
+### Metadata, assays, and embeddings
+
+Left to infer, scroll will select all columns with reasonable
+cardinality. Specific columns can also be manually selected.
+
+```{r}
+scroll_build(pbmc, "pbmc3k",
+             assays     = "RNA",
+             embeddings = c("umap", "pca"),
+             meta_cols  = c("seurat_annotations", "seurat_clusters",
+                            "nCount_RNA", "nFeature_RNA"),
+             overwrite  = TRUE)
+```
+
+| Argument     | What it controls                                                            |
+|--------------|-----------------------------------------------------------------------------|
+| `meta_cols`  | Which metadata columns become app selectors.                                |
+| `assays`     | Which assays to include.                                                    |
+| `embeddings` | Which reductions to carry. Any 2-D reduction becomes a plottable embedding. |
+
+### `quantize`: size vs. exactness
+
+By default scroll compresses expression values to 8-bit integers about
+4× smaller on disk,. The cost is that very small values (below roughly
+`max / 510`) floor to zero, so percent-expressing and dot sizes slightly
+under-count the lowest expressors. Pass `quantize = FALSE` for exact
+`float32` values.
+
+| Setting            | Store        | Precision             | Use when                               |
+|--------------------|--------------|-----------------------|----------------------------------------|
+| `quantize = TRUE`  | \~4× smaller | low values floor to 0 | almost always --- the default          |
+| `quantize = FALSE` | larger       | exact                 | you need precise low-expression values |
+
+### `counts`
+
+Remember the Pseudobulk DE panel that was missing in step 5? It needs
+raw counts, which the default build doesn't store. Add `counts = TRUE`
+and rebuild:
+
+```{r}
+scroll_build(pbmc, "pbmc3k", counts = TRUE, overwrite = TRUE)
+scroll_serve("pbmc3k")   # the Pseudobulk DE panel now appears
+```
+
+This writes an extra, unquantized counts store (so the project roughly
+doubles in size) and flips `has_counts` in the manifest, which is what
+the panel's gate checks. It also needs `edgeR` and `limma` from step 2.
+
+## 8. Subset views
+
+Subsetted cells with their own embeddings and clusters can be added to
+the app.
+
+### Reprocess a slice, then attach it
+
+Subset T cells and give them their own embedding:
+
+```{r}
+library(Seurat)
+
+tcells <- subset(pbmc, subset = seurat_annotations %in%
+                   c("Naive CD4 T", "Memory CD4 T", "CD8 T"))
+
+tcells <- NormalizeData(tcells)      |>
+  FindVariableFeatures()             |>
+  ScaleData()                        |>
+  RunPCA()                           |>
+  RunUMAP(dims = 1:20)               # a fresh UMAP for just these cells
+
+tcells <- FindNeighbors(tcells, dims = 1:20) |> FindClusters(resolution = 0.4)
+tcells$tcell_subcluster <- tcells$seurat_clusters
+```
+
+`scroll_add_subset()` copies the child's reduction and chosen metadata
+onto the parent, matched by cell barcode (cells outside the slice get
+`NA`), and records the view so the build finds it automatically.
+
+```{r}
+# attach the sub-embedding + sub-labels onto the parent, matched by barcode
+pbmc <- scroll_add_subset(pbmc, tcells,
+                          name       = "tcell",
+                          label      = "T cells",
+                          embeddings = c(umap_tcell = "umap"),   # child "umap" -> parent "umap_tcell"
+                          meta       = "tcell_subcluster")
+
+# rebuild — the recorded subset is picked up automatically
+scroll_build(pbmc, "pbmc3k", counts = TRUE, overwrite = TRUE)
+```
+
+The `embeddings` argument is a named vector,
+`new_name = source_reduction`: it takes the reduction called `umap` in
+`tcells` and stores it on the parent as `umap_tcell`. (If you prefer,
+you can skip the helper and pass a `subsets =` list straight to
+`scroll_build()`.)

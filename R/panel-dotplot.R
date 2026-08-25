@@ -1,5 +1,37 @@
 # --- DotPlot panel ------------------------------------------------------------
 
+# A <script> that lets a multi-select selectize accept a pasted, delimited gene
+# list in the SAME box: when text containing a separator is pasted into the
+# control, split it and hand it to Shiny (input `paste_id`) instead of dropping it
+# in as one token. Single tokens paste normally through selectize. Delegated on
+# document (capture) so it survives selectize re-rendering.
+.scroll_paste_handler <- function(select_id, paste_id) {
+  shiny::tags$script(shiny::HTML(sprintf("
+(function(){
+  document.addEventListener('paste', function(e){
+    var sel = document.getElementById('%s'); if(!sel) return;
+    var ctrl = sel.parentNode.querySelector('.selectize-control');
+    if(!ctrl || !ctrl.contains(e.target)) return;
+    var txt = (e.clipboardData || window.clipboardData).getData('text');
+    if(!txt || !/[\\s,;]/.test(txt)) return;   // single token: let selectize handle it
+    e.preventDefault();
+    if(window.Shiny) Shiny.setInputValue('%s', txt, {priority:'event'});
+  }, true);
+})();", select_id, paste_id)))
+}
+
+# Parse a pasted gene list (space/comma/tab/newline separated) and match it to a
+# feature set: exact first, then case-insensitively. Returns the matched features
+# in pasted order (`ok`) plus the unmatched tokens (`missing`).
+.scroll_parse_gene_list <- function(text, feats) {
+  toks <- strsplit(text %||% "", "[[:space:],;]+", perl = TRUE)[[1]]
+  toks <- unique(toks[nzchar(toks)])
+  if (!length(toks)) return(list(ok = character(0), missing = character(0)))
+  lut <- stats::setNames(feats, toupper(feats))
+  matched <- ifelse(toks %in% feats, toks, unname(lut[toupper(toks)]))
+  list(ok = unique(matched[!is.na(matched)]), missing = toks[is.na(matched)])
+}
+
 dotplot_ui <- function(id, data) {
   ns <- NS(id)
   m <- data$manifest
@@ -11,8 +43,9 @@ dotplot_ui <- function(id, data) {
       class = "scroll-controls",
       .scroll_group("Genes",
         selectizeInput(ns("markers"), "Marker genes", choices = NULL, multiple = TRUE,
-                       options = list(placeholder = "Add genes...", maxOptions = 50,
-                                      plugins = list("remove_button")))),
+                       options = list(placeholder = "Add genes, or paste a list...",
+                                      maxOptions = 50, plugins = list("remove_button"))),
+        .scroll_paste_handler(ns("markers"), ns("marker_paste"))),
       .scroll_group("Grouping",
         selectInput(ns("group"), "Group by", stats::setNames(cats, cats), selected = cats[[1]]),
         if (length(assays) > 1)
@@ -26,7 +59,7 @@ dotplot_ui <- function(id, data) {
                     c("Off" = "off", "Rows" = "rows", "Columns" = "columns", "Both" = "both")),
         .scroll_aspect_input(ns))
     ),
-    .scroll_plot_area(ns, "520px")
+    .scroll_plot_area(ns, "520px", csv = TRUE)
   )
 }
 
@@ -44,6 +77,19 @@ dotplot_server <- function(id, data, cells_r = reactive(data$cells),
       updateSelectizeInput(session, "markers", choices = feats, server = TRUE,
                            selected = intersect(cur, feats))
     })
+    # a delimited list pasted into the marker box (see .scroll_paste_handler) is
+    # parsed and added to the current selection, in pasted order. Unknown symbols
+    # are matched case-insensitively, then reported.
+    observeEvent(input$marker_paste, {
+      feats <- .scroll_features_of(m, assay())
+      parsed <- .scroll_parse_gene_list(input$marker_paste, feats)
+      req(length(parsed$ok) > 0 || length(parsed$missing) > 0)
+      sel <- unique(c(isolate(input$markers), parsed$ok))
+      updateSelectizeInput(session, "markers", choices = feats, server = TRUE, selected = sel)
+      if (length(parsed$missing))
+        showNotification(paste("Not in this assay:", paste(parsed$missing, collapse = ", ")),
+                         type = "warning", duration = 6)
+    })
     # DATA reactive: query + aggregation + hclust. `scale` and `cluster` change
     # the aggregation/clustering, so they are DATA inputs (not cosmetic); palette
     # and dot size are cosmetic. No rasterization (dots = features x groups).
@@ -59,13 +105,14 @@ dotplot_server <- function(id, data, cells_r = reactive(data$cells),
     })
     cosmetic_r <- .scroll_cosmetic(reactive(
       list(theme = theme_r(), palette = input$palette, dot_size = input$dotrange, aspect = input$aspect)))
-    plot_r <- reactive({
+    plot_r <- .scroll_lazy_plot(input, function() {
       d <- data_r()
       view_dotplot(d$cells, list(group_by = d$group_by, features = d$features),
                    NULL, cosmetic_r(), assembly = d$assembly)
     })
     output$plot <- renderPlot(plot_r())
-    .scroll_plot_downloads(output, plot_r, id)
+    csv_r <- reactive(.scroll_dotplot_source(data_r()$assembly))
+    .scroll_plot_downloads(output, plot_r, id, csv_r = csv_r)
   })
 }
 

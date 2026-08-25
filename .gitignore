@@ -6,6 +6,9 @@
 .DS_Store
 data/
 demo/
+pbmc3k/
+.claude/
+CLAUDE.md
 examples/*/project*/
 examples/**/*.rds
 inst/doc
@@ -18,3 +21,6 @@ docs/
 
 # Local dev/scratch scripts (dataset-specific; not part of the package)
 dev/
+
+# Internal usage guide — lab reference, not part of the package
+USAGE.md

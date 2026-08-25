@@ -79,10 +79,95 @@ projects with no rebuild** (they read columns already baked into the store):
   by coordinate **overlap** (substring match remains the fallback for other text); the
   peak list cap is raised and truncation is surfaced in the plot subtitle, not silent.
 
+# scroll 0.2.3
+
+## Fix: Pseudobulk "Aggregate by" / "Replicate" follow the active View
+
+* The Pseudobulk DE panel built its **Aggregate by** and **Replicate** column
+  menus once from the whole-dataset columns, so a subset View's own scoped
+  categorical columns (e.g. a re-clustered subset's resolutions) were missing.
+  Both menus now refresh with the active View — scoped columns appear in their
+  view, global columns stay available everywhere — matching the DE panel.
+
+# scroll 0.2.2
+
+## Fix: DimPlot/FeaturePlot render once per View switch (was up to 4×)
+
+* Switching the app-bar **View** used to redraw DimPlot/FeaturePlot several times:
+  the active cells changed, then the view-driven reduction / colour-by selectors
+  round-tripped through the client and each re-render fired again. The effective
+  reduction and colour column are now deduped `reactiveVal`s resolved server-side
+  (updated at high priority, before the plot renders), so a View switch redraws
+  the panel exactly once. Measured 4 renders → 1 on the demo.
+
+# scroll 0.2.1
+
+## New: lazy on-screen rendering (snappier View/subset switching)
+
+* The built-in plot panels (DimPlot, FeaturePlot, Biaxial, DotPlot, Violin,
+  Proportions) now **recompute only while on screen**. An `IntersectionObserver`
+  reports each panel's visibility to its module, and the panel keeps its last
+  render while off screen, refreshing when scrolled back into view. Switching the
+  app-bar **View** (subset) or cell filter therefore redraws just the panels in
+  view instead of every panel on the page — the on-screen panel updates
+  immediately and the rest catch up as you scroll, rather than the whole page
+  re-rendering serially at once. The build is memoized, so scrolling a panel out
+  of view and back does not rebuild it unless its data or controls actually
+  changed while it was away.
+
+# scroll 0.2.0
+
+Bigger multi-gene panels: the FeaturePlot, DotPlot and Violin panels now take
+many genes at once (grids and co-expression blend), with paste-a-list gene entry.
+
+## New: multi-gene and co-expression blend in the FeaturePlot panel
+
+* The FeaturePlot gene box is now **multi-select**, and the numeric-metadata
+  selector alongside it too. Pick any mix of genes and numeric columns and the
+  panel lays out a **grid of feature plots**, one per feature, each with its own
+  colour scale (as `Seurat::FeaturePlot(features = c(...))` does), up to 12.
+  New exported view core `view_feature_multi()`.
+* A **Blend** toggle reproduces `Seurat::FeaturePlot(blend = TRUE)` for the two
+  selected genes: four views — each gene alone, their co-expression blend, and a
+  2-D colour key — with an adjustable **Blend threshold** and pickers for the two
+  gene colours. The blend colours are a faithful, Seurat-free port of Seurat's
+  `BlendMatrix`/`BlendExpression` (byte-identical colours). New exported view core
+  `view_feature_blend()`. The CSV export includes every plotted gene.
+* Both features use the (Suggested) `patchwork` for their grid layout; without it
+  the panel degrades to a single plot.
+* FeaturePlot's **colour quantile** cutoffs are now taken over the expressing
+  (non-zero) cells. Single-cell expression is zero-inflated, so a quantile of the
+  full vector stayed pinned at 0 until the fraction passed the (often >90%) zero
+  share — the lower cutoff had no visible effect. It now spans the real expression
+  range.
+
+## New: multi-gene Violin, and paste a gene list into DotPlot/Violin
+
+* The Violin gene box is now **multi-select**: pick or paste several genes and the
+  panel draws a grid of violins, one per gene (each with its own expression axis),
+  up to 12. New exported view core `view_violin_multi()`.
+
+* Paste a gene list **straight into the DotPlot or Violin gene box** — separated
+  by spaces, tabs, commas or newlines — and the genes are added to the selection
+  in the pasted order (typing one at a time still works in the same box). Symbols
+  are matched case-insensitively and any that aren't in the assay are reported.
+
 # scroll 0.1.0
 
 First tagged release. `scroll` turns a processed Seurat object into a
 polished, flat-RAM interactive single-cell explorer.
+
+## New: reproducible CSV export for the built-in plot panels
+
+* Every built-in plot panel (DimPlot, FeaturePlot, Biaxial, Violin, DotPlot,
+  Proportions) now offers a **CSV** download beside its PNG/PDF buttons, containing
+  the minimal source data behind the figure. For the per-cell panels the CSV leads
+  with the **cell barcode** plus the plotted columns (embedding coords + colour-by /
+  expression / group), so an exported point maps back to a tracked cell; the two
+  aggregated panels export their group×feature (DotPlot: `avg_expr`, `pct_expressing`)
+  and group×category (Proportions: `n_cells`, `proportion`) summary. The CSV reuses
+  the exact data the plot draws, so it reproduces the figure. Custom panels built with
+  `.scroll_plot_area(csv = TRUE)` + `.scroll_plot_downloads(csv_r = )` get the same.
 
 ## New: `scroll_preview_panel()` — fast custom-panel dev loop
 
