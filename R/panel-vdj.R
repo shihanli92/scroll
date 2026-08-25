@@ -93,6 +93,45 @@
   .scroll_discrete_colors(levels, pal)
 }
 
+# Expansion composition colours: the five ORDERED clone-size categories, a few
+# sequential palettes suited to an ordered scale, plus Manual. Kept separate from the
+# group colour control (distinct input ids "epalette"/"ecol_*") so both can live in the
+# clone_overview panel without colliding; ordered, so it can't reuse the qualitative,
+# alphabetically-sorted group colour machinery.
+.SCROLL_EXPANSION_LEVELS <- c("Single", "Small", "Medium", "Large", "Hyperexpanded")
+.scroll_expansion_palettes <- function() list(
+  "YlOrRd"  = c("#FFFFB2", "#FECC5C", "#FD8D3C", "#F03B20", "#BD0026"),
+  "Blues"   = c("#EFF3FF", "#BDD7E7", "#6BAED6", "#3182BD", "#08519C"),
+  "Reds"    = c("#FEE5D9", "#FCAE91", "#FB6A4A", "#DE2D26", "#A50F15"),
+  "Greens"  = c("#EDF8E9", "#BAE4B3", "#74C476", "#31A354", "#006D2C"),
+  "Viridis" = c("#FDE725", "#7AD151", "#22A884", "#2A788E", "#414487"))
+
+.scroll_expansion_colours <- function(input) {
+  lv <- .SCROLL_EXPANSION_LEVELS; pals <- .scroll_expansion_palettes()
+  pal <- input$epalette %||% "YlOrRd"
+  if (identical(pal, "Manual")) {
+    m <- .scroll_manual_colors(input, lv, prefix = "ecol")
+    if (!is.null(m) && all(lv %in% names(m))) return(m)
+    pal <- "YlOrRd"
+  }
+  stats::setNames(pals[[pal]] %||% pals[["YlOrRd"]], lv)
+}
+
+.scroll_expansion_colour_control <- function()
+  scroll_input_custom("epalette", "Colour",
+    ui = function(ns, data)
+      tagList(selectInput(ns("epalette"), "Colour",
+                          c(names(.scroll_expansion_palettes()), "Manual"), selected = "YlOrRd"),
+              uiOutput(ns("epalette_manual"))),
+    bind = function(input, session, data, output) {
+      output$epalette_manual <- renderUI({
+        if (!identical(input$epalette, "Manual")) return(NULL)
+        .scroll_manual_ui(session$ns, .SCROLL_EXPANSION_LEVELS, prefix = "ecol",
+          defaults = stats::setNames(.scroll_expansion_palettes()[["YlOrRd"]],
+                                     .SCROLL_EXPANSION_LEVELS))
+      })
+    })
+
 # ---- the four panels --------------------------------------------------------
 
 # Assembled as built-in panels gated on manifest$vdj (see .scroll_assemble_panels).
@@ -118,7 +157,11 @@
                           control = "view", equals = "Rank-abundance"),
          # palette + manual per-group colour picker (rank-abundance colours by group)
          scroll_show_when(.scroll_vdj_colour_control("group", "group_levels"),
-                          control = "view", equals = "Rank-abundance")),
+                          control = "view", equals = "Rank-abundance"),
+         # ordered palette + manual pickers for the five expansion categories
+         scroll_show_when(.scroll_expansion_colour_control(),
+                          control = "view", equals = "Expansion composition"),
+         scroll_input_slider("aspect", "Aspect ratio", 0.4, 3, 1, 0.1)),
     function(cells, input, data) {
       rc <- .scroll_vdj_read(data, "rep_cells.parquet")
       if (is.null(rc) || !nrow(rc)) stop("No repertoire store; rebuild with vdj =.")
@@ -165,7 +208,8 @@
           ggplot2::geom_bar(position = "fill", colour = "white", linewidth = 0.2) +
           ggplot2::scale_y_continuous(labels = scales::percent,
                                       expand = ggplot2::expansion(mult = c(0, 0))) +
-          ggplot2::scale_fill_brewer(palette = "YlOrRd") +
+          ggplot2::scale_fill_manual(values = .scroll_expansion_colours(input),
+                                     name = "Expansion", drop = FALSE) +
           ggplot2::labs(x = grp, y = "Fraction of clones", fill = "Expansion",
                         title = "Expansion-category composition") +
           .scroll_base_theme()
@@ -189,7 +233,8 @@
              choices = function(input, data) .scroll_vdj_col_levels(input, data, "group")),
            control = "view", equals = "Frequency"),
          scroll_show_when(.scroll_vdj_colour_control("group", "group_levels"),
-                          control = "view", equals = "Frequency")),
+                          control = "view", equals = "Frequency"),
+         scroll_input_slider("aspect", "Aspect ratio", 0.4, 3, 1, 0.1)),
     function(cells, input, data) {
       rc <- .scroll_vdj_read(data, "rep_cells.parquet"); seg <- input$segment
       if (is.null(rc) || !seg %in% names(rc)) stop("Segment '", seg, "' not baked.")
@@ -245,7 +290,8 @@
            choices = function(data) .scroll_vdj_split_cols(data)),
          scroll_input_levels("group_levels", "Groups", none = TRUE, watch = "colorby",
            choices = function(input, data) .scroll_vdj_col_levels(input, data, "colorby")),
-         .scroll_vdj_colour_control("colorby", "group_levels")),
+         .scroll_vdj_colour_control("colorby", "group_levels"),
+         scroll_input_slider("aspect", "Aspect ratio", 0.4, 3, 1, 0.1)),
     function(cells, input, data) {
       rc <- .scroll_vdj_read(data, "rep_cells.parquet")
       lc <- if (identical(input$chain, "Combined")) "cdr3_combined" else paste0("cdr3_", input$chain, "_len")
@@ -307,7 +353,8 @@
              c("shannon", "simpson", "clonality", "gini", "top_clone_prop", "paired_rate")),
            control = "view", equals = "Diversity metric"),
          scroll_show_when(.scroll_vdj_colour_control("by", "group_levels"),
-                          control = "view", equals = "Diversity metric")),
+                          control = "view", equals = "Diversity metric"),
+         scroll_input_slider("aspect", "Aspect ratio", 0.4, 3, 1, 0.1)),
     function(cells, input, data) {
       if (identical(input$view, "Tissue correlation")) {
         tc <- .scroll_vdj_read(data, "tissue_corr.parquet")

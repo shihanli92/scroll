@@ -164,24 +164,27 @@
 # Above this many levels, per-level colour pickers become an unusable wall of
 # widgets (and a DOM blow-up), so fall back to a note pointing at a palette.
 .SCROLL_MANUAL_CAP <- 30L
-.scroll_manual_ui <- function(ns, levels) {
+# `prefix` names the picker inputs (`<prefix>_<i>`); pass a distinct prefix when a
+# panel has more than one manual-colour control (e.g. group vs expansion), so their
+# inputs don't collide. `defaults` optionally seeds the initial swatch colours.
+.scroll_manual_ui <- function(ns, levels, prefix = "col", defaults = NULL) {
   if (length(levels) > .SCROLL_MANUAL_CAP)
     return(tags$p(class = "scroll-desc",
                   sprintf("Manual colours are unavailable for %d-level columns - pick a palette instead.",
                           length(levels))))
-  defaults <- .scroll_discrete_colors(levels, "Tableau 10")
+  defaults <- defaults %||% .scroll_discrete_colors(levels, "Tableau 10")
   # compact circular swatches that wrap into rows (rather than tall full-width
   # inputs), so many levels stay manageable; the level name is a caption + title.
   div(class = "scroll-manual-grid",
     lapply(seq_along(levels), function(i)
       div(class = "scroll-swatch", title = levels[i],
-        colourpicker::colourInput(ns(paste0("col_", i)), label = NULL,
+        colourpicker::colourInput(ns(paste0(prefix, "_", i)), label = NULL,
                                   value = defaults[[levels[i]]],
                                   showColour = "both", closeOnClick = TRUE),
         span(class = "scroll-swatch-label", levels[i]))))
 }
-.scroll_manual_colors <- function(input, levels) {
-  vals <- lapply(seq_along(levels), function(i) input[[paste0("col_", i)]])
+.scroll_manual_colors <- function(input, levels, prefix = "col") {
+  vals <- lapply(seq_along(levels), function(i) input[[paste0(prefix, "_", i)]])
   names(vals) <- levels
   vals <- vals[!vapply(vals, is.null, logical(1))]
   if (length(vals)) unlist(vals) else NULL

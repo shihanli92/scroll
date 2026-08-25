@@ -497,8 +497,15 @@ register_plot_panel <- function(id, plot, controls = list(), label = id, title =
         for (c in req_ctls)
           validate(need(length(input[[c$id]]) > 0, paste0("Select ", c$label, ".")))
         p <- plot(cells_r(), input, data)
-        # apply the global theme controls to bare ggplots (not aplot/patchwork composites)
-        if (inherits(p, "ggplot")) p <- p + .scroll_ggtheme(theme_r())
+        # apply the global theme controls to bare ggplots (not aplot/patchwork composites),
+        # then an optional per-panel aspect ratio (any panel with an `aspect` slider; 1 =
+        # unconstrained). `+` preserves the plot fn's scroll_source attr (used by CSV).
+        if (inherits(p, "ggplot")) {
+          p <- p + .scroll_ggtheme(theme_r())
+          a <- input$aspect
+          if (is.numeric(a) && length(a) == 1 && abs(a - 1) > 1e-6)
+            p <- p + ggplot2::theme(aspect.ratio = a)
+        }
         p
       }
       event <- if (isTRUE(compute)) reactive(input$scroll_compute) else NULL
