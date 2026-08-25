@@ -1,5 +1,11 @@
 # scroll (development version)
 
+## Collapsible control rail
+
+* A toggle in the app bar collapses/expands the entire right-hand control rail (theme +
+  filters), giving the plots full width — useful on narrow screens where the rail would
+  otherwise crowd them out. Pure client-side (no redraw).
+
 ## Global theme controls
 
 * The right control rail gained a comprehensive **Theme** section, organised into

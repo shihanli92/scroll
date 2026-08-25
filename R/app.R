@@ -449,6 +449,12 @@ scroll_reset_panels <- function() {
                 c("All cells" = "", stats::setNames(cats, cats)), width = "150px"),
     selectizeInput(ns("scroll_subset_val"), NULL, choices = NULL, multiple = TRUE,
                    width = "200px", options = list(placeholder = "all")))
+  # toggle to collapse/expand the right control rail (frees plot width on narrow screens)
+  has_ctrl <- !isFALSE(data$config$theme_controls) || length(.scroll_filter_specs(data)) > 0
+  toggle <- if (has_ctrl)
+    tags$button(class = "scroll-ctl-toggle", type = "button",
+                onclick = "scrollToggleControls(this)", title = "Show/hide controls",
+                `aria-label` = "Show or hide the control rail")
   div(
     class = "scroll-appbar",
     div(class = "scroll-brand", brand),
@@ -458,7 +464,8 @@ scroll_reset_panels <- function() {
         .scroll_stat(textOutput(ns("scroll_ncells"), inline = TRUE), "cells"),
         .scroll_stat(format(m$assays[[assay]]$n_features, big.mark = ","), "genes"),
         .scroll_stat(paste(.scroll_assays_of(m), collapse = ", "), "assays"),
-        .scroll_stat(paste(.scroll_reductions(m), collapse = ", "), "reductions"))
+        .scroll_stat(paste(.scroll_reductions(m), collapse = ", "), "reductions")),
+    toggle
   )
 }
 

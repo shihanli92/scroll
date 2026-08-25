@@ -75,6 +75,15 @@ body{background:var(--sc-ground); color:var(--sc-ink);
 .scroll-filters{position:sticky; top:80px; align-self:start; display:flex; flex-direction:column;
   gap:12px; max-height:calc(100vh - 100px); overflow-y:auto; padding-right:2px;}
 .scroll-multi .scroll-filters{top:123px;}
+/* collapse toggle: hide the whole control rail to give the plots full width */
+.scroll-ctl-toggle{flex:none; width:32px; height:32px; padding:0; cursor:pointer; line-height:1;
+  border:1px solid var(--sc-line); background:#fff; color:var(--sc-muted); border-radius:8px;
+  font-size:15px;}
+.scroll-ctl-toggle:hover{color:var(--sc-ink); border-color:var(--sc-accent);}
+.scroll-ctl-toggle::before{content:'\\00BB';}                 /* > : hide the rail */
+.scroll-ctl-toggle.is-collapsed::before{content:'\\00AB';}    /* < : show the rail */
+.scroll-layout.controls-collapsed{grid-template-columns:200px minmax(0,1fr);}
+.scroll-layout.controls-collapsed>.scroll-filters{display:none;}
 /* collapsible <details> sections (Theme / Filters, and Theme's sub-sections) */
 .scroll-ctl-details{border-bottom:1px solid var(--sc-line);}
 .scroll-ctl-details:last-child{border-bottom:none;}
@@ -185,7 +194,8 @@ body{background:var(--sc-ground); color:var(--sc-ink);
 .scroll-dl.btn .fa,.scroll-dl.btn svg{margin-right:5px; opacity:.7;}
 
 @media (max-width:900px){
-  .scroll-layout,.scroll-layout.has-filters{grid-template-columns:1fr; gap:16px;}
+  .scroll-layout,.scroll-layout.has-filters,.scroll-layout.controls-collapsed{
+    grid-template-columns:1fr; gap:16px;}
   .scroll-rail{position:static; flex-direction:row; overflow-x:auto; top:auto;}
   .scroll-rail-foot{display:none;}
   .scroll-stats{display:none;}
@@ -194,6 +204,14 @@ body{background:var(--sc-ground); color:var(--sc-ink);
 "
 
 .scroll_spy_js <- function() "
+window.scrollToggleControls=function(btn){
+  var body=btn.closest('.scroll-appbar').parentElement;
+  var lay=body?body.querySelector('.scroll-layout'):document.querySelector('.scroll-layout');
+  if(!lay) return;
+  var collapsed=lay.classList.toggle('controls-collapsed');
+  btn.classList.toggle('is-collapsed', collapsed);
+  btn.setAttribute('aria-expanded', String(!collapsed));
+};
 (function(){
   function spy(){
     var items=document.querySelectorAll('.scroll-rail-item');
