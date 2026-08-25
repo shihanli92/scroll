@@ -113,6 +113,9 @@
          # restrict to a subset of the Group-by column's levels (empty = all)
          scroll_input_levels("group_levels", "Groups", none = TRUE, watch = "group",
            choices = function(input, data) .scroll_vdj_col_levels(input, data, "group")),
+         # rank-abundance clone-size axis: log10 (default) or raw counts
+         scroll_show_when(scroll_input_choice("yscale", "Y axis", c("Log", "Raw")),
+                          control = "view", equals = "Rank-abundance"),
          # palette + manual per-group colour picker (rank-abundance colours by group)
          scroll_show_when(.scroll_vdj_colour_control("group", "group_levels"),
                           control = "view", equals = "Rank-abundance")),
@@ -134,12 +137,15 @@
           dplyr::group_by(.data[[grp]]) |>
           dplyr::mutate(rank = dplyr::row_number()) |> dplyr::ungroup()
         lv <- .scroll_vdj_level_set(input, data, "group", "group_levels")
+        raw <- identical(input$yscale, "Raw")
         p <- ggplot2::ggplot(d, ggplot2::aes(.data$rank, .data$count, colour = .data[[grp]])) +
-          ggplot2::geom_point(size = 0.5) + ggplot2::scale_y_log10() +
+          ggplot2::geom_point(size = 0.5) +
+          (if (raw) ggplot2::scale_y_continuous() else ggplot2::scale_y_log10()) +
           ggplot2::scale_colour_manual(values = .scroll_vdj_colours(input, lv), name = grp) +
           ggplot2::facet_wrap(stats::as.formula(paste0("~`", grp, "`")), scales = "free_x") +
-          ggplot2::labs(x = "Clone rank", y = "Clone size (cells, log10)", colour = grp,
-                        title = "Clone rank-abundance") +
+          ggplot2::labs(x = "Clone rank",
+                        y = if (raw) "Clone size (cells)" else "Clone size (cells, log10)",
+                        colour = grp, title = "Clone rank-abundance") +
           .scroll_base_theme(legend = FALSE)
         attr(p, "scroll_source") <- as.data.frame(d); p
       } else {
@@ -157,7 +163,8 @@
           labels = c("Single", "Small", "Medium", "Large", "Hyperexpanded"))
         p <- ggplot2::ggplot(cl, ggplot2::aes(.data$g, fill = .data$expansion)) +
           ggplot2::geom_bar(position = "fill", colour = "white", linewidth = 0.2) +
-          ggplot2::scale_y_continuous(labels = scales::percent) +
+          ggplot2::scale_y_continuous(labels = scales::percent,
+                                      expand = ggplot2::expansion(mult = c(0, 0))) +
           ggplot2::scale_fill_brewer(palette = "YlOrRd") +
           ggplot2::labs(x = grp, y = "Fraction of clones", fill = "Expansion",
                         title = "Expansion-category composition") +
