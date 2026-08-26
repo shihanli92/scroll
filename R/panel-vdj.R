@@ -590,82 +590,65 @@
     })
 
   diversity <- mk("diversity", "Diversity", "Repertoire diversity",
-    "Shannon / Simpson / clonality / Gini / Gini-Simpson per group, and tissue correlation.",
-    list(scroll_input_choice("view", "View", c("Diversity metric", "Tissue correlation")),
-         # Diversity is recomputed at runtime from the clone table, so it can group by
-         # any baked categorical column (not just the build-time group/cluster) and
-         # count clones under any clone definition.
-         scroll_show_when(
-           scroll_input_choice("clone_col", "Clone ID",
-             choices = function(data) .scroll_vdj_clone_cols(data), widget = "select"),
-           control = "view", equals = "Diversity metric"),
-         scroll_show_when(
-           # "None" (default) reports one overall diversity value for the repertoire.
-           scroll_input_choice("by", "Group by",
-             choices = function(data) c("None" = "", .scroll_vdj_split_cols(data)),
-             widget = "select"),
-           control = "view", equals = "Diversity metric"),
-         scroll_show_when(
-           scroll_input_levels("group_levels", "Groups", none = TRUE, watch = "by",
-             choices = function(input, data) .scroll_vdj_col_levels(input, data, "by")),
-           control = "view", equals = "Diversity metric"),
-         scroll_show_when(
-           scroll_input_choice("metric", "Metric",
-             c("shannon", "simpson", "clonality", "gini", "top_clone_prop", "paired_rate")),
-           control = "view", equals = "Diversity metric"),
-         scroll_show_when(.scroll_vdj_colour_control("by", "group_levels"),
-                          control = "view", equals = "Diversity metric"),
+    "Shannon / Simpson / clonality / Gini per group, for one or more clone or gene features.",
+    list(# Diversity of one or more features: a clone definition (the baked clone_id or an
+         # alternate clonotype) AND/OR a segment gene (TRBV/TRBJ/...). Recomputed at runtime
+         # from the clone table. Several selections -> one facet per feature (own y-scale).
+         scroll_input_choice("features", "Diversity of",
+           choices = function(data) c(.scroll_vdj_clone_cols(data),
+                                      as.character(unlist(data$manifest$vdj$segments))),
+           selected = "clone_id", multiple = TRUE, widget = "select"),
+         # "None" (default) reports one overall value for the whole repertoire.
+         scroll_input_choice("by", "Group by",
+           choices = function(data) c("None" = "", .scroll_vdj_split_cols(data)),
+           widget = "select"),
+         scroll_input_levels("group_levels", "Groups", none = TRUE, watch = "by",
+           choices = function(input, data) .scroll_vdj_col_levels(input, data, "by")),
+         scroll_input_choice("metric", "Metric",
+           c("shannon", "simpson", "clonality", "gini", "top_clone_prop", "paired_rate")),
+         .scroll_vdj_colour_control("by", "group_levels"),
          scroll_input_slider("aspect", "Aspect ratio", 0.4, 3, 1, 0.1)),
     function(cells, input, data) {
-      if (identical(input$view, "Tissue correlation")) {
-        tc <- .scroll_vdj_read(data, "tissue_corr.parquet")
-        if (is.null(tc) || !nrow(tc)) stop("Tissue correlation not available (needs loc_col + broad_col).")
-        lev <- unique(c(tc$g1, tc$g2))
-        tc$g1 <- factor(tc$g1, levels = lev); tc$g2 <- factor(tc$g2, levels = rev(lev))
-        p <- ggplot2::ggplot(tc, ggplot2::aes(.data$g1, .data$g2, fill = .data$cor)) +
-          ggplot2::geom_tile(colour = "white") +
-          ggplot2::geom_text(ggplot2::aes(label = sprintf("%.2f", .data$cor)), size = 3) +
-          ggplot2::scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B",
-                                        midpoint = 0, limits = c(-1, 1)) +
-          ggplot2::labs(x = NULL, y = NULL, fill = "Pearson r", title = "Clone-frequency correlation") +
-          ggplot2::coord_fixed() + .scroll_base_theme(x_angle = 45)
-        attr(p, "scroll_source") <- as.data.frame(tc); return(p)
-      }
       rc <- .scroll_vdj_read(data, "rep_cells.parquet")
       if (is.null(rc) || !nrow(rc)) stop("No repertoire store; rebuild with vdj =.")
       rc <- .scroll_vdj_scope(rc, cells)          # honour the global filter / subset view
-      # group column, or NULL for one overall repertoire value (the "None" default)
+      feats <- input$features; if (!length(feats)) feats <- "clone_id"
+      feats <- feats[feats %in% names(rc)]
+      if (!length(feats)) stop("Pick at least one clone id or gene.")
+      # group column, or NULL for one overall value (the "None" default)
       by_col <- if (!is.null(input$by) && nzchar(input$by) && input$by %in% names(rc)) input$by else NULL
       bcol <- by_col %||% ".grp"
       if (is.null(by_col)) rc$.grp <- "all"
-      cid <- if (!is.null(input$clone_col) && input$clone_col %in% names(rc)) input$clone_col else "clone_id"
       if (!is.null(by_col) && length(input$group_levels))           # optional group filter
         rc <- rc[!is.na(rc[[bcol]]) & as.character(rc[[bcol]]) %in% input$group_levels, , drop = FALSE]
       len_cols <- paste0("cdr3_", unlist(data$manifest$vdj$cdr3_chains), "_len")
       len_cols <- len_cols[len_cols %in% names(rc)]
-      d <- .scroll_vdj_diversity(rc, cid, bcol, len_cols)           # per-level metrics
       metric <- input$metric %||% "shannon"
-      if (is.null(d) || !nrow(d) || !metric %in% names(d))
-        stop("No '", metric, "' for '", by_col %||% "the repertoire", "'.")
+      # per-level diversity for each selected feature (clone or gene column), tagged so the
+      # facets separate them (a clone repertoire and a V-gene set live on different scales).
+      parts <- lapply(feats, function(f) {
+        dd <- .scroll_vdj_diversity(rc, f, bcol, len_cols)
+        if (is.null(dd) || !nrow(dd) || !metric %in% names(dd)) return(NULL)
+        dd$feature <- f; dd
+      })
+      d <- do.call(rbind, Filter(Negate(is.null), parts))
+      if (is.null(d) || !nrow(d)) stop("No '", metric, "' for this selection.")
       if (all(is.na(d[[metric]])))
         stop("'", metric, "' is undefined for this dataset (needs two CDR3 chains).")
-      d$value <- d[[metric]]; d$level <- factor(d$level, levels = d$level[order(d$value)])
-      if (is.null(by_col)) {
-        p <- ggplot2::ggplot(d, ggplot2::aes(.data$level, .data$value)) +
-          ggplot2::geom_col(fill = .scroll_vdj_one_colour(input, data, "by"),
-                            colour = "black", linewidth = 0.3) +
-          ggplot2::scale_y_continuous(expand = .scroll_expand0()) +
-          ggplot2::labs(x = NULL, y = metric, title = paste(metric, "(overall)")) +
-          .scroll_base_theme(legend = FALSE, x_angle = 30)
-      } else {
-        lv <- .scroll_vdj_level_set(input, data, "by", "group_levels")
-        p <- ggplot2::ggplot(d, ggplot2::aes(.data$level, .data$value, fill = .data$level)) +
-          ggplot2::geom_col(colour = "black", linewidth = 0.3) +
-          ggplot2::scale_fill_manual(values = .scroll_vdj_colours(input, lv)) +
-          ggplot2::scale_y_continuous(expand = .scroll_expand0()) +
-          ggplot2::labs(x = by_col, y = metric, title = paste(metric, "by", by_col)) +
-          .scroll_base_theme(legend = FALSE, x_angle = 30)
-      }
+      d$value <- d[[metric]]
+      d$feature <- factor(d$feature, levels = feats)
+      ord <- names(sort(tapply(d$value, d$level, function(v) mean(v, na.rm = TRUE))))
+      d$level <- factor(d$level, levels = ord)                       # levels ordered by value
+      lv <- .scroll_vdj_level_set(input, data, "by", "group_levels")
+      p <- ggplot2::ggplot(d, ggplot2::aes(.data$level, .data$value, fill = .data$level)) +
+        ggplot2::geom_col(colour = "black", linewidth = 0.3) +
+        ggplot2::scale_fill_manual(values = .scroll_vdj_colours(input, lv)) +
+        ggplot2::scale_y_continuous(expand = .scroll_expand0()) +
+        ggplot2::labs(x = by_col, y = metric,
+                      title = paste(metric, if (is.null(by_col)) "(overall)" else paste("by", by_col))) +
+        .scroll_base_theme(legend = FALSE, x_angle = 30)
+      if (length(feats) > 1)                                         # one facet per feature
+        p <- p + ggplot2::facet_wrap(stats::as.formula("~feature"), scales = "free_y")
       attr(p, "scroll_source") <- as.data.frame(d); p
     })
 

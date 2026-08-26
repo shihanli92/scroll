@@ -282,14 +282,30 @@ test_that("clone_overview / diversity / cdr3_length all take a Clone ID column",
     expect_false(is.null(output$csv))
   })
   shiny::testServer(panel("diversity")$server, args = list(data = data), {
-    session$setInputs(view = "Diversity metric", by = "group", metric = "shannon",
-                      clone_col = "clonotype_nt")
+    session$setInputs(by = "group", metric = "shannon", features = "clonotype_nt")
     expect_error(force(output$plot), NA)                 # diversity recomputes under nt clones
   })
   shiny::testServer(panel("cdr3_length")$server, args = list(data = data), {
     session$setInputs(chain = "beta", style = "Density", colorby = "group",
                       clone_col = "clonotype_nt")
     expect_error(force(output$plot), NA)                 # dedup keys off the chosen clone id
+  })
+})
+
+test_that("diversity: multi-select of clone ids + genes facets one panel per feature", {
+  data <- scroll:::.scroll_load(vdj_test_project())
+  on.exit(scroll_disconnect(data$con), add = TRUE)
+  dv <- Filter(function(x) identical(x$id, "diversity"),
+               scroll:::.scroll_assemble_panels(data$manifest))[[1]]
+  shiny::testServer(dv$server, args = list(data = data), {
+    # diversity of a clone definition AND a V gene, grouped by donor
+    session$setInputs(by = "group", metric = "shannon", features = c("clone_id", "TRBV"))
+    src <- attr(plot_r(), "scroll_source")
+    expect_true("feature" %in% names(src))
+    expect_setequal(as.character(unique(src$feature)), c("clone_id", "TRBV"))
+    # single feature -> no facet dimension (one feature)
+    session$setInputs(features = "clone_id")
+    expect_equal(length(unique(attr(plot_r(), "scroll_source")$feature)), 1L)
   })
 })
 
