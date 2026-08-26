@@ -598,6 +598,9 @@
            choices = function(data) c(.scroll_vdj_clone_cols(data),
                                       as.character(unlist(data$manifest$vdj$segments))),
            selected = "clone_id", multiple = TRUE, widget = "select"),
+         # With several features: facet them separately, or Combine into one composite
+         # feature (e.g. TRBV+TRBJ = V-J pairing diversity).
+         scroll_input_choice("combine", "Multiple features", c("Separate", "Combine")),
          # "None" (default) reports one overall value for the whole repertoire.
          scroll_input_choice("by", "Group by",
            choices = function(data) c("None" = "", .scroll_vdj_split_cols(data)),
@@ -624,19 +627,29 @@
       len_cols <- paste0("cdr3_", unlist(data$manifest$vdj$cdr3_chains), "_len")
       len_cols <- len_cols[len_cols %in% names(rc)]
       metric <- input$metric %||% "shannon"
-      # per-level diversity for each selected feature (clone or gene column), tagged so the
-      # facets separate them (a clone repertoire and a V-gene set live on different scales).
-      parts <- lapply(feats, function(f) {
-        dd <- .scroll_vdj_diversity(rc, f, bcol, len_cols)
+      # each "feature" to score: a (column, label) pair. With several features and
+      # Combine, paste them into one composite column (e.g. TRBV+TRBJ = V-J pairing);
+      # otherwise score each separately (faceted). A composite is NA if any part is NA.
+      feat_specs <- if (identical(input$combine, "Combine") && length(feats) > 1) {
+        comps <- lapply(feats, function(f) as.character(rc[[f]]))
+        key <- do.call(paste, c(comps, sep = "+"))
+        key[Reduce(`|`, lapply(comps, is.na))] <- NA
+        rc$.combo <- key
+        list(list(col = ".combo", label = paste(feats, collapse = "+")))
+      } else lapply(feats, function(f) list(col = f, label = f))
+      # per-level diversity for each feature spec, tagged so the facets separate them
+      # (a clone repertoire and a V-gene set live on different scales).
+      parts <- lapply(feat_specs, function(s) {
+        dd <- .scroll_vdj_diversity(rc, s$col, bcol, len_cols)
         if (is.null(dd) || !nrow(dd) || !metric %in% names(dd)) return(NULL)
-        dd$feature <- f; dd
+        dd$feature <- s$label; dd
       })
       d <- do.call(rbind, Filter(Negate(is.null), parts))
       if (is.null(d) || !nrow(d)) stop("No '", metric, "' for this selection.")
       if (all(is.na(d[[metric]])))
         stop("'", metric, "' is undefined for this dataset (needs two CDR3 chains).")
       d$value <- d[[metric]]
-      d$feature <- factor(d$feature, levels = feats)
+      d$feature <- factor(d$feature, levels = vapply(feat_specs, function(s) s$label, character(1)))
       ord <- names(sort(tapply(d$value, d$level, function(v) mean(v, na.rm = TRUE))))
       d$level <- factor(d$level, levels = ord)                       # levels ordered by value
       lv <- .scroll_vdj_level_set(input, data, "by", "group_levels")
@@ -647,7 +660,7 @@
         ggplot2::labs(x = by_col, y = metric,
                       title = paste(metric, if (is.null(by_col)) "(overall)" else paste("by", by_col))) +
         .scroll_base_theme(legend = FALSE, x_angle = 30)
-      if (length(feats) > 1)                                         # one facet per feature
+      if (length(feat_specs) > 1)                                    # one facet per feature
         p <- p + ggplot2::facet_wrap(stats::as.formula("~feature"), scales = "free_y")
       attr(p, "scroll_source") <- as.data.frame(d); p
     })

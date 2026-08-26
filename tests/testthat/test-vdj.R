@@ -306,6 +306,10 @@ test_that("diversity: multi-select of clone ids + genes facets one panel per fea
     # single feature -> no facet dimension (one feature)
     session$setInputs(features = "clone_id")
     expect_equal(length(unique(attr(plot_r(), "scroll_source")$feature)), 1L)
+    # Combine -> the selected features become one composite feature (V-J pairing)
+    session$setInputs(features = c("TRBV", "TRBJ"), combine = "Combine")
+    src <- attr(plot_r(), "scroll_source")
+    expect_equal(unique(as.character(src$feature)), "TRBV+TRBJ")
   })
 })
 
