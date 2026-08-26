@@ -187,6 +187,9 @@ body{background:var(--sc-ground); color:var(--sc-ink);
 .scroll-plot .shiny-plot-output,
 .scroll-plot .shiny-spinner-output-container{width:round(down, 100%, 1px); min-width:0;}
 .scroll-plot-bar{display:flex; justify-content:flex-end; align-items:center; gap:8px; padding:0 2px 8px;}
+/* condensed clone-map table: smaller text + tighter cells, single-line rows */
+table.scroll-clone-dt{font-size:12px;}
+table.scroll-clone-dt td,table.scroll-clone-dt th{padding:3px 8px;}
 /* compact download-scale slider + live value readout, sitting with the downloads */
 .scroll-size-wrap{display:inline-flex; align-items:center; gap:6px;}
 .scroll-size{width:80px; height:16px; accent-color:var(--sc-accent); cursor:pointer;}

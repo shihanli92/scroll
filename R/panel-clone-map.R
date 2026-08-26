@@ -105,7 +105,7 @@ clone_map_server <- function(id, data, cells_r = shiny::reactive(data$cells),
         t <- tbl_r(); validate(need(!is.null(t) && nrow(t), "No clones for this selection."))
         disp <- .scroll_clone_disp_cols(t, segs)
         DT::datatable(t[, disp, drop = FALSE], rownames = FALSE, selection = "multiple",
-                      class = "compact stripe hover",                    # condensed rows
+                      class = "compact stripe hover nowrap scroll-clone-dt",  # condensed rows
                       options = list(pageLength = 10, dom = "tip", scrollX = TRUE,
                         order = list(list(1, "desc")),                   # size desc
                         # truncate the long composite clone id; full id on hover
