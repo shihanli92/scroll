@@ -121,6 +121,19 @@ test_that("VDJ panels re-group by any baked categorical and expose CSV", {
   })
 })
 
+test_that("VDJ value plots have zero lower-end expansion on the continuous axis", {
+  data <- scroll:::.scroll_load(vdj_test_project())
+  on.exit(scroll_disconnect(data$con), add = TRUE)
+  gu <- Filter(function(x) identical(x$id, "gene_usage"),
+               scroll:::.scroll_assemble_panels(data$manifest))[[1]]
+  shiny::testServer(gu$server, args = list(data = data), {
+    session$setInputs(segment = "TRBV", view = "Frequency", group = "")
+    ysc <- plot_r()$scales$get_scales("y")
+    expect_false(is.null(ysc))
+    expect_equal(ysc$expand[1], 0)                          # lower multiplicative expansion = 0
+  })
+})
+
 test_that("ungrouped VDJ series colour follows the palette / Manual colour control", {
   data <- scroll:::.scroll_load(vdj_test_project())
   on.exit(scroll_disconnect(data$con), add = TRUE)

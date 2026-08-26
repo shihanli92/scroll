@@ -83,6 +83,10 @@
 .scroll_vdj_one_colour <- function(input, data, group_id, levels_id = "group_levels")
   unname(.scroll_vdj_colours(input, .scroll_vdj_level_set(input, data, group_id, levels_id)))[1]
 
+# Zero lower-end expansion for continuous (value) position scales, so bars / curves sit
+# flush on the axis; a small upper margin is kept for headroom.
+.scroll_expand0 <- function() ggplot2::expansion(mult = c(0, 0.05))
+
 # A palette + manual-per-group colour control for the VDJ panels, keyed to the active
 # group levels. The Manual pickers are rendered dynamically (needs the builder to pass
 # `output` to the bind), so they track the chosen group column + group filter.
@@ -265,17 +269,19 @@
           dplyr::mutate(rank = dplyr::row_number()) |> dplyr::ungroup()
         raw <- identical(input$yscale, "Raw")
         ylab <- if (raw) "Clone size (cells)" else "Clone size (cells, log10)"
-        yscale <- if (raw) ggplot2::scale_y_continuous() else ggplot2::scale_y_log10()
+        yscale <- if (raw) ggplot2::scale_y_continuous(expand = .scroll_expand0())
+                  else ggplot2::scale_y_log10(expand = .scroll_expand0())
+        xscale <- ggplot2::scale_x_continuous(expand = .scroll_expand0())
         if (is.null(grp)) {
           p <- ggplot2::ggplot(d, ggplot2::aes(.data$rank, .data$count)) +
             ggplot2::geom_point(size = 0.5,
-              colour = .scroll_vdj_one_colour(input, data, "group")) + yscale +
+              colour = .scroll_vdj_one_colour(input, data, "group")) + yscale + xscale +
             ggplot2::labs(x = "Clone rank", y = ylab, title = "Clone rank-abundance") +
             .scroll_base_theme(legend = FALSE)
         } else {
           lv <- .scroll_vdj_level_set(input, data, "group", "group_levels")
           p <- ggplot2::ggplot(d, ggplot2::aes(.data$rank, .data$count, colour = .data[[gcol]])) +
-            ggplot2::geom_point(size = 0.5) + yscale +
+            ggplot2::geom_point(size = 0.5) + yscale + xscale +
             ggplot2::scale_colour_manual(values = .scroll_vdj_colours(input, lv), name = grp) +
             ggplot2::facet_wrap(stats::as.formula(paste0("~`", gcol, "`")), scales = "free_x") +
             ggplot2::labs(x = "Clone rank", y = ylab, colour = grp, title = "Clone rank-abundance") +
@@ -478,6 +484,7 @@
         # ungrouped: a single overall usage barplot (colour from the palette / Manual control)
         p <- ggplot2::ggplot(f, ggplot2::aes(.data$gene, .data$freq)) +
           ggplot2::geom_col(fill = .scroll_vdj_one_colour(input, data, "group")) +
+          ggplot2::scale_y_continuous(expand = .scroll_expand0()) +
           ggplot2::labs(x = seg, y = paste0("Frequency (", unit, ", overall)"),
                         title = paste(seg, "usage")) +
           .scroll_base_theme(legend = FALSE) +
@@ -488,6 +495,7 @@
           ggplot2::geom_line(ggplot2::aes(group = .data$gene), colour = "grey70", linewidth = 0.3) +
           ggplot2::geom_point(ggplot2::aes(fill = .data[[gcol]]), shape = 21, size = 2.5) +
           ggplot2::scale_fill_manual(values = .scroll_vdj_colours(input, lv), name = grp) +
+          ggplot2::scale_y_continuous(expand = .scroll_expand0()) +
           ggplot2::labs(x = seg, y = paste0("Frequency (", unit, ", within group)"), fill = grp,
                         title = paste(seg, "usage")) +
           .scroll_base_theme() +
@@ -533,6 +541,8 @@
           p <- ggplot2::ggplot(d, ggplot2::aes(.data$len)) +
             ggplot2::geom_density(adjust = 2, linewidth = 1,
               colour = .scroll_vdj_one_colour(input, data, "colorby")) +
+            ggplot2::scale_x_continuous(expand = .scroll_expand0()) +
+            ggplot2::scale_y_continuous(expand = .scroll_expand0()) +
             ggplot2::labs(x = "CDR3 length", y = "Density",
                           title = paste(input$chain, "CDR3 length")) +
             .scroll_base_theme(legend = FALSE)
@@ -541,6 +551,8 @@
           p <- ggplot2::ggplot(d, ggplot2::aes(.data$len, colour = .data$col)) +
             ggplot2::geom_density(adjust = 2, linewidth = 1) +
             ggplot2::scale_colour_manual(values = cols, name = col) +
+            ggplot2::scale_x_continuous(expand = .scroll_expand0()) +
+            ggplot2::scale_y_continuous(expand = .scroll_expand0()) +
             ggplot2::labs(x = "CDR3 length", y = "Density", colour = col,
                           title = paste(input$chain, "CDR3 length")) +
             .scroll_base_theme()
@@ -556,6 +568,8 @@
           p <- ggplot2::ggplot(h, ggplot2::aes(.data$len, .data$freq)) +
             ggplot2::geom_col(fill = .scroll_vdj_one_colour(input, data, "colorby"),
                               colour = "black", linewidth = 0.2) +
+            ggplot2::scale_x_continuous(expand = .scroll_expand0()) +
+            ggplot2::scale_y_continuous(expand = .scroll_expand0()) +
             ggplot2::labs(x = "CDR3 length", y = "Frequency (overall)",
                           title = paste(input$chain, "CDR3 length")) +
             .scroll_base_theme(legend = FALSE)
@@ -565,6 +579,8 @@
             ggplot2::geom_col(position = ggplot2::position_dodge2(preserve = "single"),
                               colour = "black", linewidth = 0.2) +
             ggplot2::scale_fill_manual(values = cols, name = col) +
+            ggplot2::scale_x_continuous(expand = .scroll_expand0()) +
+            ggplot2::scale_y_continuous(expand = .scroll_expand0()) +
             ggplot2::labs(x = "CDR3 length", y = "Frequency (within group)", fill = col,
                           title = paste(input$chain, "CDR3 length")) +
             .scroll_base_theme()
@@ -638,6 +654,7 @@
         p <- ggplot2::ggplot(d, ggplot2::aes(.data$level, .data$value)) +
           ggplot2::geom_col(fill = .scroll_vdj_one_colour(input, data, "by"),
                             colour = "black", linewidth = 0.3) +
+          ggplot2::scale_y_continuous(expand = .scroll_expand0()) +
           ggplot2::labs(x = NULL, y = metric, title = paste(metric, "(overall)")) +
           .scroll_base_theme(legend = FALSE, x_angle = 30)
       } else {
@@ -645,6 +662,7 @@
         p <- ggplot2::ggplot(d, ggplot2::aes(.data$level, .data$value, fill = .data$level)) +
           ggplot2::geom_col(colour = "black", linewidth = 0.3) +
           ggplot2::scale_fill_manual(values = .scroll_vdj_colours(input, lv)) +
+          ggplot2::scale_y_continuous(expand = .scroll_expand0()) +
           ggplot2::labs(x = by_col, y = metric, title = paste(metric, "by", by_col)) +
           .scroll_base_theme(legend = FALSE, x_angle = 30)
       }
