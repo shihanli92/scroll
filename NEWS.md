@@ -11,6 +11,13 @@
 * The **Frequency** view can **deduplicate expanded clones** (count clones, not cells) and
   orders genes in **genomic** (natural IMGT) order on the axis, not alphabetically.
 
+## New Clone-map panel
+
+* A new repertoire panel (**Clone map**, gated on `vdj`): an interactive per-clone table
+  (clone id, size, group, V/J genes, CDR3 lengths — searchable/sortable via `DT`) over a
+  greyed embedding. Selecting clones in the table highlights their cells on the UMAP, one
+  colour per clone. Honours the global cell filter / subset view; CSV + image export.
+
 ## Optional group-by across the VDJ panels
 
 * Group-by / Colour-by now defaults to **None**: each VDJ panel (clone overview, gene

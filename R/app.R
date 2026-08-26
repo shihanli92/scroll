@@ -51,7 +51,8 @@
 ),
   # Modality panels: each carries a `when(manifest)` predicate and only surfaces
   # for projects whose manifest has the matching block (see .scroll_assemble_panels).
-  .scroll_vdj_panels(), .scroll_spatial_panels(), .scroll_atac_panels())
+  .scroll_vdj_panels(), .scroll_clone_map_panels(),
+  .scroll_spatial_panels(), .scroll_atac_panels())
 
 # Mutable registry of user-added panels (session-global, like knitr's engines).
 .scroll_registry <- new.env(parent = emptyenv())
