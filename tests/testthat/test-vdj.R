@@ -412,11 +412,11 @@ test_that("diversity recomputes at runtime, matching the baked group-level table
   expect_equal(live$shannon, baked_grp$shannon, tolerance = 1e-8)
   expect_equal(live$n_clones, baked_grp$n_clones)
 
-  # runtime re-grouping by antigen (not a baked level_type) + paired_rate metric
+  # runtime re-grouping by antigen (not a baked level_type)
   dv <- Filter(function(x) identical(x$id, "diversity"),
                scroll:::.scroll_assemble_panels(data$manifest))[[1]]
   shiny::testServer(dv$server, args = list(data = data), {
-    session$setInputs(view = "Diversity metric", by = "antigen", metric = "paired_rate")
+    session$setInputs(by = "antigen", metric = "shannon")
     tryCatch(force(output$plot), error = function(e) NULL)
     expect_false(is.null(output$csv))
   })

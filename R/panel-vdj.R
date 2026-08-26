@@ -608,7 +608,7 @@
          scroll_input_levels("group_levels", "Groups", none = TRUE, watch = "by",
            choices = function(input, data) .scroll_vdj_col_levels(input, data, "by")),
          scroll_input_choice("metric", "Metric",
-           c("shannon", "simpson", "clonality", "gini", "top_clone_prop", "paired_rate")),
+           c("shannon", "simpson", "clonality", "gini", "top_clone_prop")),
          .scroll_vdj_colour_control("by", "group_levels"),
          scroll_input_slider("aspect", "Aspect ratio", 0.4, 3, 1, 0.1)),
     function(cells, input, data) {
