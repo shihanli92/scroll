@@ -269,19 +269,19 @@
           dplyr::mutate(rank = dplyr::row_number()) |> dplyr::ungroup()
         raw <- identical(input$yscale, "Raw")
         ylab <- if (raw) "Clone size (cells)" else "Clone size (cells, log10)"
-        yscale <- if (raw) ggplot2::scale_y_continuous(expand = .scroll_expand0())
-                  else ggplot2::scale_y_log10(expand = .scroll_expand0())
-        xscale <- ggplot2::scale_x_continuous(expand = .scroll_expand0())
+        # keep default axis expansion here: the log-scale rank-abundance scatter needs
+        # the padding (zero expansion crowds points against the axes).
+        yscale <- if (raw) ggplot2::scale_y_continuous() else ggplot2::scale_y_log10()
         if (is.null(grp)) {
           p <- ggplot2::ggplot(d, ggplot2::aes(.data$rank, .data$count)) +
             ggplot2::geom_point(size = 0.5,
-              colour = .scroll_vdj_one_colour(input, data, "group")) + yscale + xscale +
+              colour = .scroll_vdj_one_colour(input, data, "group")) + yscale +
             ggplot2::labs(x = "Clone rank", y = ylab, title = "Clone rank-abundance") +
             .scroll_base_theme(legend = FALSE)
         } else {
           lv <- .scroll_vdj_level_set(input, data, "group", "group_levels")
           p <- ggplot2::ggplot(d, ggplot2::aes(.data$rank, .data$count, colour = .data[[gcol]])) +
-            ggplot2::geom_point(size = 0.5) + yscale + xscale +
+            ggplot2::geom_point(size = 0.5) + yscale +
             ggplot2::scale_colour_manual(values = .scroll_vdj_colours(input, lv), name = grp) +
             ggplot2::facet_wrap(stats::as.formula(paste0("~`", gcol, "`")), scales = "free_x") +
             ggplot2::labs(x = "Clone rank", y = ylab, colour = grp, title = "Clone rank-abundance") +
