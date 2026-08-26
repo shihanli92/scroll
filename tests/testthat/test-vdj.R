@@ -121,6 +121,21 @@ test_that("VDJ panels re-group by any baked categorical and expose CSV", {
   })
 })
 
+test_that("ungrouped VDJ series colour follows the palette / Manual colour control", {
+  data <- scroll:::.scroll_load(vdj_test_project())
+  on.exit(scroll_disconnect(data$con), add = TRUE)
+  # no group -> the level set collapses to one synthetic "all" level
+  expect_equal(scroll:::.scroll_vdj_level_set(list(group = ""), data, "group"), "all")
+  # palette mode: the first colour of the chosen palette
+  expect_match(scroll:::.scroll_vdj_one_colour(list(group = "", palette = "Set2"), data, "group"),
+               "^#")
+  # Manual mode: the single picker (col_1) wins
+  expect_equal(
+    scroll:::.scroll_vdj_one_colour(list(group = "", palette = "Manual", col_1 = "#123456"),
+                                    data, "group"),
+    "#123456")
+})
+
 test_that("clone_overview / cdr3_length / diversity group-by is optional (None default)", {
   data <- scroll:::.scroll_load(vdj_test_project())
   on.exit(scroll_disconnect(data$con), add = TRUE)

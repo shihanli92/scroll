@@ -66,13 +66,22 @@
 
 # The active group levels = the group column's levels narrowed by the group filter
 # (`levels_id`). Shared by the colour control (to render one picker per level) and the
-# plot (to build the colour scale), so the two stay in lock-step.
+# plot (to build the colour scale), so the two stay in lock-step. With no group selected
+# ("None"), the plot is a single pooled series -- return one synthetic "all" level so the
+# same palette / Manual colour control drives that one colour.
 .scroll_vdj_level_set <- function(input, data, group_id = "group", levels_id = "group_levels") {
+  gv <- input[[group_id]]
+  if (is.null(gv) || !nzchar(gv)) return("all")
   lv <- .scroll_vdj_col_levels(input, data, group_id)
   f <- input[[levels_id]]
   if (length(f)) lv <- lv[lv %in% f]
   lv
 }
+
+# A single colour for an ungrouped (pooled) series: the first colour the palette / Manual
+# control resolves for the active level set (which is the synthetic "all" when ungrouped).
+.scroll_vdj_one_colour <- function(input, data, group_id, levels_id = "group_levels")
+  unname(.scroll_vdj_colours(input, .scroll_vdj_level_set(input, data, group_id, levels_id)))[1]
 
 # A palette + manual-per-group colour control for the VDJ panels, keyed to the active
 # group levels. The Manual pickers are rendered dynamically (needs the builder to pass
@@ -259,7 +268,8 @@
         yscale <- if (raw) ggplot2::scale_y_continuous() else ggplot2::scale_y_log10()
         if (is.null(grp)) {
           p <- ggplot2::ggplot(d, ggplot2::aes(.data$rank, .data$count)) +
-            ggplot2::geom_point(size = 0.5, colour = "#4C78A8") + yscale +
+            ggplot2::geom_point(size = 0.5,
+              colour = .scroll_vdj_one_colour(input, data, "group")) + yscale +
             ggplot2::labs(x = "Clone rank", y = ylab, title = "Clone rank-abundance") +
             .scroll_base_theme(legend = FALSE)
         } else {
@@ -465,9 +475,9 @@
       if (!identical(input$gene_order, "Alphabetical"))      # default: genomic (natural)
         f$gene <- factor(f$gene, levels = .scroll_gene_natural_levels(f$gene))
       if (is.null(grp)) {
-        # ungrouped: a single overall usage barplot
+        # ungrouped: a single overall usage barplot (colour from the palette / Manual control)
         p <- ggplot2::ggplot(f, ggplot2::aes(.data$gene, .data$freq)) +
-          ggplot2::geom_col(fill = "#4C78A8") +
+          ggplot2::geom_col(fill = .scroll_vdj_one_colour(input, data, "group")) +
           ggplot2::labs(x = seg, y = paste0("Frequency (", unit, ", overall)"),
                         title = paste(seg, "usage")) +
           .scroll_base_theme(legend = FALSE) +
@@ -521,7 +531,8 @@
       if (identical(input$style, "Density")) {
         if (is.null(col)) {
           p <- ggplot2::ggplot(d, ggplot2::aes(.data$len)) +
-            ggplot2::geom_density(adjust = 2, linewidth = 1, colour = "#4C78A8") +
+            ggplot2::geom_density(adjust = 2, linewidth = 1,
+              colour = .scroll_vdj_one_colour(input, data, "colorby")) +
             ggplot2::labs(x = "CDR3 length", y = "Density",
                           title = paste(input$chain, "CDR3 length")) +
             .scroll_base_theme(legend = FALSE)
@@ -543,7 +554,8 @@
           dplyr::mutate(freq = .data$count / sum(.data$count)) |> dplyr::ungroup()
         if (is.null(col)) {
           p <- ggplot2::ggplot(h, ggplot2::aes(.data$len, .data$freq)) +
-            ggplot2::geom_col(fill = "#4C78A8", colour = "black", linewidth = 0.2) +
+            ggplot2::geom_col(fill = .scroll_vdj_one_colour(input, data, "colorby"),
+                              colour = "black", linewidth = 0.2) +
             ggplot2::labs(x = "CDR3 length", y = "Frequency (overall)",
                           title = paste(input$chain, "CDR3 length")) +
             .scroll_base_theme(legend = FALSE)
@@ -624,7 +636,8 @@
       d$value <- d[[metric]]; d$level <- factor(d$level, levels = d$level[order(d$value)])
       if (is.null(by_col)) {
         p <- ggplot2::ggplot(d, ggplot2::aes(.data$level, .data$value)) +
-          ggplot2::geom_col(fill = "#4C78A8", colour = "black", linewidth = 0.3) +
+          ggplot2::geom_col(fill = .scroll_vdj_one_colour(input, data, "by"),
+                            colour = "black", linewidth = 0.3) +
           ggplot2::labs(x = NULL, y = metric, title = paste(metric, "(overall)")) +
           .scroll_base_theme(legend = FALSE, x_angle = 30)
       } else {
