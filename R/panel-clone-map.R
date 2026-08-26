@@ -104,7 +104,10 @@ clone_map_server <- function(id, data, cells_r = shiny::reactive(data$cells),
       output$table <- DT::renderDataTable({
         t <- tbl_r(); validate(need(!is.null(t) && nrow(t), "No clones for this selection."))
         disp <- .scroll_clone_disp_cols(t, segs)
+        # per-column text filters (keep columns as-is: factor columns break DT's
+        # server-side filtering, so every column gets a plain text search box).
         DT::datatable(t[, disp, drop = FALSE], rownames = FALSE, selection = "multiple",
+                      filter = "top",                       # a search input under each column
                       class = "compact stripe hover nowrap scroll-clone-dt",  # condensed rows
                       options = list(pageLength = 10, dom = "ftip", scrollX = TRUE,
                         order = list(list(1, "desc")),                   # size desc
