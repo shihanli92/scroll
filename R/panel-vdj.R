@@ -155,22 +155,17 @@
       })
     })
 
-# One slider, three knobs: the max-Small / max-Medium / max-Large cut points as QUANTILES
-# of the expanded (size >= 2) clones. Single (size 1) stays a fixed category. Uses a
-# noUiSlider (multi-handle) when shinyWidgets is installed, else three plain sliders.
+# The max-Small / max-Medium / max-Large cut points as QUANTILES of the expanded
+# (size >= 2) clones. Single (size 1) stays a fixed category. Three plain sliders: a
+# multi-handle noUiSlider throws "$x.noUiSlider is not a function" while hidden in a
+# conditionalPanel (this control is gated to the Expansion-composition view), a client
+# error that can flake the whole Shiny session.
 .scroll_expansion_quantile_control <- function()
   scroll_input_custom("exp_q", "Category cut quantiles",
-    ui = function(ns, data) {
-      if (requireNamespace("shinyWidgets", quietly = TRUE))
-        shinyWidgets::noUiSliderInput(ns("exp_q"),
-          "Small / Medium / Large max (quantile of expanded clones)",
-          min = 0, max = 1, value = c(0.5, 0.8, 0.95), step = 0.01,
-          format = shinyWidgets::wNumbFormat(decimals = 2))
-      else tagList(
-        sliderInput(ns("exp_q1"), "Small max (quantile)",  0, 1, 0.5,  step = 0.01),
-        sliderInput(ns("exp_q2"), "Medium max (quantile)", 0, 1, 0.8,  step = 0.01),
-        sliderInput(ns("exp_q3"), "Large max (quantile)",  0, 1, 0.95, step = 0.01))
-    })
+    ui = function(ns, data) tagList(
+      sliderInput(ns("exp_q1"), "Small max (quantile)",  0, 1, 0.5,  step = 0.01),
+      sliderInput(ns("exp_q2"), "Medium max (quantile)", 0, 1, 0.8,  step = 0.01),
+      sliderInput(ns("exp_q3"), "Large max (quantile)",  0, 1, 0.95, step = 0.01)))
 
 # The three cut quantiles from the control (multi-handle slider, or the three-slider
 # fallback), sorted ascending.

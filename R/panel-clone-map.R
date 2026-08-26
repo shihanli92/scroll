@@ -104,17 +104,24 @@ clone_map_server <- function(id, data, cells_r = shiny::reactive(data$cells),
       output$table <- DT::renderDataTable({
         t <- tbl_r(); validate(need(!is.null(t) && nrow(t), "No clones for this selection."))
         disp <- .scroll_clone_disp_cols(t, segs)
-        # per-column text filters (keep columns as-is: factor columns break DT's
-        # server-side filtering, so every column gets a plain text search box).
-        DT::datatable(t[, disp, drop = FALSE], rownames = FALSE, selection = "multiple",
+        dd <- t[, disp, drop = FALSE]
+        # Every column gets a plain TEXT filter: numeric columns are stringified (else DT
+        # renders a noUiSlider range filter that throws "$x.noUiSlider is not a function"
+        # and flakes the session), with type="num" kept so they still sort numerically.
+        # Factor columns are avoided too (they break DT's server-side filtering).
+        num_idx <- unname(which(vapply(dd, is.numeric, logical(1)))) - 1L  # 0-based
+        for (c in names(dd)[num_idx + 1L]) dd[[c]] <- as.character(dd[[c]])
+        DT::datatable(dd, rownames = FALSE, selection = "multiple",
                       filter = "top",                       # a search input under each column
                       class = "compact stripe hover nowrap scroll-clone-dt",  # condensed rows
                       options = list(pageLength = 10, dom = "ftip", scrollX = TRUE,
                         order = list(list(1, "desc")),                   # size desc
-                        # truncate the long composite clone id; full id on hover
-                        columnDefs = list(list(targets = 0, render = DT::JS(
-                          "function(d,t){return t==='display'&&d&&d.length>26 ?",
-                          "'<span title=\"'+d+'\">'+d.substr(0,24)+'\\u2026'+'</span>' : d;}")))))
+                        columnDefs = list(
+                          list(targets = num_idx, type = "num"),         # numeric sort on strings
+                          # truncate the long composite clone id; full id on hover
+                          list(targets = 0, render = DT::JS(
+                            "function(d,t){return t==='display'&&d&&d.length>26 ?",
+                            "'<span title=\"'+d+'\">'+d.substr(0,24)+'\\u2026'+'</span>' : d;}")))))
       }, server = TRUE)
       selected_r <- reactive({
         idx <- input$table_rows_selected; t <- tbl_r()
