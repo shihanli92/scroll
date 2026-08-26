@@ -293,7 +293,10 @@ scroll_input_choice <- function(id, label, choices, selected = NULL, inline = TR
          w  <- if (widget != "auto") widget
                else if (is.function(choices) || isTRUE(multiple) || length(ch) > 8) "select"
                else "radio"
-         sel <- selected %||% (if (length(ch)) ch[[1]] else NULL)
+         # `selected` may be a function(data) so the default can be data-derived
+         # (e.g. the modal value) while `choices` stays in its own order.
+         sel <- (if (is.function(selected)) selected(data) else selected) %||%
+                (if (length(ch)) ch[[1]] else NULL)
          if (identical(w, "radio"))
            radioButtons(ns(id), label, ch, selected = sel, inline = inline)
          else

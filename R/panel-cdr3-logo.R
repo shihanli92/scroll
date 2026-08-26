@@ -2,16 +2,24 @@
 # length) via ggseqlogo. Gated on manifest$vdj + ggseqlogo; needs the CDR3 aa columns
 # (cdr3_<chain>) baked by a current scroll_build (older builds store only lengths).
 
-# CDR3 lengths present across the baked chains, most-common first (so the default is the
-# modal length). Strings, for a choice control.
-.scroll_cdr3_lengths <- function(data) {
+# Table of CDR3 lengths present across the baked chains (named by length).
+.scroll_cdr3_length_counts <- function(data) {
   rc <- .scroll_vdj_read(data, "rep_cells.parquet")
   cols <- paste0("cdr3_", unlist(data$manifest$vdj$cdr3_chains))
   cols <- cols[cols %in% names(rc)]
-  if (is.null(rc) || !length(cols)) return(character())
+  if (is.null(rc) || !length(cols)) return(integer())
   lens <- unlist(lapply(cols, function(c) nchar(rc[[c]][!is.na(rc[[c]]) & nzchar(rc[[c]])])))
-  if (!length(lens)) return(character())
-  as.character(names(sort(table(lens), decreasing = TRUE)))
+  if (!length(lens)) return(integer())
+  table(lens)
+}
+# Lengths in numeric order (menu), and the modal length (the default).
+.scroll_cdr3_lengths <- function(data) {
+  t <- .scroll_cdr3_length_counts(data)
+  if (!length(t)) character() else as.character(sort(as.integer(names(t))))
+}
+.scroll_cdr3_modal <- function(data) {
+  t <- .scroll_cdr3_length_counts(data)
+  if (!length(t)) NULL else names(t)[which.max(t)]
 }
 
 # Assembled as a built-in gated on manifest$vdj (placed after the Clone-map panel).
@@ -25,7 +33,9 @@
       scroll_input_choice("chain", "Chain",
         choices = function(data) unlist(data$manifest$vdj$cdr3_chains)),
       scroll_input_choice("length", "CDR3 length",
-        choices = function(data) .scroll_cdr3_lengths(data), widget = "select"),
+        choices = function(data) .scroll_cdr3_lengths(data),   # numeric order
+        selected = function(data) .scroll_cdr3_modal(data),    # default = modal length
+        widget = "select"),
       # per-group logos; "None" pools all sequences into a single logo
       scroll_input_choice("group", "Group by",
         choices = function(data) c(.scroll_vdj_split_cols(data), "None" = ""), widget = "select"),
