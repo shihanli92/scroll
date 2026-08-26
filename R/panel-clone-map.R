@@ -103,10 +103,15 @@ clone_map_server <- function(id, data, cells_r = shiny::reactive(data$cells),
     if (.scroll_has_dt()) {
       output$table <- DT::renderDataTable({
         t <- tbl_r(); validate(need(!is.null(t) && nrow(t), "No clones for this selection."))
-        DT::datatable(t[, .scroll_clone_disp_cols(t, segs), drop = FALSE],
-                      rownames = FALSE, selection = "multiple",
-                      options = list(pageLength = 8, dom = "tip", scrollX = TRUE,
-                                     order = list(list(1, "desc"))))     # size desc
+        disp <- .scroll_clone_disp_cols(t, segs)
+        DT::datatable(t[, disp, drop = FALSE], rownames = FALSE, selection = "multiple",
+                      class = "compact stripe hover",                    # condensed rows
+                      options = list(pageLength = 10, dom = "tip", scrollX = TRUE,
+                        order = list(list(1, "desc")),                   # size desc
+                        # truncate the long composite clone id; full id on hover
+                        columnDefs = list(list(targets = 0, render = DT::JS(
+                          "function(d,t){return t==='display'&&d&&d.length>26 ?",
+                          "'<span title=\"'+d+'\">'+d.substr(0,24)+'\\u2026'+'</span>' : d;}")))))
       }, server = TRUE)
       selected_r <- reactive({
         idx <- input$table_rows_selected; t <- tbl_r()
