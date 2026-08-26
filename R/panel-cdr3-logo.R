@@ -22,6 +22,40 @@
   if (!length(t)) NULL else names(t)[which.max(t)]
 }
 
+# ggseqlogo's chemistry classes (aa grouping + default colours), for the Manual scheme.
+.SCROLL_CHEM_LETTERS <- c(Acidic = "DE", Basic = "KRH", Hydrophobic = "PAWFLIMV",
+                         Neutral = "NQ", Polar = "GSTYC")
+.SCROLL_CHEM_GROUPS  <- names(.SCROLL_CHEM_LETTERS)
+.SCROLL_CHEM_DEFAULTS <- c(Acidic = "#D62839", Basic = "#255C99", Hydrophobic = "#221E22",
+                          Neutral = "#5E239D", Polar = "#109648")
+
+# Colour control: a ggseqlogo colour scheme, or Manual per-chemistry-class pickers.
+.scroll_logo_colour_control <- function()
+  scroll_input_custom("colscheme", "Colours",
+    ui = function(ns, data)
+      tagList(selectInput(ns("colscheme"), "Colours",
+                c("chemistry", "chemistry2", "hydrophobicity", "clustalx", "taylor", "Manual")),
+              uiOutput(ns("colscheme_manual"))),
+    bind = function(input, session, data, output) {
+      output$colscheme_manual <- renderUI({
+        if (!identical(input$colscheme, "Manual")) return(NULL)
+        .scroll_manual_ui(session$ns, .SCROLL_CHEM_GROUPS, prefix = "chem",
+                          defaults = .SCROLL_CHEM_DEFAULTS)
+      })
+    })
+
+# The ggseqlogo `col_scheme` from the control: a scheme name, or a make_col_scheme built
+# from the Manual per-chemistry-class colours (falling back to the defaults).
+.scroll_logo_col_scheme <- function(input) {
+  cs <- input$colscheme %||% "chemistry"
+  if (!identical(cs, "Manual")) return(cs)
+  gcol <- .scroll_manual_colors(input, .SCROLL_CHEM_GROUPS, prefix = "chem")
+  if (is.null(gcol) || !all(.SCROLL_CHEM_GROUPS %in% names(gcol))) gcol <- .SCROLL_CHEM_DEFAULTS
+  chars  <- unlist(strsplit(unname(.SCROLL_CHEM_LETTERS), ""))
+  groups <- rep(.SCROLL_CHEM_GROUPS, nchar(.SCROLL_CHEM_LETTERS))
+  ggseqlogo::make_col_scheme(chars = chars, groups = groups, cols = unname(gcol[groups]))
+}
+
 # Assembled as a built-in gated on manifest$vdj (placed after the Clone-map panel).
 .scroll_cdr3_logo_panels <- function() {
   gate <- function(m) !is.null(m$vdj) && requireNamespace("ggseqlogo", quietly = TRUE)
@@ -43,6 +77,7 @@
         choices = function(input, data) .scroll_vdj_col_levels(input, data, "group")),
       scroll_input_choice("count", "Count", c("Clones (dedup)", "Cells")),
       scroll_input_choice("units", "Logo units", c("Bits", "Probability")),
+      .scroll_logo_colour_control(),
       scroll_input_slider("aspect", "Aspect ratio", 0.4, 3, 1, 0.1)),
     plot = function(cells, input, data) {
       if (!requireNamespace("ggseqlogo", quietly = TRUE))
@@ -74,12 +109,13 @@
       d <- d[d$len == len, , drop = FALSE]
       if (!nrow(d)) stop("No length-", len, " CDR3s for this selection.")
       method <- if (identical(input$units, "Probability")) "prob" else "bits"
+      cscheme <- .scroll_logo_col_scheme(input)
       # suppressWarnings: ggseqlogo builds its layer with the deprecated aes_string()
       p <- suppressWarnings(
-        if (is.null(grp)) ggseqlogo::ggseqlogo(d$seq, method = method)
+        if (is.null(grp)) ggseqlogo::ggseqlogo(d$seq, method = method, col_scheme = cscheme)
         else {
           gl <- split(d$seq, as.character(d[[gcol]])); gl <- gl[order(names(gl))]
-          ggseqlogo::ggseqlogo(gl, method = method, ncol = min(length(gl), 3L))
+          ggseqlogo::ggseqlogo(gl, method = method, col_scheme = cscheme, ncol = min(length(gl), 3L))
         })
       unit <- if (identical(input$count, "Clones (dedup)")) "clones" else "cells"
       p <- p + ggplot2::labs(title = sprintf("CDR3 %s logo - length %d (%d %s)",

@@ -40,5 +40,22 @@ test_that("cdr3_logo panel builds per-group logos (and a pooled one), honouring 
     # None -> a single pooled logo
     session$setInputs(group = "")
     expect_s3_class(plot_r(), "ggplot")
+    # Manual colour scheme renders
+    session$setInputs(group = "group", colscheme = "Manual",
+                      chem_1 = "#ff0000", chem_2 = "#00ff00", chem_3 = "#000000",
+                      chem_4 = "#0000ff", chem_5 = "#123456")
+    expect_s3_class(plot_r(), "ggplot")
   })
+})
+
+test_that("cdr3_logo colour scheme: named passes through, Manual builds a col scheme", {
+  skip_if_not_installed("ggseqlogo")
+  expect_equal(scroll:::.scroll_logo_col_scheme(list(colscheme = "taylor")), "taylor")
+  cs <- scroll:::.scroll_logo_col_scheme(list(colscheme = "Manual",
+    chem_1 = "#ff0000", chem_2 = "#00ff00", chem_3 = "#000000",
+    chem_4 = "#0000ff", chem_5 = "#123456"))
+  d <- as.data.frame(cs)
+  expect_equal(nrow(d), 20L)                    # all 20 amino acids coloured
+  expect_equal(d$col[d$letter == "D"], "#ff0000")   # Acidic picker
+  expect_equal(d$col[d$letter == "G"], "#123456")   # Polar picker
 })
