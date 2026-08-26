@@ -237,12 +237,15 @@
 # (the server must then wire output$csv, e.g. via .scroll_plot_downloads(csv_r=)).
 # A compact download-scale slider for a plot toolbar: sets the module's `dl_scale`
 # input (1-5), which the PNG/PDF handlers pass to ggsave(scale=) so the *exported*
-# figure is larger/smaller. It does not change the on-screen plot.
+# figure is larger/smaller. It does not change the on-screen plot. A live "Nx" readout
+# (the next sibling) shows the current value.
 .scroll_size_slider <- function(ns)
-  tags$input(type = "range", class = "scroll-size", min = "1", max = "5", step = "0.5",
-             value = "1", title = "Download scale (ggsave scale)",
-             `data-input` = ns("dl_scale"),
-             oninput = "Shiny.setInputValue(this.dataset.input, parseFloat(this.value));")
+  tags$span(class = "scroll-size-wrap", title = "Export (download) scale",
+    tags$input(type = "range", class = "scroll-size", min = "1", max = "5", step = "0.5",
+               value = "1", `data-input` = ns("dl_scale"),
+               oninput = paste0("Shiny.setInputValue(this.dataset.input, parseFloat(this.value));",
+                                "this.nextElementSibling.textContent=this.value+'\u00d7';")),
+    tags$span(class = "scroll-size-val", "1\u00d7"))
 
 .scroll_plot_area <- function(ns, height = "460px", csv = FALSE)
   div(class = "scroll-plot",

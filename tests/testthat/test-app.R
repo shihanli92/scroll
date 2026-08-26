@@ -132,5 +132,6 @@ test_that("plot toolbars carry a download-scale slider wired to the dl_scale inp
   expect_match(html, "scroll-size")                     # the slider is in the toolbar
   expect_match(html, "dl_scale")                        # targets the module's dl_scale input
   expect_match(html, "Shiny.setInputValue")             # writes the value to Shiny
+  expect_match(html, "scroll-size-val")                 # live value readout
   expect_match(scroll:::.scroll_css(), "\\.scroll-size\\{")    # and styled
 })

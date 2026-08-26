@@ -187,9 +187,12 @@ body{background:var(--sc-ground); color:var(--sc-ink);
 .scroll-plot .shiny-plot-output,
 .scroll-plot .shiny-spinner-output-container{width:round(down, 100%, 1px); min-width:0;}
 .scroll-plot-bar{display:flex; justify-content:flex-end; align-items:center; gap:8px; padding:0 2px 8px;}
-/* compact download-scale slider sitting with the download buttons */
+/* compact download-scale slider + live value readout, sitting with the downloads */
+.scroll-size-wrap{display:inline-flex; align-items:center; gap:6px;}
 .scroll-size{width:80px; height:16px; accent-color:var(--sc-accent); cursor:pointer;}
 .scroll-size::-webkit-slider-thumb{cursor:pointer;}
+.scroll-size-val{font-size:12px; font-weight:600; color:var(--sc-muted);
+  font-variant-numeric:tabular-nums; min-width:26px; text-align:right;}
 /* .scroll-plot-hold reserves the plot height so panels keep a stable size; the
    lazy-rendering gate (.scroll_lazy_js + .scroll_lazy_plot) recomputes a panel
    only while it is on screen. */
