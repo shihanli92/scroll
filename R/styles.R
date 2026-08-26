@@ -190,6 +190,11 @@ body{background:var(--sc-ground); color:var(--sc-ink);
 /* condensed clone-map table: smaller text + tighter cells, single-line rows */
 table.scroll-clone-dt{font-size:12px;}
 table.scroll-clone-dt td,table.scroll-clone-dt th{padding:3px 8px;}
+/* smaller per-column + global search inputs */
+#clone_map .dataTables_filter input,
+table.scroll-clone-dt thead input{
+  font-size:11px; padding:1px 6px; height:24px; min-height:0; line-height:1.3;}
+table.scroll-clone-dt thead th{padding-top:2px; padding-bottom:2px;}
 /* compact download-scale slider + live value readout, sitting with the downloads */
 .scroll-size-wrap{display:inline-flex; align-items:center; gap:6px;}
 .scroll-size{width:80px; height:16px; accent-color:var(--sc-accent); cursor:pointer;}
