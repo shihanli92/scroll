@@ -807,6 +807,8 @@ view_violin <- function(cells, params, values = NULL, state = list()) {
                                   show.legend = FALSE)
   p <- p +
     ggplot2::scale_fill_manual(values = cols) +
+    # no lower expansion so the violins sit flush on the axis; small headroom on top
+    ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0, 0.05))) +
     ggplot2::labs(x = group_by, y = params$feature %||% "expression", fill = group_by) +
     .scroll_box_theme(.scroll_opt(params, state, "legend", FALSE))
   .scroll_apply_aspect(p, state$aspect %||% 1, state$theme)

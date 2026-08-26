@@ -44,6 +44,23 @@ test_that("built panel: placeholder, required message, inline error, render, dow
   })
 })
 
+test_that("custom register_plot_panel panels get the export-scale slider by default", {
+  on.exit(scroll_reset_panels()); scroll_reset_panels()
+  register_plot_panel("mine", compute = FALSE,
+    controls = list(scroll_input_column("grp", "Group", "categorical")),
+    plot = function(cells, input, data) ggplot2::ggplot())
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con), add = TRUE)
+  p <- Filter(function(x) identical(x$id, "mine"), scroll:::.scroll_assemble_panels())[[1]]
+  html <- as.character(p$ui("mine", data))
+  expect_match(html, "scroll-size")                    # slider present by default
+  expect_match(html, "dl_scale")                       # wired to the export-scale input
+  shiny::testServer(p$server, args = list(data = data), {
+    session$setInputs(grp = "celltype", dl_scale = 4)
+    expect_equal(scroll:::.scroll_dl_scale(session), 4)   # download reads the scale
+  })
+})
+
 test_that("csv = TRUE wires an output$csv from the plot's attached source; csv = FALSE does not", {
   on.exit(scroll_reset_panels()); scroll_reset_panels()
   src <- data.frame(k = c("a", "b"), v = c(1, 2))
