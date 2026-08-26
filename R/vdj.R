@@ -6,28 +6,77 @@
 # diversity) then auto-appear for any project built with a `vdj` spec. Generalized
 # from the Zareie/Tablo repertoire panels; TCR vs BCR is a `chain_type` parameter.
 
-# Default per-cell column maps by receptor. Users override any of these in vdj_spec().
-.SCROLL_VDJ_DEFAULTS <- list(
-  TCR = list(
-    segments = c(TRBV = "v_gene_TRB", TRBJ = "j_gene_TRB",
-                 TRAV = "v_gene_TRA", TRAJ = "j_gene_TRA"),
-    cdr3     = c(beta = "cdr3_beta", alpha = "cdr3_alpha")),
-  BCR = list(
-    segments = c(IGHV = "v_gene_IGH", IGHJ = "j_gene_IGH",
-                 IGKV = "v_gene_IGK", IGKJ = "j_gene_IGK",
-                 IGLV = "v_gene_IGL", IGLJ = "j_gene_IGL"),
-    cdr3     = c(heavy = "cdr3_heavy", light = "cdr3_light")))
+# Per-cell column maps by upstream source and receptor. The runtime panels read a fixed
+# normalized schema (rep_cells.parquet), so supporting a new package is purely a build-time
+# mapping: `source=` (or auto-detection in .scroll_vdj_resolve_spec) picks one of these and
+# fills any segment/CDR3/clone/count column the user didn't pass. `scroll` is the historical
+# default; `airr` = dandelion per-cell obs (_VDJ/_VJ), `platypus` = VDJ_/VJ_ columns.
+.SCROLL_VDJ_PRESETS <- list(
+  scroll = list(
+    TCR = list(
+      segments = c(TRBV = "v_gene_TRB", TRBJ = "j_gene_TRB",
+                   TRAV = "v_gene_TRA", TRAJ = "j_gene_TRA"),
+      cdr3     = c(beta = "cdr3_beta", alpha = "cdr3_alpha")),
+    BCR = list(
+      segments = c(IGHV = "v_gene_IGH", IGHJ = "j_gene_IGH",
+                   IGKV = "v_gene_IGK", IGKJ = "j_gene_IGK",
+                   IGLV = "v_gene_IGL", IGLJ = "j_gene_IGL"),
+      cdr3     = c(heavy = "cdr3_heavy", light = "cdr3_light"))),
+  # dandelion / AIRR per-cell obs: _VDJ = heavy/beta chain, _VJ = light/alpha chain.
+  airr = list(
+    TCR = list(
+      segments = c(TRBV = "v_call_VDJ", TRBJ = "j_call_VDJ",
+                   TRAV = "v_call_VJ",  TRAJ = "j_call_VJ"),
+      cdr3     = c(beta = "junction_aa_VDJ", alpha = "junction_aa_VJ"),
+      clone_col = "clone_id", count_col = "duplicate_count"),
+    BCR = list(
+      segments = c(IGHV = "v_call_VDJ", IGHJ = "j_call_VDJ",
+                   IGLV = "v_call_VJ",  IGLJ = "j_call_VJ"),
+      cdr3     = c(heavy = "junction_aa_VDJ", light = "junction_aa_VJ"),
+      clone_col = "clone_id", count_col = "duplicate_count")),
+  # Platypus VDJ.GEX per-cell matrix: VDJ_ = heavy/beta chain, VJ_ = light/alpha chain.
+  platypus = list(
+    TCR = list(
+      segments = c(TRBV = "VDJ_vgene", TRBJ = "VDJ_jgene",
+                   TRAV = "VJ_vgene",  TRAJ = "VJ_jgene"),
+      cdr3     = c(beta = "VDJ_cdr3s_aa", alpha = "VJ_cdr3s_aa"),
+      clone_col = "clonotype_id_10x"),
+    BCR = list(
+      segments = c(IGHV = "VDJ_vgene", IGHJ = "VDJ_jgene",
+                   IGLV = "VJ_vgene",  IGLJ = "VJ_jgene"),
+      cdr3     = c(heavy = "VDJ_cdr3s_aa", light = "VJ_cdr3s_aa"),
+      clone_col = "clonotype_id_10x")))
+
+# Back-compat: eager defaulting in vdj_spec() reads the historical `scroll` map.
+.SCROLL_VDJ_DEFAULTS <- .SCROLL_VDJ_PRESETS$scroll
 
 #' Describe a dataset's TCR/BCR (VDJ) metadata for `scroll_build()`
 #'
 #' Maps a Seurat object's per-cell repertoire columns onto the schema scroll's
 #' repertoire panels use. Pass the result as `scroll_build(..., vdj = vdj_spec(...))`
-#' to bake the `repertoire/` store and enable the VDJ panels. Column defaults follow
-#' common 10x naming and differ by `chain_type` (TCR vs BCR); override any that
-#' differ in your object.
+#' to bake the `repertoire/` store and enable the VDJ panels.
+#'
+#' `scroll` reads TCR/BCR data straight from the common upstream tools — set `source`
+#' (or leave it `"auto"` to detect) and the segment/CDR3/clone columns are mapped for
+#' you; override any of them explicitly when your object differs:
+#'   * `"scRepertoire"` — Seurat objects from `combineTCR()`/`combineBCR()` +
+#'     `combineExpression()`; the compound `CTgene`/`CTaa`/`CTstrict` columns are parsed
+#'     into per-segment/per-chain columns.
+#'   * `"airr"` — dandelion / AIRR per-cell obs (`v_call_VDJ`/`v_call_VJ`,
+#'     `junction_aa_VDJ`/`_VJ`, `clone_id`).
+#'   * `"platypus"` — Platypus VDJ.GEX per-cell columns (`VDJ_vgene`/`VJ_vgene`,
+#'     `VDJ_cdr3s_aa`/`VJ_cdr3s_aa`).
+#'   * `"scroll"` — scroll's own `v_gene_TRB`/`cdr3_beta`… convention (the historical
+#'     default).
+#' Long, one-row-per-contig tables (raw 10x `filtered_contig_annotations.csv` / long
+#' AIRR `.tsv`) must be collapsed to per-cell columns upstream (e.g. with scRepertoire
+#' or dandelion) before building.
 #'
 #' @param chain_type `"TCR"` or `"BCR"` — sets default segment/CDR3 column names and
 #'   panel labels (TRBV/TRAV… vs IGHV/IGKV…).
+#' @param source Upstream convention to read: `"auto"` (default; detect from the
+#'   metadata columns), `"scroll"`, `"scRepertoire"`, `"airr"`, or `"platypus"`. Any
+#'   column you pass explicitly (`segments`, `cdr3`, `clone_col`, …) overrides the preset.
 #' @param group_col A categorical per-cell column to group repertoire summaries by
 #'   (e.g. cell type / cluster). Required.
 #' @param clone_col Per-cell clonotype id. `NULL` (default) derives a clonotype from
@@ -49,18 +98,23 @@
 #' @export
 vdj_spec <- function(chain_type = c("TCR", "BCR"), group_col, clone_col = NULL,
                      count_col = NULL, segments = NULL, cdr3 = NULL,
+                     source = c("auto", "scroll", "scRepertoire", "airr", "platypus"),
                      antigen_col = NULL, tissue_col = NULL, cluster_col = NULL,
                      loc_col = NULL, broad_col = NULL, carry = character(),
                      exclude = NULL) {
   chain_type <- match.arg(chain_type)
+  source <- match.arg(source)
   if (missing(group_col) || is.null(group_col))
     stop("vdj_spec(): `group_col` is required.", call. = FALSE)
   d <- .SCROLL_VDJ_DEFAULTS[[chain_type]]
   structure(list(
-    chain_type = chain_type, group_col = group_col, clone_col = clone_col,
-    count_col = count_col,
+    chain_type = chain_type, source = source,
+    group_col = group_col, clone_col = clone_col, count_col = count_col,
+    # eager scroll defaults preserve back-compat; the resolver only augments/replaces
+    # them when they don't match the object (see .scroll_vdj_resolve_spec).
     segments = if (is.null(segments)) d$segments else segments,
     cdr3 = if (is.null(cdr3)) d$cdr3 else cdr3,
+    segments_explicit = !is.null(segments), cdr3_explicit = !is.null(cdr3),
     antigen_col = antigen_col, tissue_col = tissue_col, cluster_col = cluster_col,
     loc_col = loc_col, broad_col = broad_col, carry = carry, exclude = exclude
   ), class = "scroll_vdj_spec")
@@ -122,16 +176,130 @@ vdj_spec <- function(chain_type = c("TCR", "BCR"), group_col, clone_col = NULL,
              cor = as.numeric(m), stringsAsFactors = FALSE)
 }
 
+# ---- source resolution (read scRepertoire / AIRR / Platypus / scroll) -------
+
+# Tokens that mean "no value" in a clone id or a "|"-pasted clonotype field.
+.SCROLL_VDJ_NA_TOKENS <- c("", "na", "none", "nan", ".", "unassigned")
+
+# TRUE where a (possibly "|"-pasted) clone id is entirely missing — every field is an
+# NA token. Broader than the old fixed c("", "NA", "NA|NA") so 3-field pastes and other
+# conventions ("None", "NA_NA"-style) are caught.
+.scroll_vdj_blank_clone <- function(clone) {
+  parts <- strsplit(as.character(clone), "|", fixed = TRUE)
+  vapply(parts, function(p) all(tolower(trimws(p)) %in% .SCROLL_VDJ_NA_TOKENS), logical(1))
+}
+
+# Expand scRepertoire's compound CT* columns into per-cell columns matching scroll's
+# `scroll` map (v_gene_TRB / cdr3_beta …). scRepertoire stores, per cell, CTgene / CTaa
+# with chains separated by "_" and segments within a chain by ".". Chain order is
+# receptor-specific: TCR = alpha(TRA: V.J.C) _ beta(TRB: V.D.J.C); BCR = heavy(IGH) _ light.
+.scroll_vdj_parse_screpertoire <- function(md, chain_type) {
+  field <- function(col, chain_ix, seg_ix) {
+    v <- as.character(md[[col]]); v[is.na(v)] <- ""
+    vapply(strsplit(v, "_", fixed = TRUE), function(parts) {
+      if (length(parts) < chain_ix) return(NA_character_)
+      seg <- strsplit(parts[[chain_ix]], ".", fixed = TRUE)[[1]]
+      x <- if (length(seg) >= seg_ix) seg[[seg_ix]] else NA_character_
+      if (is.na(x) || !nzchar(x) || x %in% c("NA", "None")) NA_character_ else x
+    }, character(1))
+  }
+  has <- function(col) col %in% names(md) && any(nzchar(as.character(md[[col]])), na.rm = TRUE)
+  if (identical(chain_type, "BCR")) {
+    if (has("CTgene")) {                                # heavy = chain 1, light = chain 2
+      md$v_gene_IGH <- field("CTgene", 1, 1); md$j_gene_IGH <- field("CTgene", 1, 3)
+      md$v_gene_IGL <- field("CTgene", 2, 1); md$j_gene_IGL <- field("CTgene", 2, 2)
+    }
+    if (has("CTaa")) { md$cdr3_heavy <- field("CTaa", 1, 1); md$cdr3_light <- field("CTaa", 2, 1) }
+  } else {
+    if (has("CTgene")) {                                # alpha = chain 1, beta = chain 2
+      md$v_gene_TRA <- field("CTgene", 1, 1); md$j_gene_TRA <- field("CTgene", 1, 2)
+      md$v_gene_TRB <- field("CTgene", 2, 1); md$j_gene_TRB <- field("CTgene", 2, 3)
+    }
+    if (has("CTaa")) { md$cdr3_alpha <- field("CTaa", 1, 1); md$cdr3_beta <- field("CTaa", 2, 1) }
+  }
+  clone_src <- Find(function(c) c %in% names(md), c("CTstrict", "CTaa", "CTnt"))
+  md$.scroll_ct_clone <- if (!is.null(clone_src)) as.character(md[[clone_src]]) else NA_character_
+  freq_src <- Find(function(c) c %in% names(md) && is.numeric(md[[c]]),
+                   c("clonalFrequency", "Frequency", "clonalProportion"))
+  if (!is.null(freq_src)) md$.scroll_ct_count <- as.numeric(md[[freq_src]])
+  md
+}
+
+# Resolve a vdj_spec's column maps against the actual metadata `md` before baking.
+# Explicit user maps always win; otherwise scRepertoire compounds are parsed and, for
+# `source="auto"`, the preset whose columns are most present is chosen. Returns the
+# (possibly augmented) `md` and the filled `spec`.
+.scroll_vdj_resolve_spec <- function(spec, md) {
+  ct <- spec$chain_type
+  hits <- function(map) if (length(map)) sum(map %in% names(md)) else 0L
+
+  # 1. scRepertoire: explicit, or auto-detected compound columns the current map misses
+  if (identical(spec$source, "scRepertoire") ||
+      (identical(spec$source, "auto") && "CTgene" %in% names(md) &&
+       !spec$segments_explicit && hits(spec$segments) == 0)) {
+    md <- .scroll_vdj_parse_screpertoire(md, ct)
+    if (identical(ct, "BCR")) {
+      seg <- c(IGHV = "v_gene_IGH", IGHJ = "j_gene_IGH", IGLV = "v_gene_IGL", IGLJ = "j_gene_IGL")
+      cd  <- c(heavy = "cdr3_heavy", light = "cdr3_light")
+    } else {
+      seg <- c(TRBV = "v_gene_TRB", TRBJ = "j_gene_TRB", TRAV = "v_gene_TRA", TRAJ = "j_gene_TRA")
+      cd  <- c(beta = "cdr3_beta", alpha = "cdr3_alpha")
+    }
+    if (!spec$segments_explicit) spec$segments <- seg
+    if (!spec$cdr3_explicit)     spec$cdr3     <- cd
+    if (is.null(spec$clone_col)) spec$clone_col <- ".scroll_ct_clone"
+    if (is.null(spec$count_col) && ".scroll_ct_count" %in% names(md)) spec$count_col <- ".scroll_ct_count"
+    spec$source <- "scRepertoire"
+    return(list(spec = spec, md = md))
+  }
+
+  fill <- function(spec, p) {                            # fill only unset / zero-hit fields
+    if (!spec$segments_explicit && !is.null(p$segments)) spec$segments <- p$segments
+    if (!spec$cdr3_explicit && !is.null(p$cdr3))         spec$cdr3     <- p$cdr3
+    if (is.null(spec$clone_col) && !is.null(p$clone_col)) spec$clone_col <- p$clone_col
+    if (is.null(spec$count_col) && !is.null(p$count_col)) spec$count_col <- p$count_col
+    spec
+  }
+
+  # 2. explicit name-map preset
+  if (spec$source %in% c("scroll", "airr", "platypus"))
+    return(list(spec = fill(spec, .SCROLL_VDJ_PRESETS[[spec$source]][[ct]]), md = md))
+
+  # 3. auto: keep the (explicit or default) map when it matches; else sniff presets
+  if (identical(spec$source, "auto")) {
+    if (spec$segments_explicit || hits(spec$segments) > 0) {
+      if (!spec$segments_explicit) spec$source <- "scroll"   # default map matched
+      return(list(spec = spec, md = md))
+    }
+    scores <- vapply(names(.SCROLL_VDJ_PRESETS), function(nm)
+      hits(.SCROLL_VDJ_PRESETS[[nm]][[ct]]$segments), integer(1))
+    best <- names(scores)[which.max(scores)]
+    if (scores[[best]] > 0) { spec <- fill(spec, .SCROLL_VDJ_PRESETS[[best]][[ct]]); spec$source <- best }
+  }
+  list(spec = spec, md = md)
+}
+
 # ---- bake -------------------------------------------------------------------
 
 # Write the repertoire/ store (clone table + diversity/chisq/tissue_corr) from a
 # per-cell metadata frame + a vdj_spec. Called by scroll_build(). Returns the
 # `vdj` manifest block (or NULL if no clones survive).
 .scroll_bake_vdj <- function(md, outdir, spec) {
+  r <- .scroll_vdj_resolve_spec(spec, md); spec <- r$spec; md <- r$md
   seg <- spec$segments[spec$segments %in% names(md)]
   cd3 <- spec$cdr3[spec$cdr3 %in% names(md)]
   gcol <- spec$group_col
   if (!gcol %in% names(md)) stop("vdj: group_col '", gcol, "' not in metadata.", call. = FALSE)
+  miss <- setdiff(unname(spec$segments), names(md))      # mapped but absent -> warn, don't drop silently
+  if (length(seg) && length(miss))
+    warning("vdj: mapped segment/CDR3 columns not found in metadata: ",
+            paste(miss, collapse = ", "), ". Set source= or pass segments=/cdr3= to fix.",
+            call. = FALSE)
+  if (!length(seg))
+    warning("vdj: no V/J segment columns resolved (source='", spec$source,
+            "'); gene-usage and diversity-by-gene views will be empty. ",
+            "Set source= (\"scRepertoire\"/\"airr\"/\"platypus\") or pass segments=.",
+            call. = FALSE)
 
   # clone id: given, or derived from the pasted CDR3 columns
   clone <- if (!is.null(spec$clone_col) && spec$clone_col %in% names(md))
@@ -139,7 +307,7 @@ vdj_spec <- function(chain_type = c("TCR", "BCR"), group_col, clone_col = NULL,
   else if (length(cd3))
     do.call(paste, c(lapply(cd3, function(c) as.character(md[[c]])), sep = "|"))
   else stop("vdj: no clone_col and no CDR3 columns to derive a clonotype from.", call. = FALSE)
-  clone[clone %in% c("", "NA|NA", "NA")] <- NA
+  clone[.scroll_vdj_blank_clone(clone)] <- NA
 
   keep <- !is.na(clone) & !is.na(md[[gcol]]) & nzchar(as.character(md[[gcol]]))
   if (!is.null(spec$exclude) && !is.null(spec$antigen_col) && spec$antigen_col %in% names(md))
@@ -193,8 +361,8 @@ vdj_spec <- function(chain_type = c("TCR", "BCR"), group_col, clone_col = NULL,
     wp(tcorr, "tissue_corr.parquet")
   }
 
-  list(chain_type = spec$chain_type, segments = as.list(names(seg)),
-       cdr3_chains = as.list(names(cd3)), group_col = gcol,
+  list(chain_type = spec$chain_type, source = spec$source,
+       segments = as.list(names(seg)), cdr3_chains = as.list(names(cd3)), group_col = gcol,
        has_antigen = !is.null(spec$antigen_col) && spec$antigen_col %in% names(md),
        has_tissue  = !is.null(spec$tissue_col)  && spec$tissue_col  %in% names(md),
        has_cluster = !is.null(div) && "cluster" %in% div$level_type,

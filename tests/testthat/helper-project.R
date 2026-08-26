@@ -81,11 +81,11 @@ subset_test_project <- local({
   }
 })
 
-# A synthetic TCR object: the base object plus per-cell repertoire columns
-# (V/J segments, CDR3 aa strings, clone id, antigen/tissue) named per 10x-ish
-# conventions so a minimal vdj_spec() picks most of them up by default.
-make_vdj_object <- function(n = 120, seed = 3) {
-  obj <- make_test_object(n, seed)
+# A single synthetic TCR draw (skewed clone sizes + V/J genes + CDR3 aa + annotations),
+# shared by make_vdj_object() and the alternate-source fixtures so they all express the
+# SAME data in different upstream conventions — the parity tests then assert that
+# auto-detection normalizes each to an identical rep_cells table.
+.vdj_draw <- function(n = 120, seed = 3) {
   set.seed(seed)
   nclone <- 25L
   clone <- sample(seq_len(nclone), n, replace = TRUE,
@@ -97,16 +97,75 @@ make_vdj_object <- function(n = 120, seed = 3) {
   aa <- function(len) vapply(len, function(k)
     paste(sample(strsplit("ACDEFGHIKLMNPQRSTVWY", "")[[1]], k, replace = TRUE), collapse = ""),
     character(1))
-  obj$v_gene_TRB <- vb; obj$j_gene_TRB <- jb
-  obj$v_gene_TRA <- va; obj$j_gene_TRA <- ja
-  obj$cdr3_beta  <- aa(sample(10:18, nclone, replace = TRUE))[clone]
-  obj$cdr3_alpha <- aa(sample(8:15, nclone, replace = TRUE))[clone]
-  obj$clonotype  <- paste0("clone", clone)
+  list(clone = clone, vb = vb, jb = jb, va = va, ja = ja,
+       cdr3b = aa(sample(10:18, nclone, replace = TRUE))[clone],
+       cdr3a = aa(sample(8:15, nclone, replace = TRUE))[clone],
+       clonotype = paste0("clone", clone),
+       clonotype_nt = paste0("nt", clone, "_", sample(1:2, n, replace = TRUE)),
+       antigen = factor(sample(c("gB", "B8R"), n, replace = TRUE)),
+       tissue  = factor(sample(c("skin", "spleen"), n, replace = TRUE)))
+}
+
+# A synthetic TCR object: the base object plus per-cell repertoire columns
+# (V/J segments, CDR3 aa strings, clone id, antigen/tissue) named per scroll's own
+# conventions so a minimal vdj_spec() picks most of them up by default.
+make_vdj_object <- function(n = 120, seed = 3) {
+  obj <- make_test_object(n, seed); d <- .vdj_draw(n, seed)
+  obj$v_gene_TRB <- d$vb; obj$j_gene_TRB <- d$jb
+  obj$v_gene_TRA <- d$va; obj$j_gene_TRA <- d$ja
+  obj$cdr3_beta  <- d$cdr3b; obj$cdr3_alpha <- d$cdr3a
+  obj$clonotype  <- d$clonotype
   # an alternate, finer clonal definition (each clone splits into up to 2) — stands in
   # for a nucleotide-vs-amino-acid clonotype, so the clone-id picker has >1 candidate
-  obj$clonotype_nt <- paste0("nt", clone, "_", sample(1:2, n, replace = TRUE))
-  obj$antigen    <- factor(sample(c("gB", "B8R"), n, replace = TRUE))
-  obj$tissue     <- factor(sample(c("skin", "spleen"), n, replace = TRUE))
+  obj$clonotype_nt <- d$clonotype_nt
+  obj$antigen    <- d$antigen
+  obj$tissue     <- d$tissue
+  obj
+}
+
+# The same TCR draw expressed in scRepertoire's compound-column convention (CTgene/CTaa/
+# CTstrict + a numeric clonalFrequency), Platypus (VDJ_/VJ_ columns), and dandelion/AIRR
+# per-cell obs (_VDJ/_VJ, clone_id). Auto-detection must normalize all three identically.
+make_vdj_screpertoire_object <- function(n = 120, seed = 3) {
+  obj <- make_test_object(n, seed); d <- .vdj_draw(n, seed)
+  obj$CTgene   <- paste0(d$va, ".", d$ja, ".TRAC", "_", d$vb, ".TRBD1.", d$jb, ".TRBC2")
+  obj$CTaa     <- paste0(d$cdr3a, "_", d$cdr3b)
+  obj$CTstrict <- d$clonotype
+  obj$clonalFrequency <- as.numeric(stats::ave(d$clone, d$clone, FUN = length))
+  obj$antigen  <- d$antigen; obj$tissue <- d$tissue
+  obj
+}
+
+make_vdj_platypus_object <- function(n = 120, seed = 3) {
+  obj <- make_test_object(n, seed); d <- .vdj_draw(n, seed)
+  obj$VDJ_vgene <- d$vb; obj$VDJ_jgene <- d$jb
+  obj$VJ_vgene  <- d$va; obj$VJ_jgene  <- d$ja
+  obj$VDJ_cdr3s_aa <- d$cdr3b; obj$VJ_cdr3s_aa <- d$cdr3a
+  obj$clonotype_id_10x <- d$clonotype
+  obj$antigen <- d$antigen; obj$tissue <- d$tissue
+  obj
+}
+
+make_vdj_airr_object <- function(n = 120, seed = 3) {
+  obj <- make_test_object(n, seed); d <- .vdj_draw(n, seed)
+  obj$v_call_VDJ <- d$vb; obj$j_call_VDJ <- d$jb
+  obj$v_call_VJ  <- d$va; obj$j_call_VJ  <- d$ja
+  obj$junction_aa_VDJ <- d$cdr3b; obj$junction_aa_VJ <- d$cdr3a
+  obj$clone_id <- d$clonotype
+  obj$duplicate_count <- as.numeric(stats::ave(d$clone, d$clone, FUN = length))
+  obj$antigen <- d$antigen; obj$tissue <- d$tissue
+  obj
+}
+
+# A synthetic BCR object: the TCR draw relabelled as heavy/light IG segments, in scroll's
+# BCR convention, so the chain_type = "BCR" path (IGHV/IGLV, heavy/light) is exercised.
+make_vdj_bcr_object <- function(n = 120, seed = 3) {
+  obj <- make_test_object(n, seed); d <- .vdj_draw(n, seed)
+  obj$v_gene_IGH <- sub("^TRB", "IGH", d$vb); obj$j_gene_IGH <- sub("^TRB", "IGH", d$jb)
+  obj$v_gene_IGL <- sub("^TRA", "IGL", d$va); obj$j_gene_IGL <- sub("^TRA", "IGL", d$ja)
+  obj$cdr3_heavy <- d$cdr3b; obj$cdr3_light <- d$cdr3a
+  obj$clonotype  <- d$clonotype
+  obj$antigen <- d$antigen; obj$tissue <- d$tissue
   obj
 }
 
@@ -128,6 +187,31 @@ vdj_test_project <- local({
     cached
   }
 })
+
+# Build a VDJ project from an alternate-source object via source-auto detection, cached
+# per source. `spec_args` overrides go to vdj_spec (e.g. chain_type = "BCR").
+.vdj_alt_project <- local({
+  cache <- new.env(parent = emptyenv())
+  function(tag, obj, spec_args = list()) {
+    if (is.null(cache[[tag]])) {
+      dir <- file.path(tempdir(), paste0("scroll-vdj-", tag))
+      spec <- do.call(vdj_spec, c(list(group_col = "celltype",
+        antigen_col = "antigen", tissue_col = "tissue", cluster_col = "celltype"), spec_args))
+      if (!dir.exists(file.path(dir, "repertoire")))
+        suppressWarnings(suppressMessages(scroll_build(
+          obj, dir, assays = "RNA",
+          meta_cols = c("condition", "celltype", "antigen", "tissue"),
+          vdj = spec, overwrite = TRUE)))
+      cache[[tag]] <- dir
+    }
+    cache[[tag]]
+  }
+})
+vdj_screpertoire_test_project <- function() .vdj_alt_project("screp", make_vdj_screpertoire_object())
+vdj_platypus_test_project     <- function() .vdj_alt_project("platypus", make_vdj_platypus_object())
+vdj_airr_test_project         <- function() .vdj_alt_project("airr", make_vdj_airr_object())
+vdj_bcr_test_project <- function()
+  .vdj_alt_project("bcr", make_vdj_bcr_object(), list(chain_type = "BCR", clone_col = "clonotype"))
 
 # A synthetic spatial project. Constructing a real Seurat image class in a test is
 # impractical, so we build a normal project with a `spatial` 2-D reduction, then

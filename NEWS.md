@@ -1,5 +1,21 @@
 # scroll 0.2.5
 
+## Read VDJ from scRepertoire / AIRR / Platypus
+
+* `vdj_spec()` gains a **`source`** argument (default `"auto"`) so the shipped repertoire
+  panels read TCR/BCR data straight from the common upstream tools — no hand-written
+  column map needed. `"auto"` detects the convention from the metadata columns; you can
+  also name it: `"scRepertoire"` (parses the compound `CTgene`/`CTaa`/`CTstrict` columns
+  into per-segment/per-chain columns), `"airr"` (dandelion per-cell obs — `v_call_VDJ`/
+  `v_call_VJ`, `junction_aa_VDJ`/`_VJ`, `clone_id`), `"platypus"` (`VDJ_`/`VJ_` columns),
+  or `"scroll"` (the historical `v_gene_TRB`/`cdr3_beta` default). Any column you pass
+  explicitly still overrides the preset. Long per-contig tables (raw 10x
+  `filtered_contig_annotations.csv` / long AIRR `.tsv`) should be collapsed to per-cell
+  upstream first. The resolved source is recorded in the manifest `vdj` block.
+* Build-time ingestion is more robust: a mapped-but-absent segment/CDR3 column now
+  **warns** (naming it) instead of silently dropping, and the missing-clonotype sentinel
+  recognises more conventions (`NA|NA|NA`, `None`, …), not just `NA`/`NA|NA`.
+
 ## V/J gene usage panel
 
 * New **Pairing** view: a segment × segment co-occurrence heatmap (e.g. TRBV × TRBJ),

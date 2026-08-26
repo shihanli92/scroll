@@ -22,7 +22,8 @@ step.
 > cell-index + zstd, ~5× smaller than v1; lossless with `quantize = FALSE`);
 > **`scroll_build_stream()`** for streaming multi-million-cell builds on a laptop;
 > **`scroll_multi_app()`** for several datasets behind one page; multimodal support
-> (multi-assay, per-cell **VDJ / immune repertoire** via `vdj_spec()`, **spatial**
+> (multi-assay, per-cell **VDJ / immune repertoire** via `vdj_spec()` — reads TCR/BCR
+> from **scRepertoire / AIRR-dandelion / Platypus** out of the box, **spatial**
 > tissue-image maps via `spatial_spec()`, and **scATAC** peaks via `atac_spec()`); **subset
 > views** for reprocessed sub-embeddings; rich declarative controls (data-derived choices,
 > cascading levels, preferred defaults, palette picker); PNG/PDF/CSV export; a

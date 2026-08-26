@@ -11,6 +11,7 @@ vdj_spec(
   count_col = NULL,
   segments = NULL,
   cdr3 = NULL,
+  source = c("auto", "scroll", "scRepertoire", "airr", "platypus"),
   antigen_col = NULL,
   tissue_col = NULL,
   cluster_col = NULL,
@@ -39,6 +40,10 @@ from \code{clone_col} frequency.}
 \item{cdr3}{Named character vector \code{chain = column} of CDR3 amino-acid columns
 (defaults by \code{chain_type}); drives CDR3-length views.}
 
+\item{source}{Upstream convention to read: \code{"auto"} (default; detect from the
+metadata columns), \code{"scroll"}, \code{"scRepertoire"}, \code{"airr"}, or \code{"platypus"}. Any
+column you pass explicitly (\code{segments}, \code{cdr3}, \code{clone_col}, …) overrides the preset.}
+
 \item{antigen_col, tissue_col, cluster_col, loc_col, broad_col}{Optional grouping /
 annotation columns (antigen split, tissue split, per-cluster diversity, and the
 location/broad pair used for the tissue-correlation view).}
@@ -54,9 +59,26 @@ A \code{scroll_vdj_spec} list.
 \description{
 Maps a Seurat object's per-cell repertoire columns onto the schema scroll's
 repertoire panels use. Pass the result as \code{scroll_build(..., vdj = vdj_spec(...))}
-to bake the \verb{repertoire/} store and enable the VDJ panels. Column defaults follow
-common 10x naming and differ by \code{chain_type} (TCR vs BCR); override any that
-differ in your object.
+to bake the \verb{repertoire/} store and enable the VDJ panels.
+}
+\details{
+\code{scroll} reads TCR/BCR data straight from the common upstream tools — set \code{source}
+(or leave it \code{"auto"} to detect) and the segment/CDR3/clone columns are mapped for
+you; override any of them explicitly when your object differs:
+\itemize{
+\item \code{"scRepertoire"} — Seurat objects from \code{combineTCR()}/\code{combineBCR()} +
+\code{combineExpression()}; the compound \code{CTgene}/\code{CTaa}/\code{CTstrict} columns are parsed
+into per-segment/per-chain columns.
+\item \code{"airr"} — dandelion / AIRR per-cell obs (\code{v_call_VDJ}/\code{v_call_VJ},
+\code{junction_aa_VDJ}/\verb{_VJ}, \code{clone_id}).
+\item \code{"platypus"} — Platypus VDJ.GEX per-cell columns (\code{VDJ_vgene}/\code{VJ_vgene},
+\code{VDJ_cdr3s_aa}/\code{VJ_cdr3s_aa}).
+\item \code{"scroll"} — scroll's own \code{v_gene_TRB}/\code{cdr3_beta}… convention (the historical
+default).
+Long, one-row-per-contig tables (raw 10x \code{filtered_contig_annotations.csv} / long
+AIRR \code{.tsv}) must be collapsed to per-cell columns upstream (e.g. with scRepertoire
+or dandelion) before building.
+}
 }
 \seealso{
 \code{\link[=scroll_build]{scroll_build()}}
