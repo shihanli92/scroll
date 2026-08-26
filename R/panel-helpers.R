@@ -235,9 +235,16 @@
 # Standard plot area: a small toolbar (PNG + PDF, and optionally a CSV of the
 # plot's source data) above the plot output. Pass csv = TRUE to add the CSV button
 # (the server must then wire output$csv, e.g. via .scroll_plot_downloads(csv_r=)).
+# A compact plot-size slider for a plot toolbar: scales the sibling plot output's
+# rendered height (client-side, via scrollSizePlot); Shiny re-renders at the new size.
+.scroll_size_slider <- function()
+  tags$input(type = "range", class = "scroll-size", min = "1", max = "3", step = "0.25",
+             value = "1", title = "Plot size", oninput = "scrollSizePlot(this)")
+
 .scroll_plot_area <- function(ns, height = "460px", csv = FALSE)
   div(class = "scroll-plot",
       div(class = "scroll-plot-bar",
+          .scroll_size_slider(),
           .scroll_dl_button(ns("png"), "PNG"),
           .scroll_dl_button(ns("pdf"), "PDF"),
           if (isTRUE(csv)) .scroll_dl_button(ns("csv"), "CSV")),

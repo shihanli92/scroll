@@ -126,3 +126,11 @@ test_that("base CSS suppresses scrollbar-toggle resize loops (both axes)", {
   expect_no_match(css, "body\\{[^}]*overflow-x")
   expect_match(css, "\\.scroll-rail\\{position:sticky")
 })
+
+test_that("plot toolbars carry a plot-size slider wired to the resize handler", {
+  html <- as.character(scroll:::.scroll_plot_area(identity))
+  expect_match(html, "scroll-size")                     # the slider is in the toolbar
+  expect_match(html, "scrollSizePlot")                  # wired to the resize handler
+  expect_match(scroll:::.scroll_lazy_js(), "scrollSizePlot")   # handler is injected
+  expect_match(scroll:::.scroll_css(), "\\.scroll-size\\{")    # and styled
+})

@@ -64,6 +64,7 @@ pseudobulk_de_ui <- function(id, data) {
                              else tableOutput(ns("table"))))),
           bslib::nav_panel("Plot",
             div(class = "scroll-plot-bar",
+                .scroll_size_slider(),
                 .scroll_dl_button(ns("png"), "PNG"), .scroll_dl_button(ns("pdf"), "PDF")),
             .scroll_spin(plotOutput(ns("plot"), height = "520px")))))
   )
