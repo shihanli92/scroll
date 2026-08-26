@@ -40,7 +40,7 @@
 # Greyed embedding with the selected clones' cells drawn on top, one colour per clone.
 # Pure, so it renders identically on screen and on export. `sel` = selected clone ids,
 # `cols` = a named colour vector for them (NULL -> a default palette). `connect` adds a
-# path per clone (cells ordered around the clone centroid, so it outlines the clone).
+# line per clone (geom_line orders each clone's cells by x, tracing its spread).
 .scroll_clone_map_plot <- function(df, emb, sel, cols = NULL, size = 0.8, aspect = 1,
                                    connect = FALSE) {
   df$.x <- df[[paste0(emb, "_1")]]; df$.y <- df[[paste0(emb, "_2")]]
@@ -53,13 +53,10 @@
   if (nrow(hi)) {
     if (is.null(cols)) cols <- .scroll_discrete_colors(sel, "Tableau 10")
     hi$.hl <- factor(hi$.hl, levels = sel)
-    if (isTRUE(connect)) {                              # a path per clone (under the points)
-      pathdf <- do.call(rbind, lapply(split(hi, hi$.hl, drop = TRUE), function(g)
-        g[order(atan2(g$.y - mean(g$.y), g$.x - mean(g$.x))), , drop = FALSE]))
-      p <- p + ggplot2::geom_path(data = pathdf,
+    if (isTRUE(connect))                                # a line per clone (ordered by x)
+      p <- p + ggplot2::geom_line(data = hi,
         ggplot2::aes(group = .data$.hl, colour = .data$.hl),
         linewidth = 0.4, alpha = 0.6, show.legend = FALSE)
-    }
     p <- p + ggplot2::geom_point(data = hi, ggplot2::aes(colour = .data$.hl),
                                  size = size + 0.7) +
       ggplot2::scale_colour_manual(values = cols, name = "Clone",
