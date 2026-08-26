@@ -20,10 +20,10 @@
 .scroll_ndistinct <- function(v) length(unique(v[!is.na(v)]))
 
 # Categorical rep_cells columns that are candidates for grouping or as a clone id
-# (excludes the segment genes, CDR3 lengths, and the clone-size count).
+# (excludes the segment genes, all CDR3 columns (sequences + lengths), and the count).
 .scroll_vdj_cat_cols <- function(rc, segments) {
-  cand <- setdiff(names(rc), c("cell", "clone_id", "clone_count", "cdr3_combined",
-                               grep("_len$", names(rc), value = TRUE), unlist(segments)))
+  cand <- setdiff(names(rc), c("cell", "clone_id", "clone_count",
+                               grep("^cdr3_", names(rc), value = TRUE), unlist(segments)))
   cand[vapply(cand, function(c) is.character(rc[[c]]) && any(!is.na(rc[[c]])), logical(1))]
 }
 

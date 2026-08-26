@@ -11,6 +11,15 @@
 * The **Frequency** view can **deduplicate expanded clones** (count clones, not cells) and
   orders genes in **genomic** (natural IMGT) order on the axis, not alphabetically.
 
+## New CDR3 logo panel
+
+* A new repertoire panel (**CDR3 logo**, gated on `vdj` + the `ggseqlogo` package):
+  amino-acid sequence logos of the CDR3 at a chosen length, one per group (faceted).
+  Controls for chain, CDR3 length (defaults to the modal), group-by, cell vs
+  clone-deduplicated counting, and bits vs probability height. Needs the CDR3 sequences,
+  which `scroll_build()` now bakes into `repertoire/` (`cdr3_<chain>` columns) alongside
+  the lengths.
+
 ## New Clone-map panel
 
 * A new repertoire panel (**Clone map**, gated on `vdj`): an interactive per-clone table

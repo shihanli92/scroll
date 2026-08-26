@@ -156,7 +156,11 @@ vdj_spec <- function(chain_type = c("TCR", "BCR"), group_col, clone_col = NULL,
   rep_cells$clone_count <- if (!is.null(spec$count_col) && spec$count_col %in% names(m))
     as.numeric(m[[spec$count_col]]) else as.numeric(stats::ave(clone, clone, FUN = length))
   for (lab in names(seg)) rep_cells[[lab]] <- as.character(m[[seg[[lab]]]])         # gene per segment
-  for (ch in names(cd3)) rep_cells[[paste0("cdr3_", ch, "_len")]] <- nchar(as.character(m[[cd3[[ch]]]]))
+  for (ch in names(cd3)) {                                       # CDR3 aa sequence + length
+    aa <- as.character(m[[cd3[[ch]]]])
+    rep_cells[[paste0("cdr3_", ch)]] <- aa
+    rep_cells[[paste0("cdr3_", ch, "_len")]] <- nchar(aa)
+  }
   lens <- grep("^cdr3_.*_len$", names(rep_cells), value = TRUE)
   if (length(lens)) rep_cells$cdr3_combined <- rowSums(as.matrix(rep_cells[lens]), na.rm = TRUE)
   for (cc in setdiff(intersect(spec$carry, names(m)), names(rep_cells)))
