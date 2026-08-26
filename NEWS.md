@@ -1,3 +1,35 @@
+# scroll 0.2.5
+
+## V/J gene usage panel
+
+* New **Pairing** view: a segment × segment co-occurrence heatmap (e.g. TRBV × TRBJ),
+  faceted by the group-by, with a continuous colour palette + min/max quantile colour
+  cut-offs. Absent pairings render as 0 (the low colour), not blank tiles.
+* The **Chi-square residuals** view is recomputed at runtime, so it re-groups by any
+  categorical column and honours the global cell filter / subset view (previously locked
+  to the build-time group).
+* The **Frequency** view can **deduplicate expanded clones** (count clones, not cells) and
+  orders genes in **genomic** (natural IMGT) order on the axis, not alphabetically.
+
+## Optional group-by across the VDJ panels
+
+* Group-by / Colour-by now defaults to **None**: each VDJ panel (clone overview, gene
+  usage, CDR3 length, diversity) opens as a single pooled plot until a column is chosen.
+  Chi-square still requires a group. Ungrouped plots honour the palette / Manual **Colour**
+  control (a single pooled colour).
+
+## Plot toolbar
+
+* Every panel's plot toolbar gained an **export-scale slider** (1×–5×, with a live value
+  readout) next to the download buttons. It feeds `ggsave(scale =)`, so a larger value
+  exports a bigger figure without changing the on-screen plot. Custom `register_plot_panel`
+  panels inherit it by default.
+
+## Cosmetics
+
+* Continuous value axes sit **flush on the axis** (zero lower-end expansion) across the VDJ
+  value plots, Violin, and Proportions.
+
 # scroll 0.2.4
 
 ## Collapsible control rail
