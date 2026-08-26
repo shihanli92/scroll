@@ -212,8 +212,10 @@
          # definition carried in the store, e.g. a nucleotide vs amino-acid clonotype)
          scroll_input_choice("clone_col", "Clone ID",
            choices = function(data) .scroll_vdj_clone_cols(data), widget = "select"),
+         # "None" (default) pools all clones into a single ungrouped plot.
          scroll_input_choice("group", "Group by",
-           choices = function(data) .scroll_vdj_split_cols(data), widget = "select"),
+           choices = function(data) c("None" = "", .scroll_vdj_split_cols(data)),
+           widget = "select"),
          # restrict to a subset of the Group-by column's levels (empty = all)
          scroll_input_levels("group_levels", "Groups", none = TRUE, watch = "group",
            choices = function(input, data) .scroll_vdj_col_levels(input, data, "group")),
@@ -235,43 +237,52 @@
       rc <- .scroll_vdj_read(data, "rep_cells.parquet")
       if (is.null(rc) || !nrow(rc)) stop("No repertoire store; rebuild with vdj =.")
       rc <- .scroll_vdj_scope(rc, cells)          # honour the global filter / subset view
-      # Clone id column drives what counts as a clone; Group-by drives the split/facet.
+      # Clone id column drives what counts as a clone; Group-by drives the split/facet,
+      # or NULL for a single ungrouped plot (the "None" default).
       cid <- if (!is.null(input$clone_col) && input$clone_col %in% names(rc)) input$clone_col else "clone_id"
-      grp <- if (!is.null(input$group) && input$group %in% names(rc) &&
-                 any(!is.na(rc[[input$group]]))) input$group else "group"
-      rc <- rc[!is.na(rc[[cid]]) & !is.na(rc[[grp]]), , drop = FALSE]
-      if (length(input$group_levels))                          # optional group filter
-        rc <- rc[as.character(rc[[grp]]) %in% input$group_levels, , drop = FALSE]
+      grp <- if (!is.null(input$group) && nzchar(input$group) && input$group %in% names(rc) &&
+                 any(!is.na(rc[[input$group]]))) input$group else NULL
+      gcol <- grp %||% ".grp"
+      if (is.null(grp)) rc$.grp <- "all"
+      rc <- rc[!is.na(rc[[cid]]) & !is.na(rc[[gcol]]), , drop = FALSE]
+      if (!is.null(grp) && length(input$group_levels))         # optional group filter
+        rc <- rc[as.character(rc[[gcol]]) %in% input$group_levels, , drop = FALSE]
       if (!nrow(rc)) stop("No clones for the selected groups.")
       if (identical(input$view, "Rank-abundance")) {
-        d <- rc |> dplyr::group_by(.data[[cid]], .data[[grp]]) |>
+        d <- rc |> dplyr::group_by(.data[[cid]], .data[[gcol]]) |>
           dplyr::summarise(count = dplyr::n(), .groups = "drop") |>
-          dplyr::arrange(.data[[grp]], dplyr::desc(.data$count)) |>
-          dplyr::group_by(.data[[grp]]) |>
+          dplyr::arrange(.data[[gcol]], dplyr::desc(.data$count)) |>
+          dplyr::group_by(.data[[gcol]]) |>
           dplyr::mutate(rank = dplyr::row_number()) |> dplyr::ungroup()
-        lv <- .scroll_vdj_level_set(input, data, "group", "group_levels")
         raw <- identical(input$yscale, "Raw")
-        p <- ggplot2::ggplot(d, ggplot2::aes(.data$rank, .data$count, colour = .data[[grp]])) +
-          ggplot2::geom_point(size = 0.5) +
-          (if (raw) ggplot2::scale_y_continuous() else ggplot2::scale_y_log10()) +
-          ggplot2::scale_colour_manual(values = .scroll_vdj_colours(input, lv), name = grp) +
-          ggplot2::facet_wrap(stats::as.formula(paste0("~`", grp, "`")), scales = "free_x") +
-          ggplot2::labs(x = "Clone rank",
-                        y = if (raw) "Clone size (cells)" else "Clone size (cells, log10)",
-                        colour = grp, title = "Clone rank-abundance") +
-          .scroll_base_theme(legend = FALSE)
+        ylab <- if (raw) "Clone size (cells)" else "Clone size (cells, log10)"
+        yscale <- if (raw) ggplot2::scale_y_continuous() else ggplot2::scale_y_log10()
+        if (is.null(grp)) {
+          p <- ggplot2::ggplot(d, ggplot2::aes(.data$rank, .data$count)) +
+            ggplot2::geom_point(size = 0.5, colour = "#4C78A8") + yscale +
+            ggplot2::labs(x = "Clone rank", y = ylab, title = "Clone rank-abundance") +
+            .scroll_base_theme(legend = FALSE)
+        } else {
+          lv <- .scroll_vdj_level_set(input, data, "group", "group_levels")
+          p <- ggplot2::ggplot(d, ggplot2::aes(.data$rank, .data$count, colour = .data[[gcol]])) +
+            ggplot2::geom_point(size = 0.5) + yscale +
+            ggplot2::scale_colour_manual(values = .scroll_vdj_colours(input, lv), name = grp) +
+            ggplot2::facet_wrap(stats::as.formula(paste0("~`", gcol, "`")), scales = "free_x") +
+            ggplot2::labs(x = "Clone rank", y = ylab, colour = grp, title = "Clone rank-abundance") +
+            .scroll_base_theme(legend = FALSE)
+        }
         attr(p, "scroll_source") <- as.data.frame(d); p
       } else {
         # Clone size + each clone's dominant group. Vectorized: one grouped (clone x
         # group) count, then take the top-count group per clone via order + de-dup --
         # replaces a table() call per clone, which cost seconds over tens of thousands
         # of clones (52k here). Equivalent result, ~8x faster.
-        cg  <- dplyr::count(rc, .data[[cid]], .data[[grp]], name = "n")
+        cg  <- dplyr::count(rc, .data[[cid]], .data[[gcol]], name = "n")
         cg  <- cg[order(cg[[cid]], -cg$n), , drop = FALSE]
-        dom <- cg[!duplicated(cg[[cid]]), c(cid, grp), drop = FALSE]   # dominant group
+        dom <- cg[!duplicated(cg[[cid]]), c(cid, gcol), drop = FALSE]   # dominant group
         cl  <- dplyr::left_join(dplyr::count(rc, .data[[cid]], name = "count"),
                                 dom, by = cid)
-        names(cl)[names(cl) == grp] <- "g"
+        names(cl)[names(cl) == gcol] <- "g"
         # cut into categories by quantile of clone size (Single = 1 cell is fixed)
         q <- .scroll_expansion_quantiles(input)
         if (!all(is.finite(q)) || !(0 < q[1] && q[1] < q[2] && q[2] < q[3] && q[3] < 1))
@@ -482,8 +493,10 @@
          scroll_input_choice("style", "Style", c("Histogram", "Density")),
          scroll_input_choice("clone_col", "Clone ID",
            choices = function(data) .scroll_vdj_clone_cols(data), widget = "select"),
+         # "None" (default) draws a single distribution over all clones.
          scroll_input_choice("colorby", "Colour by",
-           choices = function(data) .scroll_vdj_split_cols(data)),
+           choices = function(data) c("None" = "", .scroll_vdj_split_cols(data)),
+           widget = "select"),
          scroll_input_levels("group_levels", "Groups", none = TRUE, watch = "colorby",
            choices = function(input, data) .scroll_vdj_col_levels(input, data, "colorby")),
          .scroll_vdj_colour_control("colorby", "group_levels"),
@@ -493,22 +506,34 @@
       lc <- if (identical(input$chain, "Combined")) "cdr3_combined" else paste0("cdr3_", input$chain, "_len")
       if (is.null(rc) || !lc %in% names(rc)) stop("CDR3 length for '", input$chain, "' not baked.")
       rc <- .scroll_vdj_scope(rc, cells)          # honour the global filter / subset view
-      col <- if (!is.null(input$colorby) && input$colorby %in% names(rc)) input$colorby else "group"
+      # colour/split column, or NULL for a single pooled distribution (the "None" default)
+      col <- if (!is.null(input$colorby) && nzchar(input$colorby) && input$colorby %in% names(rc))
+               input$colorby else NULL
+      ccol <- col %||% ".grp"
+      if (is.null(col)) rc$.grp <- "all"
       cid <- if (!is.null(input$clone_col) && input$clone_col %in% names(rc)) input$clone_col else "clone_id"
-      d <- rc[!is.na(rc[[lc]]) & !is.na(rc[[col]]), , drop = FALSE]
-      d$len <- d[[lc]]; d$col <- as.character(d[[col]])
-      if (length(input$group_levels)) d <- d[d$col %in% input$group_levels, , drop = FALSE]
+      d <- rc[!is.na(rc[[lc]]) & !is.na(rc[[ccol]]), , drop = FALSE]
+      d$len <- d[[lc]]; d$col <- as.character(d[[ccol]])
+      if (!is.null(col) && length(input$group_levels))
+        d <- d[d$col %in% input$group_levels, , drop = FALSE]
       d <- d[!duplicated(paste(d[[cid]], d$col)), , drop = FALSE]     # one length per clone
       if (!nrow(d)) stop("No clones with a length for this selection.")
-      lv <- .scroll_vdj_level_set(input, data, "colorby", "group_levels")
-      cols <- .scroll_vdj_colours(input, lv)
       if (identical(input$style, "Density")) {
-        p <- ggplot2::ggplot(d, ggplot2::aes(.data$len, colour = .data$col)) +
-          ggplot2::geom_density(adjust = 2, linewidth = 1) +
-          ggplot2::scale_colour_manual(values = cols, name = col) +
-          ggplot2::labs(x = "CDR3 length", y = "Density", colour = col,
-                        title = paste(input$chain, "CDR3 length")) +
-          .scroll_base_theme()
+        if (is.null(col)) {
+          p <- ggplot2::ggplot(d, ggplot2::aes(.data$len)) +
+            ggplot2::geom_density(adjust = 2, linewidth = 1, colour = "#4C78A8") +
+            ggplot2::labs(x = "CDR3 length", y = "Density",
+                          title = paste(input$chain, "CDR3 length")) +
+            .scroll_base_theme(legend = FALSE)
+        } else {
+          cols <- .scroll_vdj_colours(input, .scroll_vdj_level_set(input, data, "colorby", "group_levels"))
+          p <- ggplot2::ggplot(d, ggplot2::aes(.data$len, colour = .data$col)) +
+            ggplot2::geom_density(adjust = 2, linewidth = 1) +
+            ggplot2::scale_colour_manual(values = cols, name = col) +
+            ggplot2::labs(x = "CDR3 length", y = "Density", colour = col,
+                          title = paste(input$chain, "CDR3 length")) +
+            .scroll_base_theme()
+        }
         attr(p, "scroll_source") <- data.frame(length = d$len, group = d$col,
                                                clone = d[[cid]]); p
       } else {
@@ -516,13 +541,22 @@
           dplyr::summarise(count = dplyr::n(), .groups = "drop") |>
           dplyr::group_by(.data$col) |>
           dplyr::mutate(freq = .data$count / sum(.data$count)) |> dplyr::ungroup()
-        p <- ggplot2::ggplot(h, ggplot2::aes(.data$len, .data$freq, fill = .data$col)) +
-          ggplot2::geom_col(position = ggplot2::position_dodge2(preserve = "single"),
-                            colour = "black", linewidth = 0.2) +
-          ggplot2::scale_fill_manual(values = cols, name = col) +
-          ggplot2::labs(x = "CDR3 length", y = "Frequency (within group)", fill = col,
-                        title = paste(input$chain, "CDR3 length")) +
-          .scroll_base_theme()
+        if (is.null(col)) {
+          p <- ggplot2::ggplot(h, ggplot2::aes(.data$len, .data$freq)) +
+            ggplot2::geom_col(fill = "#4C78A8", colour = "black", linewidth = 0.2) +
+            ggplot2::labs(x = "CDR3 length", y = "Frequency (overall)",
+                          title = paste(input$chain, "CDR3 length")) +
+            .scroll_base_theme(legend = FALSE)
+        } else {
+          cols <- .scroll_vdj_colours(input, .scroll_vdj_level_set(input, data, "colorby", "group_levels"))
+          p <- ggplot2::ggplot(h, ggplot2::aes(.data$len, .data$freq, fill = .data$col)) +
+            ggplot2::geom_col(position = ggplot2::position_dodge2(preserve = "single"),
+                              colour = "black", linewidth = 0.2) +
+            ggplot2::scale_fill_manual(values = cols, name = col) +
+            ggplot2::labs(x = "CDR3 length", y = "Frequency (within group)", fill = col,
+                          title = paste(input$chain, "CDR3 length")) +
+            .scroll_base_theme()
+        }
         attr(p, "scroll_source") <- as.data.frame(h); p
       }
     })
@@ -538,8 +572,10 @@
              choices = function(data) .scroll_vdj_clone_cols(data), widget = "select"),
            control = "view", equals = "Diversity metric"),
          scroll_show_when(
+           # "None" (default) reports one overall diversity value for the repertoire.
            scroll_input_choice("by", "Group by",
-             choices = function(data) .scroll_vdj_split_cols(data), widget = "select"),
+             choices = function(data) c("None" = "", .scroll_vdj_split_cols(data)),
+             widget = "select"),
            control = "view", equals = "Diversity metric"),
          scroll_show_when(
            scroll_input_levels("group_levels", "Groups", none = TRUE, watch = "by",
@@ -570,25 +606,35 @@
       rc <- .scroll_vdj_read(data, "rep_cells.parquet")
       if (is.null(rc) || !nrow(rc)) stop("No repertoire store; rebuild with vdj =.")
       rc <- .scroll_vdj_scope(rc, cells)          # honour the global filter / subset view
-      by_col <- if (!is.null(input$by) && input$by %in% names(rc)) input$by else "group"
+      # group column, or NULL for one overall repertoire value (the "None" default)
+      by_col <- if (!is.null(input$by) && nzchar(input$by) && input$by %in% names(rc)) input$by else NULL
+      bcol <- by_col %||% ".grp"
+      if (is.null(by_col)) rc$.grp <- "all"
       cid <- if (!is.null(input$clone_col) && input$clone_col %in% names(rc)) input$clone_col else "clone_id"
-      if (length(input$group_levels))                               # optional group filter
-        rc <- rc[!is.na(rc[[by_col]]) & as.character(rc[[by_col]]) %in% input$group_levels, , drop = FALSE]
+      if (!is.null(by_col) && length(input$group_levels))           # optional group filter
+        rc <- rc[!is.na(rc[[bcol]]) & as.character(rc[[bcol]]) %in% input$group_levels, , drop = FALSE]
       len_cols <- paste0("cdr3_", unlist(data$manifest$vdj$cdr3_chains), "_len")
       len_cols <- len_cols[len_cols %in% names(rc)]
-      d <- .scroll_vdj_diversity(rc, cid, by_col, len_cols)          # per-level metrics
+      d <- .scroll_vdj_diversity(rc, cid, bcol, len_cols)           # per-level metrics
       metric <- input$metric %||% "shannon"
       if (is.null(d) || !nrow(d) || !metric %in% names(d))
-        stop("No '", metric, "' for '", by_col, "'.")
+        stop("No '", metric, "' for '", by_col %||% "the repertoire", "'.")
       if (all(is.na(d[[metric]])))
         stop("'", metric, "' is undefined for this dataset (needs two CDR3 chains).")
       d$value <- d[[metric]]; d$level <- factor(d$level, levels = d$level[order(d$value)])
-      lv <- .scroll_vdj_level_set(input, data, "by", "group_levels")
-      p <- ggplot2::ggplot(d, ggplot2::aes(.data$level, .data$value, fill = .data$level)) +
-        ggplot2::geom_col(colour = "black", linewidth = 0.3) +
-        ggplot2::scale_fill_manual(values = .scroll_vdj_colours(input, lv)) +
-        ggplot2::labs(x = by_col, y = metric, title = paste(metric, "by", by_col)) +
-        .scroll_base_theme(legend = FALSE, x_angle = 30)
+      if (is.null(by_col)) {
+        p <- ggplot2::ggplot(d, ggplot2::aes(.data$level, .data$value)) +
+          ggplot2::geom_col(fill = "#4C78A8", colour = "black", linewidth = 0.3) +
+          ggplot2::labs(x = NULL, y = metric, title = paste(metric, "(overall)")) +
+          .scroll_base_theme(legend = FALSE, x_angle = 30)
+      } else {
+        lv <- .scroll_vdj_level_set(input, data, "by", "group_levels")
+        p <- ggplot2::ggplot(d, ggplot2::aes(.data$level, .data$value, fill = .data$level)) +
+          ggplot2::geom_col(colour = "black", linewidth = 0.3) +
+          ggplot2::scale_fill_manual(values = .scroll_vdj_colours(input, lv)) +
+          ggplot2::labs(x = by_col, y = metric, title = paste(metric, "by", by_col)) +
+          .scroll_base_theme(legend = FALSE, x_angle = 30)
+      }
       attr(p, "scroll_source") <- as.data.frame(d); p
     })
 

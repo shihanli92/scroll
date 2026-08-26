@@ -121,6 +121,34 @@ test_that("VDJ panels re-group by any baked categorical and expose CSV", {
   })
 })
 
+test_that("clone_overview / cdr3_length / diversity group-by is optional (None default)", {
+  data <- scroll:::.scroll_load(vdj_test_project())
+  on.exit(scroll_disconnect(data$con), add = TRUE)
+  panel <- function(id) Filter(function(x) identical(x$id, id),
+                               scroll:::.scroll_assemble_panels(data$manifest))[[1]]
+
+  # clone_overview: no group -> a single un-faceted rank-abundance curve + one comp bar
+  shiny::testServer(panel("clone_overview")$server, args = list(data = data), {
+    session$setInputs(view = "Rank-abundance", group = "")
+    expect_s3_class(plot_r(), "ggplot")
+    session$setInputs(view = "Expansion composition", group = "")
+    src <- attr(plot_r(), "scroll_source")
+    expect_equal(length(unique(src$g)), 1L)                 # one pooled bar
+  })
+  # cdr3_length: no colour-by -> a single pooled distribution
+  shiny::testServer(panel("cdr3_length")$server, args = list(data = data), {
+    session$setInputs(chain = "beta", style = "Density", colorby = "")
+    expect_s3_class(plot_r(), "ggplot")
+    session$setInputs(style = "Histogram", colorby = "")
+    expect_error(plot_r(), NA)
+  })
+  # diversity: no group -> one overall repertoire value
+  shiny::testServer(panel("diversity")$server, args = list(data = data), {
+    session$setInputs(view = "Diversity metric", by = "", metric = "shannon")
+    expect_equal(nrow(attr(plot_r(), "scroll_source")), 1L)
+  })
+})
+
 test_that("gene_usage group-by is optional: None pools into one ungrouped plot", {
   data <- scroll:::.scroll_load(vdj_test_project())
   on.exit(scroll_disconnect(data$con), add = TRUE)
