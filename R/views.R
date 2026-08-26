@@ -48,20 +48,26 @@
 
 # `limits` clip the scale (values beyond are squished to the end color, not
 # dropped) — used by FeaturePlot's quantile caps.
-.scroll_continuous_scale <- function(palette, name = NULL, limits = NULL) {
+.scroll_continuous_scale <- function(palette, name = NULL, limits = NULL,
+                                     aesthetic = c("colour", "fill"),
+                                     labels = ggplot2::waiver()) {
+  aesthetic <- match.arg(aesthetic); fill <- identical(aesthetic, "fill")
   palette <- palette %||% "viridis"
-  # ColorBrewer palettes via scale_color_distiller (sequential low->high dark,
-  # diverging reversed so warm = high).
+  # ColorBrewer palettes via scale_*_distiller (sequential low->high dark,
+  # diverging reversed so warm = high). `aesthetic` picks colour vs fill.
+  distiller <- if (fill) ggplot2::scale_fill_distiller else ggplot2::scale_color_distiller
   if (palette %in% .scroll_brewer_seq)
-    return(ggplot2::scale_color_distiller(name = name, palette = palette,
-             direction = 1, limits = limits, oob = scales::squish))
+    return(distiller(name = name, palette = palette, direction = 1,
+             limits = limits, oob = scales::squish, labels = labels))
   if (palette %in% .scroll_brewer_div)
-    return(ggplot2::scale_color_distiller(name = name, palette = palette,
-             direction = -1, limits = limits, oob = scales::squish))
-  vir <- function(opt) ggplot2::scale_color_viridis_c(
-    name = name, option = opt, limits = limits, oob = scales::squish)
-  grad <- function(hi) ggplot2::scale_color_gradient(
-    low = "grey88", high = hi, name = name, limits = limits, oob = scales::squish)
+    return(distiller(name = name, palette = palette, direction = -1,
+             limits = limits, oob = scales::squish, labels = labels))
+  vir_f  <- if (fill) ggplot2::scale_fill_viridis_c else ggplot2::scale_color_viridis_c
+  grad_f <- if (fill) ggplot2::scale_fill_gradient  else ggplot2::scale_color_gradient
+  vir <- function(opt) vir_f(name = name, option = opt, limits = limits,
+                             oob = scales::squish, labels = labels)
+  grad <- function(hi) grad_f(low = "grey88", high = hi, name = name,
+                              limits = limits, oob = scales::squish, labels = labels)
   switch(palette,
     viridis = vir("viridis"), magma = vir("magma"), plasma = vir("plasma"),
     inferno = vir("inferno"), cividis = vir("cividis"), turbo = vir("turbo"),

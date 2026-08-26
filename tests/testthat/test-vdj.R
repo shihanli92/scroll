@@ -89,7 +89,7 @@ test_that("diversity metric + gene-usage residual views render", {
   shiny::testServer(gu$server, args = list(data = data), {
     session$setInputs(segment = "TRBV", view = "Frequency")
     expect_error(force(output$plot), NA)
-    session$setInputs(view = "Chi-square residuals")
+    session$setInputs(view = "Chi-square residuals", group = "group")
     expect_error(force(output$plot), NA)
   })
 })
@@ -106,14 +106,76 @@ test_that("VDJ panels re-group by any baked categorical and expose CSV", {
     tryCatch(force(output$plot), error = function(e) NULL)
     expect_false(is.null(output$csv))
   })
-  # gene_usage frequency re-groups by antigen; the group control is Frequency-only
+  # gene_usage re-groups by antigen; the group control is universal (applies to every
+  # view now), while count/gene_order are gated to Frequency/Pairing.
   gu <- panel("gene_usage")
-  expect_true(any(vapply(environment(gu$ui)$controls, function(c)
-    identical(c$id, "group") && !is.null(c$visible_when), logical(1))))
+  ctl <- environment(gu$ui)$controls
+  expect_true(any(vapply(ctl, function(c)
+    identical(c$id, "group") && is.null(c$visible_when), logical(1))))   # NOT gated
+  expect_true(any(vapply(ctl, function(c)
+    identical(c$id, "gene_order") && !is.null(c$visible_when), logical(1))))
   shiny::testServer(gu$server, args = list(data = data), {
     session$setInputs(segment = "TRBV", view = "Frequency", group = "antigen")
     tryCatch(force(output$plot), error = function(e) NULL)
     expect_false(is.null(output$csv))
+  })
+})
+
+test_that("gene_usage group-by is optional: None pools into one ungrouped plot", {
+  data <- scroll:::.scroll_load(vdj_test_project())
+  on.exit(scroll_disconnect(data$con), add = TRUE)
+  gu <- Filter(function(x) identical(x$id, "gene_usage"),
+               scroll:::.scroll_assemble_panels(data$manifest))[[1]]
+  shiny::testServer(gu$server, args = list(data = data), {
+    # Frequency with no group -> a single overall usage barplot (geom_col)
+    session$setInputs(segment = "TRBV", view = "Frequency", group = "")
+    p <- plot_r()
+    expect_s3_class(p, "ggplot")
+    expect_true(any(vapply(p$layers, function(l) inherits(l$geom, "GeomCol"), logical(1))))
+    # Pairing with no group -> a single un-faceted heatmap (one group value)
+    session$setInputs(view = "Pairing", segment = "TRBV", segment_y = "TRBJ", group = "")
+    expect_equal(length(unique(attr(plot_r(), "scroll_source")$grp)), 1L)
+    # Chi-square still requires a group
+    session$setInputs(view = "Chi-square residuals", group = "")
+    expect_error(plot_r(), "Group by")
+  })
+})
+
+test_that("gene_usage: pairing heatmap and runtime-recomputed chi-square group-by", {
+  data <- scroll:::.scroll_load(vdj_test_project())
+  on.exit(scroll_disconnect(data$con), add = TRUE)
+  gu <- Filter(function(x) identical(x$id, "gene_usage"),
+               scroll:::.scroll_assemble_panels(data$manifest))[[1]]
+
+  # Pairing: x/y are two different segments; source has the tile grid + within-group freq
+  shiny::testServer(gu$server, args = list(data = data), {
+    session$setInputs(view = "Pairing", segment = "TRBV", segment_y = "TRBJ",
+                      group = "group", count = "Cells", clone_col = "clone_id")
+    src <- attr(plot_r(), "scroll_source")
+    expect_true(all(c("gx", "gy", "grp", "freq") %in% names(src)))
+    expect_true(all(src$freq >= 0 & src$freq <= 1))
+    # absent pairings are completed to freq 0 (no NA gaps), and the grid is full:
+    # one row per (gx, gy, group)
+    expect_false(anyNA(src$freq))
+    expect_true(any(src$freq == 0))
+    expect_equal(nrow(src),
+                 length(unique(src$gx)) * length(unique(src$gy)) * length(unique(src$grp)))
+    # colour palette + quantile cut-offs render a fill scale
+    session$setInputs(cpalette = "magma", cquant = c(0.05, 0.95))
+    p <- plot_r()
+    expect_s3_class(p, "ggplot")
+    expect_true("fill" %in% p$scales$get_scales("fill")$aesthetics)
+    # two different segments required
+    session$setInputs(segment_y = "TRBV")
+    expect_error(plot_r(), "two different segments")
+  })
+
+  # Chi-square recomputes at runtime, so a NON-baked group (antigen) re-groups the heatmap
+  shiny::testServer(gu$server, args = list(data = data), {
+    session$setInputs(view = "Chi-square residuals", segment = "TRBV", group = "antigen")
+    src <- attr(plot_r(), "scroll_source")
+    expect_true(all(c("group", "gene", "residual") %in% names(src)))
+    expect_setequal(unique(src$group), c("gB", "B8R"))     # grouped by antigen, not celltype
   })
 })
 
@@ -151,6 +213,39 @@ test_that("clone_overview / diversity / cdr3_length all take a Clone ID column",
                       clone_col = "clonotype_nt")
     expect_error(force(output$plot), NA)                 # dedup keys off the chosen clone id
   })
+})
+
+test_that("gene-segment names sort in genomic (natural) order, not alphabetical", {
+  x <- c("TRBV10-1", "TRBV2", "TRBV1", "TRBV11-2", "TRBV9", "TRBV11-1", "TRBV20-1")
+  expect_equal(scroll:::.scroll_gene_natural_levels(x),
+               c("TRBV1", "TRBV2", "TRBV9", "TRBV10-1", "TRBV11-1", "TRBV11-2", "TRBV20-1"))
+  # dedups and is order-independent of input
+  expect_equal(scroll:::.scroll_gene_natural_levels(c("TRAV13-1", "TRAV13-1", "TRAV3")),
+               c("TRAV3", "TRAV13-1"))
+})
+
+test_that("gene_usage frequency can deduplicate expanded clones (count clones, not cells)", {
+  data <- scroll:::.scroll_load(vdj_test_project())
+  on.exit(scroll_disconnect(data$con), add = TRUE)
+  panel <- function(id) Filter(function(x) identical(x$id, id),
+                               scroll:::.scroll_assemble_panels(data$manifest))[[1]]
+  gu <- panel("gene_usage")
+
+  # the Count + Clone-ID controls exist and are Frequency-view only
+  ctl <- environment(gu$ui)$controls
+  expect_true(any(vapply(ctl, function(c)
+    identical(c$id, "count") && !is.null(c$visible_when), logical(1))))
+
+  cells_total <- NULL; clones_total <- NULL
+  shiny::testServer(gu$server, args = list(data = data), {
+    session$setInputs(segment = "TRBV", view = "Frequency", group = "group",
+                      count = "Cells")
+    cells_total <<- sum(attr(plot_r(), "scroll_source")$count)
+    session$setInputs(count = "Clones (dedup)", clone_col = "clone_id")
+    clones_total <<- sum(attr(plot_r(), "scroll_source")$count)
+  })
+  # cells >= clones, and with expansion present the dedup is a strict reduction
+  expect_gt(cells_total, clones_total)
 })
 
 test_that("VDJ colour picker resolves palette vs manual, and group filter spans panels", {

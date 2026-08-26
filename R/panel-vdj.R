@@ -181,6 +181,22 @@
   factor(cat, levels = .SCROLL_EXPANSION_LEVELS)
 }
 
+# Natural (numeric-aware) ordering of gene-segment names, approximating genomic /
+# germline orientation: IMGT segment names are numbered along the locus, so TRBV2
+# should precede TRBV10-1 -- a plain alphabetical sort puts TRBV10-1 first. Split each
+# name into number / non-number chunks (in order), zero-pad the numbers, and sort on
+# the reconstructed key. Non-numeric names fall back to their alphabetical position.
+.scroll_gene_natural_levels <- function(genes) {
+  u <- unique(as.character(genes))
+  key <- vapply(u, function(s) {
+    parts <- regmatches(s, gregexpr("[0-9]+|[^0-9]+", s))[[1]]
+    num <- grepl("^[0-9]+$", parts)
+    parts[num] <- formatC(as.integer(parts[num]), width = 8, flag = "0")
+    paste0(parts, collapse = "")
+  }, character(1))
+  u[order(key)]
+}
+
 # ---- the four panels --------------------------------------------------------
 
 # Assembled as built-in panels gated on manifest$vdj (see .scroll_assemble_panels).
@@ -275,32 +291,134 @@
     })
 
   gene_usage <- mk("gene_usage", "V/J gene usage", "TCR/BCR V/J gene usage",
-    "Per-group V/J segment frequency, or the chi-square standardized-residual heatmap.",
+    "Per-group V/J frequency, segment-pairing heatmap, or chi-square residuals.",
     list(scroll_input_choice("segment", "Segment",
            choices = function(data) unlist(data$manifest$vdj$segments)),
-         scroll_input_choice("view", "View", c("Frequency", "Chi-square residuals")),
-         # Frequency can re-group by any baked categorical; the residual heatmap is
-         # baked per the build-time group_col, so hide this control in that view.
+         scroll_input_choice("view", "View",
+           c("Frequency", "Pairing", "Chi-square residuals")),
+         # Pairing view: the second (y-axis) segment. Default to a DIFFERENT segment
+         # than x (the choices fn lists the 2nd segment first, so it's pre-selected).
          scroll_show_when(
-           scroll_input_choice("group", "Group by",
-             choices = function(data) .scroll_vdj_split_cols(data), widget = "select"),
-           control = "view", equals = "Frequency"),
+           scroll_input_choice("segment_y", "Segment (y)",
+             choices = function(data) {
+               s <- as.character(unlist(data$manifest$vdj$segments))
+               if (length(s) > 1) c(s[2], s[-2]) else s
+             }, widget = "select"),
+           control = "view", equals = "Pairing"),
+         # Count each cell, or deduplicate to one count per clone so a few large
+         # (expanded) clones don't dominate the profile. Dedup needs a clone
+         # definition, so the Clone-ID picker rides with it (Frequency + Pairing).
          scroll_show_when(
-           scroll_input_levels("group_levels", "Groups", none = TRUE, watch = "group",
-             choices = function(input, data) .scroll_vdj_col_levels(input, data, "group")),
-           control = "view", equals = "Frequency"),
+           scroll_input_choice("count", "Count", c("Cells", "Clones (dedup)")),
+           control = "view", equals = c("Frequency", "Pairing")),
+         scroll_show_when(
+           scroll_input_choice("clone_col", "Clone ID",
+             choices = function(data) .scroll_vdj_clone_cols(data), widget = "select"),
+           control = "view", equals = c("Frequency", "Pairing")),
+         # gene-axis order: Genomic (natural sort of IMGT gene numbers, approximating
+         # germline/locus orientation) or plain Alphabetical.
+         scroll_show_when(
+           scroll_input_choice("gene_order", "Gene order", c("Genomic", "Alphabetical")),
+           control = "view", equals = c("Frequency", "Pairing")),
+         # Pairing heatmap fill: a continuous palette + min/max quantile cut-offs on the
+         # colour scale (a two-knob range slider), so a few dominant pairings don't wash
+         # out the rest -- values past the cut-offs saturate to the end colour.
+         scroll_show_when(
+           scroll_input_palette("cpalette", "Colour", type = "continuous",
+                                selected = "viridis"),
+           control = "view", equals = "Pairing"),
+         scroll_show_when(
+           scroll_input_slider("cquant", "Colour quantiles", 0, 1, c(0, 1), 0.01),
+           control = "view", equals = "Pairing"),
+         # Group-by applies to every view: re-groups Frequency and the (runtime-recomputed)
+         # chi-square residuals, and facets the pairing heatmap. "None" (the default) pools
+         # all cells into a single ungrouped plot (chi-square still requires a group).
+         scroll_input_choice("group", "Group by",
+           choices = function(data) c("None" = "", .scroll_vdj_split_cols(data)),
+           widget = "select"),
+         scroll_input_levels("group_levels", "Groups", none = TRUE, watch = "group",
+           choices = function(input, data) .scroll_vdj_col_levels(input, data, "group")),
+         # per-group point colours (Frequency only; the heatmap views use a fill scale)
          scroll_show_when(.scroll_vdj_colour_control("group", "group_levels"),
                           control = "view", equals = "Frequency"),
          scroll_input_slider("aspect", "Aspect ratio", 0.4, 3, 1, 0.1)),
     function(cells, input, data) {
-      rc <- .scroll_vdj_read(data, "rep_cells.parquet"); seg <- input$segment
-      if (is.null(rc) || !seg %in% names(rc)) stop("Segment '", seg, "' not baked.")
+      rc <- .scroll_vdj_read(data, "rep_cells.parquet")
+      if (is.null(rc) || !nrow(rc)) stop("No repertoire store; rebuild with vdj =.")
       rc <- .scroll_vdj_scope(rc, cells)          # honour the global filter / subset view
-      d <- rc[!is.na(rc[[seg]]), , drop = FALSE]; d$gene <- as.character(d[[seg]])
-      if (identical(input$view, "Chi-square residuals")) {
-        ch <- .scroll_vdj_read(data, "chisq.parquet")
-        ch <- if (!is.null(ch)) ch[ch$segment == seg, , drop = FALSE] else NULL
-        if (is.null(ch) || !nrow(ch)) stop("No chi-square residuals for ", seg, ".")
+      seg <- input$segment
+      if (!seg %in% names(rc)) stop("Segment '", seg, "' not baked.")
+      view <- input$view %||% "Frequency"
+      # group-by (all views): the chosen categorical, or NULL for a single ungrouped plot
+      # (the "None" default). A synthetic constant column keeps the filter/dedup path uniform.
+      grp <- if (!is.null(input$group) && nzchar(input$group) && input$group %in% names(rc) &&
+                 any(!is.na(rc[[input$group]]))) input$group else NULL
+      gcol <- grp %||% ".grp"
+      if (is.null(grp)) rc$.grp <- "all"
+      cid <- if (!is.null(input$clone_col) && input$clone_col %in% names(rc)) input$clone_col else "clone_id"
+
+      if (identical(view, "Pairing")) {
+        segs <- as.character(unlist(data$manifest$vdj$segments))
+        segy <- if (!is.null(input$segment_y) && input$segment_y %in% names(rc))
+                  input$segment_y else setdiff(segs, seg)[1]
+        if (is.na(segy) || identical(segy, seg))
+          stop("Pick two different segments for the pairing heatmap.")
+        d <- rc[!is.na(rc[[seg]]) & !is.na(rc[[segy]]) & !is.na(rc[[gcol]]), , drop = FALSE]
+        if (!is.null(grp) && length(input$group_levels))
+          d <- d[as.character(d[[gcol]]) %in% input$group_levels, , drop = FALSE]
+        if (identical(input$count, "Clones (dedup)")) {
+          d <- d[!is.na(d[[cid]]), , drop = FALSE]
+          d <- d[!duplicated(paste(d[[cid]], d[[gcol]])), , drop = FALSE]
+        }
+        if (!nrow(d)) stop("No paired segments for this selection.")
+        # frequency of each (x, y) segment pairing WITHIN each group (facet)
+        pf <- d |> dplyr::count(.data[[gcol]], .data[[seg]], .data[[segy]], name = "n") |>
+          dplyr::group_by(.data[[gcol]]) |>
+          dplyr::mutate(freq = .data$n / sum(.data$n)) |> dplyr::ungroup()
+        names(pf)[names(pf) == seg]  <- "gx"
+        names(pf)[names(pf) == segy] <- "gy"
+        names(pf)[names(pf) == gcol] <- "grp"
+        # complete the (x, y) grid within each group so absent pairings render as 0
+        # (the low colour of the scale), not blank white tiles
+        full <- expand.grid(gx = sort(unique(pf$gx)), gy = sort(unique(pf$gy)),
+                            grp = unique(pf$grp), stringsAsFactors = FALSE)
+        pf <- dplyr::left_join(full, pf, by = c("gx", "gy", "grp"))
+        pf$n[is.na(pf$n)] <- 0; pf$freq[is.na(pf$freq)] <- 0
+        if (!identical(input$gene_order, "Alphabetical")) {  # default: genomic (natural)
+          pf$gx <- factor(pf$gx, levels = .scroll_gene_natural_levels(pf$gx))
+          pf$gy <- factor(pf$gy, levels = .scroll_gene_natural_levels(pf$gy))
+        }
+        unit <- if (identical(input$count, "Clones (dedup)")) "clones" else "cells"
+        # colour-scale quantile cut-offs (min/max range slider); c(0,1) = no clipping
+        qr <- if (length(input$cquant) == 2) as.numeric(input$cquant) else c(0, 1)
+        lims <- .scroll_expr_limits(pf$freq, sort(qr))
+        p <- ggplot2::ggplot(pf, ggplot2::aes(.data$gx, .data$gy, fill = .data$freq)) +
+          ggplot2::geom_tile() +
+          .scroll_continuous_scale(input$cpalette %||% "viridis",
+            name = paste0("Freq\n(", unit, ")"), limits = lims,
+            aesthetic = "fill", labels = scales::percent) +
+          (if (!is.null(grp)) ggplot2::facet_wrap(stats::as.formula("~grp"))) +
+          ggplot2::labs(x = seg, y = segy, title = paste0(seg, "-", segy, " pairing")) +
+          .scroll_base_theme() +
+          ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 60, hjust = 1, size = 7),
+                         axis.text.y = ggplot2::element_text(size = 7))
+        attr(p, "scroll_source") <- as.data.frame(pf); return(p)
+      }
+
+      if (identical(view, "Chi-square residuals")) {
+        # residuals are of a group x gene table -- a grouping is intrinsic to this view
+        if (is.null(grp))
+          stop("Pick a 'Group by' column for the chi-square residuals view.")
+        d <- rc[!is.na(rc[[grp]]), , drop = FALSE]
+        if (length(input$group_levels))
+          d <- d[as.character(d[[grp]]) %in% input$group_levels, , drop = FALSE]
+        d <- d[!is.na(d[[cid]]), , drop = FALSE]
+        d <- d[!duplicated(d[[cid]]), , drop = FALSE]     # one row per clone (usage, not size)
+        # recomputed at runtime (not the baked chisq.parquet) so it re-groups by any
+        # column AND honours the global cell filter / subset view.
+        ch <- .scroll_vdj_chisq(d, grp, seg)
+        if (is.null(ch) || !nrow(ch))
+          stop("Chi-square needs ≥2 groups and ≥2 genes with data.")
         ch$residual <- pmax(pmin(ch$residual, 3), -3)
         ord <- names(sort(tapply(abs(ch$residual), ch$gene, max)))
         ch$gene <- factor(ch$gene, levels = ord)
@@ -308,33 +426,53 @@
           ggplot2::geom_tile(colour = "grey90") +
           ggplot2::scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B",
                                         midpoint = 0, limits = c(-3, 3)) +
-          ggplot2::labs(x = seg, y = NULL, fill = "std\nresidual",
-                        title = paste(seg, "usage vs group")) +
+          ggplot2::labs(x = seg, y = grp, fill = "std\nresidual",
+                        title = paste(seg, "usage vs", grp)) +
           .scroll_base_theme() +
           ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 60, hjust = 1, size = 8))
-        attr(p, "scroll_source") <- as.data.frame(ch); p
+        attr(p, "scroll_source") <- as.data.frame(ch); return(p)
+      }
+
+      # Frequency (default)
+      d <- rc[!is.na(rc[[seg]]) & !is.na(rc[[gcol]]), , drop = FALSE]
+      d$gene <- as.character(d[[seg]])
+      if (!is.null(grp) && length(input$group_levels))
+        d <- d[as.character(d[[gcol]]) %in% input$group_levels, , drop = FALSE]
+      if (!nrow(d)) stop("No cells for the selected groups.")
+      # optional: collapse each clone to one row per group (one representative segment
+      # call), so expanded clones count once toward the usage frequency
+      if (identical(input$count, "Clones (dedup)")) {
+        d <- d[!is.na(d[[cid]]), , drop = FALSE]
+        d <- d[!duplicated(paste(d[[cid]], d[[gcol]])), , drop = FALSE]
+        if (!nrow(d)) stop("No clones for the selected groups.")
+      }
+      f <- d |> dplyr::group_by(.data$gene, .data[[gcol]]) |>
+        dplyr::summarise(count = dplyr::n(), .groups = "drop") |>
+        dplyr::group_by(.data[[gcol]]) |>
+        dplyr::mutate(freq = .data$count / sum(.data$count)) |> dplyr::ungroup()
+      unit <- if (identical(input$count, "Clones (dedup)")) "clones" else "cells"
+      if (!identical(input$gene_order, "Alphabetical"))      # default: genomic (natural)
+        f$gene <- factor(f$gene, levels = .scroll_gene_natural_levels(f$gene))
+      if (is.null(grp)) {
+        # ungrouped: a single overall usage barplot
+        p <- ggplot2::ggplot(f, ggplot2::aes(.data$gene, .data$freq)) +
+          ggplot2::geom_col(fill = "#4C78A8") +
+          ggplot2::labs(x = seg, y = paste0("Frequency (", unit, ", overall)"),
+                        title = paste(seg, "usage")) +
+          .scroll_base_theme(legend = FALSE) +
+          ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 60, hjust = 1, size = 7))
       } else {
-        grp <- if (!is.null(input$group) && input$group %in% names(d) &&
-                   any(!is.na(d[[input$group]]))) input$group else "group"
-        d <- d[!is.na(d[[grp]]), , drop = FALSE]
-        if (length(input$group_levels))
-          d <- d[as.character(d[[grp]]) %in% input$group_levels, , drop = FALSE]
-        if (!nrow(d)) stop("No cells for the selected groups.")
-        f <- d |> dplyr::group_by(.data$gene, .data[[grp]]) |>
-          dplyr::summarise(count = dplyr::n(), .groups = "drop") |>
-          dplyr::group_by(.data[[grp]]) |>
-          dplyr::mutate(freq = .data$count / sum(.data$count)) |> dplyr::ungroup()
         lv <- .scroll_vdj_level_set(input, data, "group", "group_levels")
         p <- ggplot2::ggplot(f, ggplot2::aes(.data$gene, .data$freq)) +
           ggplot2::geom_line(ggplot2::aes(group = .data$gene), colour = "grey70", linewidth = 0.3) +
-          ggplot2::geom_point(ggplot2::aes(fill = .data[[grp]]), shape = 21, size = 2.5) +
+          ggplot2::geom_point(ggplot2::aes(fill = .data[[gcol]]), shape = 21, size = 2.5) +
           ggplot2::scale_fill_manual(values = .scroll_vdj_colours(input, lv), name = grp) +
-          ggplot2::labs(x = seg, y = "Frequency (within group)", fill = grp,
+          ggplot2::labs(x = seg, y = paste0("Frequency (", unit, ", within group)"), fill = grp,
                         title = paste(seg, "usage")) +
           .scroll_base_theme() +
           ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 60, hjust = 1, size = 7))
-        attr(p, "scroll_source") <- as.data.frame(f); p
       }
+      attr(p, "scroll_source") <- as.data.frame(f); p
     })
 
   cdr3_length <- mk("cdr3_length", "CDR3 length", "CDR3 length distribution",
