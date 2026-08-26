@@ -39,8 +39,10 @@
 
 # Greyed embedding with the selected clones' cells drawn on top, one colour per clone.
 # Pure, so it renders identically on screen and on export. `sel` = selected clone ids,
-# `cols` = a named colour vector for them (NULL -> a default palette).
-.scroll_clone_map_plot <- function(df, emb, sel, cols = NULL, size = 0.8, aspect = 1) {
+# `cols` = a named colour vector for them (NULL -> a default palette). `connect` adds a
+# path per clone (cells ordered around the clone centroid, so it outlines the clone).
+.scroll_clone_map_plot <- function(df, emb, sel, cols = NULL, size = 0.8, aspect = 1,
+                                   connect = FALSE) {
   df$.x <- df[[paste0(emb, "_1")]]; df$.y <- df[[paste0(emb, "_2")]]
   df$.hl <- ifelse(!is.na(df$clone) & df$clone %in% sel, as.character(df$clone), NA_character_)
   base <- df[is.na(df$.hl), , drop = FALSE]
@@ -51,6 +53,13 @@
   if (nrow(hi)) {
     if (is.null(cols)) cols <- .scroll_discrete_colors(sel, "Tableau 10")
     hi$.hl <- factor(hi$.hl, levels = sel)
+    if (isTRUE(connect)) {                              # a path per clone (under the points)
+      pathdf <- do.call(rbind, lapply(split(hi, hi$.hl, drop = TRUE), function(g)
+        g[order(atan2(g$.y - mean(g$.y), g$.x - mean(g$.x))), , drop = FALSE]))
+      p <- p + ggplot2::geom_path(data = pathdf,
+        ggplot2::aes(group = .data$.hl, colour = .data$.hl),
+        linewidth = 0.4, alpha = 0.6, show.legend = FALSE)
+    }
     p <- p + ggplot2::geom_point(data = hi, ggplot2::aes(colour = .data$.hl),
                                  size = size + 0.7) +
       ggplot2::scale_colour_manual(values = cols, name = "Clone",
@@ -82,6 +91,7 @@ clone_map_ui <- function(id, data) {
     selectInput(ns("palette"), "Highlight palette", .scroll_cat_palettes()),
     uiOutput(ns("palette_manual")),                    # per-clone pickers when "Manual"
     sliderInput(ns("size"), "Point size", 0.2, 3, 0.8, 0.1),
+    checkboxInput(ns("connect"), "Connect cells (path)", FALSE),
     sliderInput(ns("aspect"), "Aspect ratio", 0.4, 3, 1, 0.1),
     actionButton(ns("clear"), "Clear selection", class = "btn-sm btn-outline-secondary"),
     tags$p(class = "scroll-desc", "Select clones in the table to colour their cells."))
@@ -175,7 +185,8 @@ clone_map_server <- function(id, data, cells_r = shiny::reactive(data$cells),
                     stats::setNames(rc$clone_id, rc$cell)[df$cell] else NA_character_
       sel <- selected_r()
       .scroll_clone_map_plot(df, emb, sel, .scroll_clone_colours(input, sel),
-                             input$size %||% 0.8, input$aspect %||% 1) +
+                             input$size %||% 0.8, input$aspect %||% 1,
+                             isTRUE(input$connect)) +
         .scroll_ggtheme(theme_r())
     })
     output$plot <- renderPlot(plot_r())

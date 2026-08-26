@@ -65,4 +65,8 @@ test_that("clone_map plot core greys the base and colours one hue per selected c
   hl <- ggplot2::layer_data(p, 2L)
   expect_equal(nrow(hl), 4L)                                   # the A + B cells (not C or NA)
   expect_equal(length(unique(hl$colour)), 2L)                  # one colour per selected clone
+
+  # connect = TRUE adds a per-clone path layer under the points
+  pc <- scroll:::.scroll_clone_map_plot(df, "umap", sel = c("A", "B"), connect = TRUE)
+  expect_true(any(vapply(pc$layers, function(l) inherits(l$geom, "GeomPath"), logical(1))))
 })
