@@ -29,7 +29,7 @@
 
 # Greyed embedding with the selected clones' cells drawn on top, one colour per clone.
 # Pure, so it renders identically on screen and on export. `sel` = selected clone ids.
-.scroll_clone_map_plot <- function(df, emb, sel, palette = "Tableau 10", size = 0.8) {
+.scroll_clone_map_plot <- function(df, emb, sel, palette = "Tableau 10", size = 0.8, aspect = 1) {
   df$.x <- df[[paste0(emb, "_1")]]; df$.y <- df[[paste0(emb, "_2")]]
   df$.hl <- ifelse(!is.na(df$clone) & df$clone %in% sel, as.character(df$clone), NA_character_)
   base <- df[is.na(df$.hl), , drop = FALSE]
@@ -48,8 +48,12 @@
   ttl <- if (length(sel)) paste(length(sel), "clone(s) highlighted",
                                 sprintf("(%d cells)", nrow(hi)))
          else "Select clones in the table to highlight them"
-  p + ggplot2::labs(x = paste0(emb, "_1"), y = paste0(emb, "_2"), title = ttl) +
-    .scroll_base_theme(legend = TRUE, axis_text = FALSE) + ggplot2::coord_equal()
+  p <- p + ggplot2::labs(x = paste0(emb, "_1"), y = paste0(emb, "_2"), title = ttl) +
+    .scroll_base_theme(legend = TRUE, axis_text = FALSE)
+  # aspect 1 (default) keeps the embedding undistorted (coord_equal); otherwise honour
+  # the requested panel aspect ratio.
+  if (is.null(aspect) || abs(aspect - 1) < 1e-6) p + ggplot2::coord_equal()
+  else p + ggplot2::theme(aspect.ratio = aspect)
 }
 
 # ---- the panel --------------------------------------------------------------
@@ -64,8 +68,9 @@ clone_map_ui <- function(id, data) {
     if (length(emb) > 1) selectInput(ns("embedding"), "Embedding", stats::setNames(emb, emb),
                                      selected = .scroll_default(data, "default_embedding", emb[[1]])),
     sliderInput(ns("minsize"), "Min clone size", 1, 50, 1, 1),
-    selectInput(ns("palette"), "Palette", names(.scroll_discrete_palettes)),
+    selectInput(ns("palette"), "Highlight palette", names(.scroll_discrete_palettes)),
     sliderInput(ns("size"), "Point size", 0.2, 3, 0.8, 0.1),
+    sliderInput(ns("aspect"), "Aspect ratio", 0.4, 3, 1, 0.1),
     actionButton(ns("clear"), "Clear selection", class = "btn-sm btn-outline-secondary"),
     tags$p(class = "scroll-desc", "Select clones in the table to colour their cells."))
   # table (top) + greyed UMAP (below); selection in the table drives the highlight
@@ -151,7 +156,8 @@ clone_map_server <- function(id, data, cells_r = shiny::reactive(data$cells),
       df$clone <- if (!is.null(rc) && "cell" %in% names(rc))
                     stats::setNames(rc$clone_id, rc$cell)[df$cell] else NA_character_
       .scroll_clone_map_plot(df, emb, selected_r(),
-                             input$palette %||% "Tableau 10", input$size %||% 0.8) +
+                             input$palette %||% "Tableau 10", input$size %||% 0.8,
+                             input$aspect %||% 1) +
         .scroll_ggtheme(theme_r())
     })
     output$plot <- renderPlot(plot_r())
