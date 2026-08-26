@@ -127,10 +127,10 @@ test_that("base CSS suppresses scrollbar-toggle resize loops (both axes)", {
   expect_match(css, "\\.scroll-rail\\{position:sticky")
 })
 
-test_that("plot toolbars carry a plot-size slider wired to the resize handler", {
+test_that("plot toolbars carry a download-scale slider wired to the dl_scale input", {
   html <- as.character(scroll:::.scroll_plot_area(identity))
   expect_match(html, "scroll-size")                     # the slider is in the toolbar
-  expect_match(html, "scrollSizePlot")                  # wired to the resize handler
-  expect_match(scroll:::.scroll_lazy_js(), "scrollSizePlot")   # handler is injected
+  expect_match(html, "dl_scale")                        # targets the module's dl_scale input
+  expect_match(html, "Shiny.setInputValue")             # writes the value to Shiny
   expect_match(scroll:::.scroll_css(), "\\.scroll-size\\{")    # and styled
 })

@@ -94,7 +94,7 @@ spatial_ui <- function(id, data) {
     div(class = "scroll-controls", do.call(.scroll_group, c(list("Controls"), ctl))),
     div(class = "scroll-plot",
         div(class = "scroll-plot-bar",
-            .scroll_size_slider(),
+            .scroll_size_slider(ns),
             .scroll_dl_button(ns("png"), "PNG"), .scroll_dl_button(ns("pdf"), "PDF"),
             .scroll_dl_button(ns("csv"), "CSV")),
         .scroll_spin(plotOutput(ns("plot"), height = "560px",

@@ -187,7 +187,7 @@ body{background:var(--sc-ground); color:var(--sc-ink);
 .scroll-plot .shiny-plot-output,
 .scroll-plot .shiny-spinner-output-container{width:round(down, 100%, 1px); min-width:0;}
 .scroll-plot-bar{display:flex; justify-content:flex-end; align-items:center; gap:8px; padding:0 2px 8px;}
-/* compact plot-size slider sitting with the download buttons */
+/* compact download-scale slider sitting with the download buttons */
 .scroll-size{width:80px; height:16px; accent-color:var(--sc-accent); cursor:pointer;}
 .scroll-size::-webkit-slider-thumb{cursor:pointer;}
 /* .scroll-plot-hold reserves the plot height so panels keep a stable size; the
@@ -251,15 +251,4 @@ window.scrollToggleControls=function(btn){
   }
   if(document.readyState!=='loading') lazy(); else document.addEventListener('DOMContentLoaded',lazy);
 })();
-// Plot-size slider: scale the associated plot output's height; Shiny re-renders it
-// crisply at the new size. Finds the plot output sharing the slider's toolbar parent.
-window.scrollSizePlot=function(el){
-  var bar=el.closest('.scroll-plot-bar'); if(!bar) return;
-  var plot=bar.parentElement.querySelector('.shiny-plot-output'); if(!plot) return;
-  if(!plot.dataset.base) plot.dataset.base=parseFloat(getComputedStyle(plot).height)||460;
-  var h=Math.round(parseFloat(plot.dataset.base)*parseFloat(el.value));
-  plot.style.height=h+'px';
-  var hold=plot.closest('.scroll-plot-hold'); if(hold) hold.style.minHeight=h+'px';
-  window.dispatchEvent(new Event('resize'));
-};
 "

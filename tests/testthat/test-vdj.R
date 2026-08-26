@@ -121,6 +121,28 @@ test_that("VDJ panels re-group by any baked categorical and expose CSV", {
   })
 })
 
+test_that("download-scale slider value is read (and clamped) from the module input", {
+  data <- scroll:::.scroll_load(vdj_test_project())
+  on.exit(scroll_disconnect(data$con), add = TRUE)
+  gu <- Filter(function(x) identical(x$id, "gene_usage"),
+               scroll:::.scroll_assemble_panels(data$manifest))[[1]]
+  shiny::testServer(gu$server, args = list(data = data), {
+    expect_equal(scroll:::.scroll_dl_scale(session), 1)          # absent -> 1
+    session$setInputs(dl_scale = 3); expect_equal(scroll:::.scroll_dl_scale(session), 3)
+    session$setInputs(dl_scale = 9); expect_equal(scroll:::.scroll_dl_scale(session), 5)  # clamp
+    session$setInputs(dl_scale = 0); expect_equal(scroll:::.scroll_dl_scale(session), 1)  # invalid
+  })
+})
+
+test_that("export scale multiplies the exported figure dimensions (ggsave scale)", {
+  png_w <- function(f) { r <- readBin(f, "raw", 24); sum(as.integer(r[17:20]) * 256^(3:0)) }
+  p <- ggplot2::ggplot(data.frame(x = 1:3, y = 1:3), ggplot2::aes(.data$x, .data$y)) +
+    ggplot2::geom_point()
+  f1 <- tempfile(fileext = ".png"); scroll:::.scroll_write_plot(f1, p, "png", 1)
+  f2 <- tempfile(fileext = ".png"); scroll:::.scroll_write_plot(f2, p, "png", 2)
+  expect_equal(png_w(f2), png_w(f1) * 2)                  # 2x scale -> 2x pixels wide
+})
+
 test_that("VDJ value plots have zero lower-end expansion on the continuous axis", {
   data <- scroll:::.scroll_load(vdj_test_project())
   on.exit(scroll_disconnect(data$con), add = TRUE)

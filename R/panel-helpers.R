@@ -235,16 +235,19 @@
 # Standard plot area: a small toolbar (PNG + PDF, and optionally a CSV of the
 # plot's source data) above the plot output. Pass csv = TRUE to add the CSV button
 # (the server must then wire output$csv, e.g. via .scroll_plot_downloads(csv_r=)).
-# A compact plot-size slider for a plot toolbar: scales the sibling plot output's
-# rendered height (client-side, via scrollSizePlot); Shiny re-renders at the new size.
-.scroll_size_slider <- function()
-  tags$input(type = "range", class = "scroll-size", min = "1", max = "3", step = "0.25",
-             value = "1", title = "Plot size", oninput = "scrollSizePlot(this)")
+# A compact download-scale slider for a plot toolbar: sets the module's `dl_scale`
+# input (1-5), which the PNG/PDF handlers pass to ggsave(scale=) so the *exported*
+# figure is larger/smaller. It does not change the on-screen plot.
+.scroll_size_slider <- function(ns)
+  tags$input(type = "range", class = "scroll-size", min = "1", max = "5", step = "0.5",
+             value = "1", title = "Download scale (ggsave scale)",
+             `data-input` = ns("dl_scale"),
+             oninput = "Shiny.setInputValue(this.dataset.input, parseFloat(this.value));")
 
 .scroll_plot_area <- function(ns, height = "460px", csv = FALSE)
   div(class = "scroll-plot",
       div(class = "scroll-plot-bar",
-          .scroll_size_slider(),
+          .scroll_size_slider(ns),
           .scroll_dl_button(ns("png"), "PNG"),
           .scroll_dl_button(ns("pdf"), "PDF"),
           if (isTRUE(csv)) .scroll_dl_button(ns("csv"), "CSV")),
@@ -254,27 +257,51 @@
       div(class = "scroll-plot-hold", style = sprintf("min-height:%s;", height),
           .scroll_spin(plotOutput(ns("plot"), height = height))))
 
-# Image downloadHandler for a plot reactive, raster (PNG) or vector (PDF). Uses
-# a device + print() (not ggsave) so it renders both bare ggplots and the
-# DotPlot's aplot composite, which ggsave() rejects as a non-ggplot.
-.scroll_img_handler <- function(plot_r, name, format = c("png", "pdf")) {
+# The download-scale slider value (the ggsave `scale`), read from a module `session`
+# (or reactive domain); 1 when absent, clamped to (0, 5].
+.scroll_dl_scale <- function(dom = shiny::getDefaultReactiveDomain()) {
+  v <- if (!is.null(dom)) tryCatch(shiny::isolate(dom$input[["dl_scale"]]),
+                                   error = function(e) NULL) else NULL
+  s <- suppressWarnings(as.numeric(v))
+  if (isTRUE(is.finite(s)) && s > 0) min(s, 5) else 1
+}
+
+# Write a plot to a raster (PNG) or vector (PDF) file at a ggsave `scale`. A bare ggplot
+# goes through ggsave; the DotPlot's aplot composite (which ggsave rejects) uses a device
+# + print with the canvas grown by scale -- the same effect ggsave's `scale` has (it
+# multiplies the output dimensions in inches).
+.scroll_write_plot <- function(file, p, format = c("png", "pdf"), scale = 1) {
+  format <- match.arg(format)
+  if (inherits(p, "ggplot")) {
+    ggplot2::ggsave(file, plot = p, device = format, width = 8, height = 6,
+                    units = "in", dpi = 150, scale = scale, bg = "white")
+  } else {
+    if (format == "pdf") grDevices::pdf(file, width = 8 * scale, height = 6 * scale, bg = "white")
+    else grDevices::png(file, width = 8 * scale, height = 6 * scale, units = "in", res = 150, bg = "white")
+    on.exit(grDevices::dev.off())
+    print(p)
+  }
+}
+
+# Image downloadHandler for a plot reactive. `scale` is a 0-arg fn returning the
+# download-scale slider value, so a larger value exports a bigger figure.
+.scroll_img_handler <- function(plot_r, name, format = c("png", "pdf"), scale = function() 1) {
   format <- match.arg(format)
   downloadHandler(
     filename = function() name,
-    content = function(file) {
-      if (format == "pdf") grDevices::pdf(file, width = 8, height = 6, bg = "white")
-      else grDevices::png(file, width = 8, height = 6, units = "in", res = 150, bg = "white")
-      on.exit(grDevices::dev.off())
-      print(plot_r())
-    })
+    content = function(file) .scroll_write_plot(file, plot_r(), format, scale()))
 }
 
 # Register the standard PNG + PDF download outputs (ids "png"/"pdf") for a plot
 # reactive on a module's `output`. Filenames stem from the panel id. When `csv_r`
 # (a data.frame reactive of the plot's source data) is supplied, also wire output$csv.
 .scroll_plot_downloads <- function(output, plot_r, id, csv_r = NULL) {
-  output$png <- .scroll_img_handler(plot_r, paste0("scroll_", id, ".png"), "png")
-  output$pdf <- .scroll_img_handler(plot_r, paste0("scroll_", id, ".pdf"), "pdf")
+  # capture the module session now (during server setup) so the handler reads the
+  # right (namespaced) dl_scale input when it later fires.
+  dom <- shiny::getDefaultReactiveDomain()
+  scale <- function() .scroll_dl_scale(dom)
+  output$png <- .scroll_img_handler(plot_r, paste0("scroll_", id, ".png"), "png", scale)
+  output$pdf <- .scroll_img_handler(plot_r, paste0("scroll_", id, ".pdf"), "pdf", scale)
   if (!is.null(csv_r)) output$csv <- .scroll_csv_handler(csv_r, paste0("scroll_", id, ".csv"))
   invisible()
 }
