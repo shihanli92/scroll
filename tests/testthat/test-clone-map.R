@@ -46,6 +46,17 @@ test_that("selecting clones highlights exactly their cells on the embedding", {
   })
 })
 
+test_that("clone-map highlight colours follow the palette / Manual pickers", {
+  # palette mode: a named colour per selected clone
+  c1 <- scroll:::.scroll_clone_colours(list(palette = "Set1"), c("A", "B"))
+  expect_setequal(names(c1), c("A", "B"))
+  expect_match(unname(c1[1]), "^#")
+  # Manual mode: the per-clone pickers (col_i) win
+  c2 <- scroll:::.scroll_clone_colours(
+    list(palette = "Manual", col_1 = "#111111", col_2 = "#222222"), c("A", "B"))
+  expect_equal(unname(c2[c("A", "B")]), c("#111111", "#222222"))
+})
+
 test_that("clone_map plot core greys the base and colours one hue per selected clone", {
   df <- data.frame(cell = paste0("c", 1:6), umap_1 = 1:6, umap_2 = 6:1,
                    clone = c("A", "A", "B", "B", "C", NA), stringsAsFactors = FALSE)

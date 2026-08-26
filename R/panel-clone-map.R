@@ -27,9 +27,20 @@
 
 # ---- plot core --------------------------------------------------------------
 
+# Named highlight colours for the selected clones: the chosen discrete palette, or the
+# Manual per-clone pickers when palette == "Manual" (falling back until they populate).
+.scroll_clone_colours <- function(input, sel) {
+  if (identical(input$palette, "Manual")) {
+    m <- .scroll_manual_colors(input, sel)
+    if (!is.null(m) && all(sel %in% names(m))) return(m)
+  }
+  .scroll_discrete_colors(sel, input$palette %||% "Tableau 10")   # "Manual" -> Tableau 10 fallback
+}
+
 # Greyed embedding with the selected clones' cells drawn on top, one colour per clone.
-# Pure, so it renders identically on screen and on export. `sel` = selected clone ids.
-.scroll_clone_map_plot <- function(df, emb, sel, palette = "Tableau 10", size = 0.8, aspect = 1) {
+# Pure, so it renders identically on screen and on export. `sel` = selected clone ids,
+# `cols` = a named colour vector for them (NULL -> a default palette).
+.scroll_clone_map_plot <- function(df, emb, sel, cols = NULL, size = 0.8, aspect = 1) {
   df$.x <- df[[paste0(emb, "_1")]]; df$.y <- df[[paste0(emb, "_2")]]
   df$.hl <- ifelse(!is.na(df$clone) & df$clone %in% sel, as.character(df$clone), NA_character_)
   base <- df[is.na(df$.hl), , drop = FALSE]
@@ -38,7 +49,7 @@
     .scroll_point_layer(data = base, size = size, colour = "grey85",
                         raster = nrow(base) > .scroll_raster_threshold)
   if (nrow(hi)) {
-    cols <- .scroll_discrete_colors(sel, palette)                # one colour per clone
+    if (is.null(cols)) cols <- .scroll_discrete_colors(sel, "Tableau 10")
     hi$.hl <- factor(hi$.hl, levels = sel)
     p <- p + ggplot2::geom_point(data = hi, ggplot2::aes(colour = .data$.hl),
                                  size = size + 0.7) +
@@ -68,7 +79,8 @@ clone_map_ui <- function(id, data) {
     if (length(emb) > 1) selectInput(ns("embedding"), "Embedding", stats::setNames(emb, emb),
                                      selected = .scroll_default(data, "default_embedding", emb[[1]])),
     sliderInput(ns("minsize"), "Min clone size", 1, 50, 1, 1),
-    selectInput(ns("palette"), "Highlight palette", names(.scroll_discrete_palettes)),
+    selectInput(ns("palette"), "Highlight palette", .scroll_cat_palettes()),
+    uiOutput(ns("palette_manual")),                    # per-clone pickers when "Manual"
     sliderInput(ns("size"), "Point size", 0.2, 3, 0.8, 0.1),
     sliderInput(ns("aspect"), "Aspect ratio", 0.4, 3, 1, 0.1),
     actionButton(ns("clear"), "Clear selection", class = "btn-sm btn-outline-secondary"),
@@ -144,6 +156,12 @@ clone_map_server <- function(id, data, cells_r = shiny::reactive(data$cells),
       observeEvent(input$clear, updateSelectizeInput(session, "clones", selected = character(0)))
     }
 
+    # Manual palette: render one colour picker per currently-selected clone
+    output$palette_manual <- renderUI({
+      if (!identical(input$palette, "Manual")) return(NULL)
+      .scroll_manual_ui(session$ns, selected_r())
+    })
+
     plot_r <- reactive({
       cells <- cells_r()
       embs <- .scroll_global_embeddings(m)
@@ -155,9 +173,9 @@ clone_map_server <- function(id, data, cells_r = shiny::reactive(data$cells),
       rc <- rc_r()
       df$clone <- if (!is.null(rc) && "cell" %in% names(rc))
                     stats::setNames(rc$clone_id, rc$cell)[df$cell] else NA_character_
-      .scroll_clone_map_plot(df, emb, selected_r(),
-                             input$palette %||% "Tableau 10", input$size %||% 0.8,
-                             input$aspect %||% 1) +
+      sel <- selected_r()
+      .scroll_clone_map_plot(df, emb, sel, .scroll_clone_colours(input, sel),
+                             input$size %||% 0.8, input$aspect %||% 1) +
         .scroll_ggtheme(theme_r())
     })
     output$plot <- renderPlot(plot_r())
