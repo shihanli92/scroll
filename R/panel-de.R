@@ -102,12 +102,14 @@ de_server <- function(id, data, cells_r = reactive(data$cells),
     # Shiny error.
     result <- eventReactive(input$compute, {
       req(input$ident1)
-      tryCatch(
-        list(ok = scroll_de(data, assay(), input$group, input$ident1,
-                            if (length(input$ident2)) input$ident2 else NULL,
-                            min_pct = 0, cells = cells_r(),
-                            max_cells = if (isTRUE(input$maxcells > 0)) input$maxcells else NULL)),
-        error = function(e) list(err = conditionMessage(e)))
+      withProgress(message = "Differential expression", value = 0,
+        tryCatch(
+          list(ok = scroll_de(data, assay(), input$group, input$ident1,
+                              if (length(input$ident2)) input$ident2 else NULL,
+                              min_pct = 0, cells = cells_r(),
+                              max_cells = if (isTRUE(input$maxcells > 0)) input$maxcells else NULL,
+                              progress = function(f, d) setProgress(value = f, detail = d))),
+          error = function(e) list(err = conditionMessage(e))))
     })
 
     de_df <- reactive({

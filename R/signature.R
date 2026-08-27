@@ -64,11 +64,15 @@
 # per-cell means are per cell, so a cell's score is independent of the active subset
 # (filter-invariant), matching Seurat.
 .scroll_module_score <- function(cells, genes, data, assay = NULL,
-                                 nbin = 24L, ctrl = 100L, seed = 1L) {
+                                 nbin = 24L, ctrl = 100L, seed = 1L, progress = NULL) {
+  pr <- function(f, d) if (is.function(progress)) progress(f, d)
   assay <- assay %||% data$manifest$default_assay
   genes <- intersect(genes, .scroll_features_of(data$manifest, assay))
   if (!length(genes) || !nrow(cells)) return(rep(0, nrow(cells)))
-  avg  <- .scroll_gene_means(data$con, data$manifest, assay)     # per-gene mean over all cells
+  # set the message BEFORE each slow step so the bar reflects what is running.
+  pr(0.10, "Scanning gene background (one-off)...")       # the full-store mean scan (cached after)
+  avg  <- .scroll_gene_means(data$con, data$manifest, assay)
+  pr(0.55, "Sampling control genes...")
   bins <- .scroll_cut_number(avg, min(nbin, length(unique(avg))))
   # seed the control sampling without disturbing the app's global RNG stream
   if (exists(".Random.seed", envir = .GlobalEnv)) {
@@ -82,7 +86,10 @@
     ctrl.use <- c(ctrl.use, sample(pool, min(ctrl, length(pool))))
   }
   ctrl.use <- unique(ctrl.use)
+  pr(0.70, "Querying signature expression...")
   sig <- .scroll_signature_score(cells, genes,    data$queryN(assay, genes),    "mean")
+  pr(0.85, "Querying control expression...")
   ctl <- .scroll_signature_score(cells, ctrl.use, data$queryN(assay, ctrl.use), "mean")
+  pr(1, "")
   sig - ctl
 }

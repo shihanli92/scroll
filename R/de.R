@@ -32,6 +32,8 @@
 #'   (a standard marker-detection shortcut; cf. Seurat's `max.cells.per.ident`).
 #'   `NULL` (default) uses every cell. The subsample is deterministic (fixed
 #'   seed) so repeated runs match, and the session RNG is left untouched.
+#' @param progress Optional `function(fraction, detail)` called at the read and
+#'   test stages, for a UI progress bar. `NULL` (default) is a no-op.
 #' @return A data.frame of results, ranked by adjusted p-value.
 #' @details With the default quantized build (`quantize = TRUE` in
 #'   [scroll_build()]), expression values below ~`max/510` round to zero, so the
@@ -40,9 +42,10 @@
 #'   `quantize = FALSE` for exact statistics.
 #' @export
 scroll_de <- function(data, assay, group_col, ident1, ident2 = NULL, min_pct = 0.1,
-                      cells = NULL, max_cells = NULL) {
+                      cells = NULL, max_cells = NULL, progress = NULL) {
   if (!requireNamespace("presto", quietly = TRUE))
     stop("Live DE needs the 'presto' package.", call. = FALSE)
+  pr <- function(f, d) if (is.function(progress)) progress(f, d)
   cells <- cells %||% data$cells
   ident1 <- as.character(ident1); ident1 <- ident1[nzchar(ident1)]
   if (!length(ident1)) stop("Pick at least one level for group 1.", call. = FALSE)
@@ -83,6 +86,7 @@ scroll_de <- function(data, assay, group_col, ident1, ident2 = NULL, min_pct = 0
   # list) also stays correct when yaml has mangled a non-ASCII feature name, and
   # zero-expression genes are absent here so restricting to expressed features is
   # correct too.
+  pr(0.15, "Reading expression...")
   long <- scroll_query_cells(data$con, assay, key, dict = TRUE)
   val   <- scroll_dequantize(long$value, data$manifest, assay)
   feats <- levels(long$feature)
@@ -100,6 +104,7 @@ scroll_de <- function(data, assay, group_col, ident1, ident2 = NULL, min_pct = 0
                             dims = c(length(feats), length(bc)), dimnames = list(feats, bc))
   rm(i, revmap, val)
 
+  pr(0.7, "Testing genes (Wilcoxon)...")
   res <- presto::wilcoxauc(X, labels)
   res <- res[res$group == "group1", , drop = FALSE]
   res <- res[pmax(res$pct_in, res$pct_out) >= min_pct * 100, , drop = FALSE]

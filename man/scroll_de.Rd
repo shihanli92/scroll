@@ -12,7 +12,8 @@ scroll_de(
   ident2 = NULL,
   min_pct = 0.1,
   cells = NULL,
-  max_cells = NULL
+  max_cells = NULL,
+  progress = NULL
 )
 }
 \arguments{
@@ -41,6 +42,9 @@ before testing, which bounds DE time and peak memory on large contrasts
 (a standard marker-detection shortcut; cf. Seurat's \code{max.cells.per.ident}).
 \code{NULL} (default) uses every cell. The subsample is deterministic (fixed
 seed) so repeated runs match, and the session RNG is left untouched.}
+
+\item{progress}{Optional \verb{function(fraction, detail)} called at the read and
+test stages, for a UI progress bar. \code{NULL} (default) is a no-op.}
 }
 \value{
 A data.frame of results, ranked by adjusted p-value.

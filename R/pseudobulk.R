@@ -103,6 +103,8 @@
 #' @param seed Integer seed for the pseudo-replicate draw, so a compute is
 #'   reproducible and the caller's RNG stream is left untouched. `NULL` uses the
 #'   current RNG state (used internally to vary draws across stability runs).
+#' @param progress Optional `function(fraction, detail)` called at the aggregate
+#'   and model-fit stages, for a UI progress bar. `NULL` (default) is a no-op.
 #' @return A data.frame (`gene`, `logFC`, `avg_expr`, `p_val`, `p_val_adj`) ranked
 #'   by adjusted p-value; positive `logFC` is up in `ident1`. The attribute
 #'   `"pseudo"` is `TRUE` when pseudo-replicates were used.
@@ -110,7 +112,8 @@
 scroll_pseudobulk_de <- function(data, assay, aggregate_cols, ident1, ident2 = NULL,
                                  replicate_col = NULL, min_cells = 10,
                                  n_pseudo = 3, cells_per_pseudo = 50, cells = NULL,
-                                 seed = 1L) {
+                                 seed = 1L, progress = NULL) {
+  pr <- function(f, d) if (is.function(progress)) progress(f, d)
   if (!requireNamespace("edgeR", quietly = TRUE) ||
       !requireNamespace("limma", quietly = TRUE))
     stop("Pseudobulk DE needs the 'edgeR' and 'limma' packages.", call. = FALSE)
@@ -149,6 +152,7 @@ scroll_pseudobulk_de <- function(data, assay, aggregate_cols, ident1, ident2 = N
          "Lower Min cells, choose a replicate column, or add pseudo-replicates.",
          call. = FALSE)
 
+  pr(0.2, "Aggregating pseudobulk counts...")
   agg <- scroll_aggregate_counts(data$con, assay, mapping[, c("cell", "psample")])
   # store's own feature names (encoding-robust; the manifest yaml can mangle a
   # non-ASCII feature name into an escaped form that would not match() the store).
@@ -157,6 +161,7 @@ scroll_pseudobulk_de <- function(data, assay, aggregate_cols, ident1, ident2 = N
   M <- matrix(0L, nrow = length(feats), ncol = length(ps), dimnames = list(feats, ps))
   M[cbind(match(agg$feature, feats), match(agg$psample, ps))] <- as.integer(agg$count)
 
+  pr(0.7, "Fitting model (edgeR / limma-voom)...")
   # group1 as the tested coefficient: positive logFC = up in ident1
   group <- factor(samp$group[match(ps, samp$psample)], levels = c("group2", "group1"))
   dge <- edgeR::DGEList(counts = M, group = group)

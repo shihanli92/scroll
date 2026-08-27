@@ -15,7 +15,8 @@ scroll_pseudobulk_de(
   n_pseudo = 3,
   cells_per_pseudo = 50,
   cells = NULL,
-  seed = 1L
+  seed = 1L,
+  progress = NULL
 )
 }
 \arguments{
@@ -44,6 +45,9 @@ pseudo-replicates and cells sampled per pseudo-replicate.}
 \item{seed}{Integer seed for the pseudo-replicate draw, so a compute is
 reproducible and the caller's RNG stream is left untouched. \code{NULL} uses the
 current RNG state (used internally to vary draws across stability runs).}
+
+\item{progress}{Optional \verb{function(fraction, detail)} called at the aggregate
+and model-fit stages, for a UI progress bar. \code{NULL} (default) is a no-op.}
 }
 \value{
 A data.frame (\code{gene}, \code{logFC}, \code{avg_expr}, \code{p_val}, \code{p_val_adj}) ranked

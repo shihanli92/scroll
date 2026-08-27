@@ -132,11 +132,14 @@ pseudobulk_de_server <- function(id, data, cells_r = reactive(data$cells),
         replicate_col = input$replicate, min_cells = input$mincells,
         n_pseudo = input$npseudo, cells_per_pseudo = input$cellsper, cells = cells_r())
       stability <- isTRUE(input$runs > 1) && identical(input$replicate, "no_replicate")
-      tryCatch(
-        if (stability)
-          list(runs = do.call(.scroll_pseudobulk_runs, c(args, list(runs = input$runs))))
-        else list(ok = do.call(scroll_pseudobulk_de, args)),
-        error = function(e) list(err = conditionMessage(e)))
+      withProgress(message = "Pseudobulk DE", value = 0,
+        tryCatch(
+          if (stability) {
+            setProgress(0.1, detail = "Running stability resamples...")
+            list(runs = do.call(.scroll_pseudobulk_runs, c(args, list(runs = input$runs))))
+          } else list(ok = do.call(scroll_pseudobulk_de,
+                        c(args, list(progress = function(f, d) setProgress(value = f, detail = d))))),
+          error = function(e) list(err = conditionMessage(e))))
     })
 
     de_df <- reactive({

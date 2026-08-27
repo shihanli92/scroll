@@ -92,9 +92,12 @@ signature_server <- function(id, data, cells_r = reactive(data$cells),
       validate(need(length(genes) >= 1, "Add one or more genes to build a signature."))
       method <- input$method %||% "mean"
       # AddModuleScore needs each gene's mean over all cells: computed once (a full-store
-      # scan, cached on the handle), then reused. The other methods touch only the genes.
+      # scan, cached on the handle), then reused. Its multi-second first run shows a staged
+      # progress bar. The other methods touch only the genes and are fast (spinner only).
       score <- if (identical(method, "addmodulescore"))
-                 .scroll_module_score(cells, genes, data, assay())
+                 withProgress(message = "Scoring signature", value = 0,
+                   .scroll_module_score(cells, genes, data, assay(),
+                     progress = function(f, d) setProgress(value = f, detail = d)))
                else
                  .scroll_signature_score(cells, genes, data$queryN(assay(), genes), method)
       list(cells = cells, genes = genes, n = nrow(cells), view = input$view %||% "umap",
