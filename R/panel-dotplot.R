@@ -32,6 +32,10 @@
   list(ok = unique(matched[!is.na(matched)]), missing = toks[is.na(matched)])
 }
 
+# Soft guidance only (does not block): a dot plot with very many gene rows is slow to
+# compute (one partition read per gene, plus O(n^2) row hclust) and hard to read.
+.SCROLL_DOTPLOT_WARN <- 80L
+
 dotplot_ui <- function(id, data) {
   ns <- NS(id)
   m <- data$manifest
@@ -90,6 +94,14 @@ dotplot_server <- function(id, data, cells_r = reactive(data$cells),
         showNotification(paste("Not in this assay:", paste(parsed$missing, collapse = ", ")),
                          type = "warning", duration = 6)
     })
+    # a very long gene list still renders, but warn that it will be slow / cramped
+    observeEvent(input$markers, {
+      n <- length(input$markers)
+      if (n > .SCROLL_DOTPLOT_WARN)
+        showNotification(sprintf(
+          "%d genes selected - the dot plot may be slow to compute and hard to read.", n),
+          type = "warning", duration = 5)
+    }, ignoreInit = TRUE)
     # DATA reactive: query + aggregation + hclust. `scale` and `cluster` change
     # the aggregation/clustering, so they are DATA inputs (not cosmetic); palette
     # and dot size are cosmetic. No rasterization (dots = features x groups).
