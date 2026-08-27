@@ -14,7 +14,18 @@
 .scroll_vdj_scope <- function(rc, cells) {
   if (is.null(rc) || is.null(cells) || !"cell" %in% names(rc) || !"cell" %in% names(cells))
     return(rc)
-  rc[rc$cell %in% cells$cell, , drop = FALSE]
+  rc <- rc[rc$cell %in% cells$cell, , drop = FALSE]
+  # Join any categorical cells.parquet column not already baked into the store onto the
+  # per-cell repertoire table by barcode, so a repertoire view can group / colour / split
+  # by ANY metadata column (e.g. cloneSize, a cluster resolution), not only the columns
+  # carried at build time. Non-members of the active view have no barcode match -> NA.
+  extra <- setdiff(names(cells)[vapply(cells, function(v) is.character(v) || is.factor(v),
+                                       logical(1))], names(rc))
+  if (length(extra) && nrow(rc)) {
+    idx <- match(rc$cell, cells$cell)
+    for (col in extra) rc[[col]] <- as.character(cells[[col]])[idx]
+  }
+  rc
 }
 # Distinct non-NA values of a vector.
 .scroll_ndistinct <- function(v) length(unique(v[!is.na(v)]))
@@ -38,8 +49,15 @@
 .scroll_vdj_split_cols <- function(data) {
   rc <- .scroll_vdj_read(data, "rep_cells.parquet"); if (is.null(rc)) return(character())
   ref <- if ("clone_id" %in% names(rc)) .scroll_ndistinct(rc$clone_id) else nrow(rc)
-  Filter(function(c) !.scroll_vdj_high_card(rc, c, ref),
-         .scroll_vdj_cat_cols(rc, data$manifest$vdj$segments))
+  baked <- Filter(function(c) !.scroll_vdj_high_card(rc, c, ref),
+                  .scroll_vdj_cat_cols(rc, data$manifest$vdj$segments))
+  # Every other categorical metadata column is offered too (joined per-cell by barcode at
+  # render, see .scroll_vdj_scope), capped to a sane level count so the group menus stay
+  # usable and identifier-like columns (barcode, clone id) never appear.
+  meta  <- data$manifest$meta
+  extra <- Filter(function(c) { n <- length(unlist(meta[[c]]$levels)); n >= 1 && n <= 50 },
+                  names(Filter(function(x) identical(x$type, "categorical"), meta)))
+  unique(c(baked, setdiff(extra, c(baked, data$manifest$vdj$group_col))))
 }
 
 # Columns that can serve as a clone id: the baked `clone_id` plus any carried
@@ -58,10 +76,12 @@
 # The distinct levels of a group column named by the control `group_id` (for a group
 # filter's choices). Falls back to the baked `group` column.
 .scroll_vdj_col_levels <- function(input, data, group_id = "group") {
-  rc <- .scroll_vdj_read(data, "rep_cells.parquet"); if (is.null(rc)) return(character())
-  g <- if (!is.null(input[[group_id]]) && input[[group_id]] %in% names(rc)) input[[group_id]] else "group"
-  if (!g %in% names(rc)) return(character())
-  sort(unique(as.character(rc[[g]][!is.na(rc[[g]])])))
+  g <- if (!is.null(input[[group_id]]) && nzchar(input[[group_id]])) input[[group_id]] else "group"
+  rc <- .scroll_vdj_read(data, "rep_cells.parquet")
+  if (!is.null(rc) && g %in% names(rc))                       # a baked repertoire column
+    return(sort(unique(as.character(rc[[g]][!is.na(rc[[g]])]))))
+  lv <- unlist(data$manifest$meta[[g]]$levels)                # a cells.parquet column, joined at render
+  if (length(lv)) sort(as.character(lv)) else character()
 }
 
 # The active group levels = the group column's levels narrowed by the group filter

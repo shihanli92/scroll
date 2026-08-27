@@ -94,6 +94,27 @@ test_that("BCR projects build and expose heavy/light labels + a computable paire
   expect_true(any(!is.na(div$paired_rate)))            # exactly 2 CDR3 chains -> computable
 })
 
+test_that("VDJ group-by offers all categorical columns, joined per-cell by barcode", {
+  data <- scroll:::.scroll_load(vdj_test_project())
+  on.exit(scroll_disconnect(data$con), add = TRUE)
+  # `condition` is a categorical metadata column that is NOT baked into the repertoire store
+  cols <- scroll:::.scroll_vdj_split_cols(data)
+  expect_true("condition" %in% cols)
+  rc <- scroll:::.scroll_vdj_read(data, "rep_cells.parquet")
+  expect_false("condition" %in% names(rc))                 # absent from rep_cells.parquet
+  expect_true("condition" %in% names(scroll:::.scroll_vdj_scope(rc, data$cells)))  # joined at render
+  # levels of a joined column come from the manifest
+  expect_setequal(scroll:::.scroll_vdj_col_levels(list(group = "condition"), data, "group"),
+                  unlist(data$manifest$meta$condition$levels))
+  # and a panel renders when grouping by it
+  gu <- Filter(function(p) identical(p$id, "gene_usage"),
+               scroll:::.scroll_assemble_panels(data$manifest))[[1]]
+  shiny::testServer(gu$server, args = list(data = data), {
+    session$setInputs(segment = "TRBV", view = "Frequency", group = "condition")
+    expect_s3_class(plot_r(), "ggplot")
+  })
+})
+
 test_that("built-in VDJ panels render on an auto-detected AIRR project", {
   data <- scroll:::.scroll_load(vdj_airr_test_project())
   on.exit(scroll_disconnect(data$con), add = TRUE)
