@@ -1,5 +1,18 @@
 # scroll 0.2.5
 
+## New Signature panel
+
+* A new always-on built-in panel (**Signature**, after FeaturePlot) scores a gene
+  **signature** per cell live — type or paste a gene list (case-insensitive, unknown
+  symbols reported) and colour the embedding by the score, or draw a violin split by any
+  categorical column. Two runtime scoring methods: **Mean** (mean of the genes' log-norm
+  expression, absent cell = 0), **Scaled** (z-score each gene across the shown cells,
+  then average), and **AddModuleScore** — a faithful runtime port of Seurat's
+  `AddModuleScore` (signature mean minus an expression-matched control mean; validated at
+  Pearson r ≈ 0.999 against Seurat on real data). No rebuild needed: AddModuleScore's
+  per-gene background means are computed by a one-time full-store scan cached on the
+  connection handle, and the other methods touch only the signature's genes.
+
 ## Read VDJ from scRepertoire / AIRR / Platypus
 
 * `vdj_spec()` gains a **`source`** argument (default `"auto"`) so the shipped repertoire
