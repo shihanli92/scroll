@@ -23,7 +23,8 @@ signature_ui <- function(id, data) {
                     c("Mean (log-norm)" = "mean", "Scaled (z-score, shown cells)" = "scaled",
                       "AddModuleScore (Seurat)" = "addmodulescore")),
         if (length(assays) > 1)
-          selectInput(ns("assay"), "Assay", assays, selected = m$default_assay)),
+          selectInput(ns("assay"), "Assay", assays, selected = m$default_assay),
+        actionButton(ns("compute"), "Calculate", class = "btn-primary", width = "100%")),
       .scroll_group("View",
         selectInput(ns("view"), "Show as",
                     c("Feature UMAP" = "umap", "Violin by group" = "violin"))),
@@ -84,24 +85,24 @@ signature_server <- function(id, data, cells_r = reactive(data$cells),
         showNotification(paste("Not in this assay:", paste(parsed$missing, collapse = ", ")),
                          type = "warning", duration = 6)
     })
-    # DATA reactive: query the signature genes and build the per-cell score once (both
-    # views reuse it). Method is a DATA input; palette/size/etc. are cosmetic.
-    data_r <- reactive({
+    # Query the signature genes and build the per-cell score only when Calculate is
+    # clicked (the score -- especially AddModuleScore's full-store scan -- shouldn't
+    # recompute on every keystroke). The view / embedding / group / palette are applied
+    # live from the cached score, so switching them never re-queries.
+    score_r <- eventReactive(input$compute, {
       cells <- cells_r()
       genes <- intersect(input$sig, .scroll_features_of(m, assay()))
       validate(need(length(genes) >= 1, "Add one or more genes to build a signature."))
       method <- input$method %||% "mean"
-      # AddModuleScore needs each gene's mean over all cells: computed once (a full-store
-      # scan, cached on the handle), then reused. Its multi-second first run shows a staged
-      # progress bar. The other methods touch only the genes and are fast (spinner only).
+      # AddModuleScore's multi-second first run shows a staged progress bar; the other
+      # methods touch only the signature's genes.
       score <- if (identical(method, "addmodulescore"))
                  withProgress(message = "Scoring signature", value = 0,
                    .scroll_module_score(cells, genes, data, assay(),
                      progress = function(f, d) setProgress(value = f, detail = d)))
                else
                  .scroll_signature_score(cells, genes, data$queryN(assay(), genes), method)
-      list(cells = cells, genes = genes, n = nrow(cells), view = input$view %||% "umap",
-           embedding = red_rv(), group_by = input$group,
+      list(cells = cells, genes = genes,
            values = data.frame(cell = cells$cell, value = score, stringsAsFactors = FALSE))
     })
     cosmetic_r <- .scroll_cosmetic(reactive(
@@ -109,20 +110,25 @@ signature_server <- function(id, data, cells_r = reactive(data$cells),
            order = isTRUE(input$order), legend = isTRUE(input$legend),
            clip = input$clip / 100, aspect = input$aspect)))
     build <- function(raster) {
-      d <- data_r(); st <- cosmetic_r(); st$raster <- raster
+      validate(need(input$compute > 0, "Add a gene signature, then click Calculate."))
+      d <- score_r(); st <- cosmetic_r(); st$raster <- raster
       lab <- sprintf("Signature (%d gene%s)", length(d$genes), if (length(d$genes) == 1) "" else "s")
-      if (identical(d$view, "violin")) {
-        validate(need(!is.null(d$group_by) && nzchar(d$group_by),
-                      "Pick a categorical column to group the violin."))
-        return(view_violin(d$cells, list(group_by = d$group_by, feature = lab), d$values, st))
+      if (identical(input$view %||% "umap", "violin")) {
+        grp <- input$group
+        validate(need(!is.null(grp) && nzchar(grp), "Pick a categorical column to group the violin."))
+        return(view_violin(d$cells, list(group_by = grp, feature = lab), d$values, st))
       }
-      view_feature_plot(d$cells, list(embedding = d$embedding, feature = lab), d$values, st)
+      view_feature_plot(d$cells, list(embedding = red_rv(), feature = lab), d$values, st)
     }
-    plot_r   <- .scroll_lazy_plot(input, function() build(.scroll_use_raster(input$raster, data_r()$n)))
+    plot_r <- .scroll_lazy_plot(input, function() {
+      n <- if (isTRUE(input$compute > 0)) nrow(score_r()$cells) else 0L
+      build(.scroll_use_raster(input$raster, n))
+    })
     export_r <- reactive(build(FALSE))
     output$plot <- renderPlot(plot_r())
     csv_r <- reactive({
-      d <- data_r()
+      req(input$compute > 0)
+      d <- score_r()
       data.frame(cell = d$cells$cell, signature_score = d$values$value, stringsAsFactors = FALSE)
     })
     .scroll_plot_downloads(output, export_r, id, csv_r = csv_r)

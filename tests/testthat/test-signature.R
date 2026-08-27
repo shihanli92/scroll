@@ -48,6 +48,8 @@ test_that("signature_server renders the UMAP and violin views from a gene list",
     session$setInputs(sig = feats[1:3], method = "mean", view = "umap", reduction = red,
                       palette = "grey-purple", size = 0.7, clip = c(0, 100),
                       order = TRUE, legend = TRUE, raster = FALSE, aspect = 1)
+    expect_error(plot_r())                                 # nothing until Calculate is clicked
+    session$setInputs(compute = 1)
     expect_s3_class(plot_r(), "ggplot")
 
     # CSV export is one score per cell
@@ -55,12 +57,12 @@ test_that("signature_server renders the UMAP and violin views from a gene list",
     expect_setequal(names(csv), c("cell", "signature_score"))
     expect_equal(nrow(csv), nrow(data$cells))
 
-    # scaled scoring still renders
-    session$setInputs(method = "scaled")
+    # switching to the violin view reuses the computed score (no recompute needed)
+    session$setInputs(view = "violin", group = cat1)
     expect_s3_class(plot_r(), "ggplot")
 
-    # violin view, grouped by a categorical column
-    session$setInputs(view = "violin", group = cat1)
+    # scaled scoring after a re-Calculate
+    session$setInputs(view = "umap", method = "scaled", compute = 2)
     expect_s3_class(plot_r(), "ggplot")
   })
 })
@@ -133,7 +135,7 @@ test_that("signature_server requires at least one gene", {
   on.exit(scroll_disconnect(data$con), add = TRUE)
   panel <- Filter(function(p) identical(p$id, "signature"), scroll:::.scroll_builtin_panels())[[1]]
   shiny::testServer(panel$server, args = list(data = data), {
-    session$setInputs(sig = character(0), method = "mean", view = "umap")
+    session$setInputs(sig = character(0), method = "mean", view = "umap", compute = 1)
     expect_error(plot_r())                               # validate() -> "Add one or more genes..."
   })
 })
