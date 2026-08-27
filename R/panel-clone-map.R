@@ -82,11 +82,12 @@ clone_map_ui <- function(id, data) {
   ns <- shiny::NS(id)
   m <- data$manifest
   if (is.null(m$vdj)) return(.scroll_empty_panel("No repertoire in this project."))
-  emb <- .scroll_global_embeddings(m)
-  if (!length(emb)) return(.scroll_empty_panel("No embedding to draw clones on."))
+  embs0 <- .scroll_view_embeddings(m, NULL)
+  if (!length(embs0)) return(.scroll_empty_panel("No embedding to draw clones on."))
   ctl <- list(
-    if (length(emb) > 1) selectInput(ns("embedding"), "Embedding", stats::setNames(emb, emb),
-                                     selected = .scroll_default(data, "default_embedding", emb[[1]])),
+    # repopulated for the active subset view in the server (see the view_r observer)
+    selectInput(ns("embedding"), "Embedding", stats::setNames(embs0, embs0),
+                selected = .scroll_default(data, "default_embedding", embs0[[1]])),
     sliderInput(ns("minsize"), "Min clone size", 1, 50, 1, 1),
     selectInput(ns("palette"), "Highlight palette", .scroll_cat_palettes()),
     uiOutput(ns("palette_manual")),                    # per-clone pickers when "Manual"
@@ -118,6 +119,18 @@ clone_map_server <- function(id, data, cells_r = shiny::reactive(data$cells),
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     segs <- m$vdj$segments
+    # Effective embedding, view-aware: the dropdown repopulates with the active subset
+    # view's reductions (e.g. cd8_wnn), so the clone map follows the View like FeaturePlot.
+    red_rv <- reactiveVal(.scroll_default(data, "default_embedding",
+                                          .scroll_view_embeddings(m, NULL)[[1]]))
+    observeEvent(view_r(), {
+      reds <- .scroll_view_embeddings(m, view_r())
+      sel <- if (is.null(view_r())) .scroll_default(data, "default_embedding", reds[[1]]) else reds[[1]]
+      if (!sel %in% reds) sel <- reds[[1]]
+      red_rv(sel)
+      updateSelectInput(session, "embedding", choices = stats::setNames(reds, reds), selected = sel)
+    }, ignoreNULL = FALSE, priority = 100)
+    observeEvent(input$embedding, red_rv(input$embedding), ignoreInit = TRUE)
     # scoped per-cell repertoire (honours the global filter / subset view), read once
     rc_r <- reactive(.scroll_vdj_scope(.scroll_vdj_read(data, "rep_cells.parquet"), cells_r()))
     # per-clone table, size-filtered
@@ -174,10 +187,8 @@ clone_map_server <- function(id, data, cells_r = shiny::reactive(data$cells),
 
     plot_r <- reactive({
       cells <- cells_r()
-      embs <- .scroll_global_embeddings(m)
-      emb <- if (!is.null(input$embedding) && input$embedding %in% embs) input$embedding
-             else .scroll_default(data, "default_embedding", embs[[1]])
-      if (!emb %in% embs) emb <- embs[[1]]
+      reds <- .scroll_view_embeddings(m, view_r())        # the active view's embeddings
+      emb <- red_rv(); if (!emb %in% reds) emb <- reds[[1]]
       df <- .scroll_embedding_xy(cells, emb)
       validate(need(nrow(df), "No cells with coordinates."))
       rc <- rc_r()
