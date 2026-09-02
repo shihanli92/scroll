@@ -1,5 +1,16 @@
 # scroll 0.2.6
 
+## DimPlot: colour by multiple columns + configurable highlight background
+
+* The DimPlot **Color by** control is now multi-select: pick more than one categorical
+  column to colour cells by their `a | b` interaction (e.g. `donor | antigen`), mirroring
+  the differential-expression "group by". The **Highlight** box then lists the composite
+  levels, so you can highlight a specific combination (e.g. `Donor 1 | pp65_CMV`).
+* When a highlight is active, a **Background colour** picker sets the colour of the
+  non-highlighted cells (previously a fixed grey), and the **Manual** palette now shows
+  a colour picker only for the highlighted group(s) rather than every level — so you can
+  recolour the few groups in focus even on a high-cardinality (or composite) column.
+
 ## Add a metadata column with no Seurat object
 
 * New `scroll_add_meta(dir, name, values)` writes a column into a built project's

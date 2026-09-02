@@ -343,42 +343,50 @@ view_umap_colorby <- function(cells, params, state = list()) {
   embedding <- .scroll_eff_embedding(params, state)
   df <- .scroll_embedding_xy(cells, embedding)
   color_by <- params$color_by
-  if (!color_by %in% names(df))
-    stop("color_by column '", color_by, "' not in cells table.", call. = FALSE)
-  df$.col <- df[[color_by]]
+  missing <- setdiff(color_by, names(df))
+  if (!length(color_by) || length(missing))
+    stop("color_by column(s) not in cells table: ",
+         paste(if (length(missing)) missing else "(none given)", collapse = ", "),
+         call. = FALSE)
+  # >1 column -> colour by their "a | b" interaction (composite is always categorical)
+  composite <- length(color_by) > 1
+  lab <- paste(color_by, collapse = " | ")
+  df$.col <- if (composite) .scroll_combo_levels(df, color_by) else df[[color_by]]
   size <- .scroll_opt(params, state, "point_size", 0.6)
   alpha <- .scroll_opt(params, state, "alpha", 0.85)
   raster <- isTRUE(state$raster)
   base <- .scroll_base_scatter(df, embedding, .scroll_opt(params, state, "legend", TRUE))
 
-  # numeric color-by: a continuous gradient
-  if (is.numeric(df$.col)) {
+  # numeric color-by (a single numeric column): a continuous gradient
+  if (!composite && is.numeric(df$.col)) {
     p <- base +
       .scroll_point_layer(ggplot2::aes(color = .data$.col), size = size, alpha = alpha, raster = raster) +
-      .scroll_continuous_scale(.scroll_opt(params, state, "palette", "viridis"), color_by) +
-      ggplot2::labs(color = color_by)
+      .scroll_continuous_scale(.scroll_opt(params, state, "palette", "viridis"), lab) +
+      ggplot2::labs(color = lab)
     return(.scroll_finish_scatter(p, df, state))
   }
 
-  # categorical: discrete colors, with optional group highlight + manual colors
+  # categorical (single column or composite): discrete colors, with optional group
+  # highlight (configurable background colour) + manual colors
   df$.col <- as.character(df$.col)
   cols <- .scroll_group_colors(df$.col, state)
   highlight <- intersect(state$highlight %||% character(0), df$.col)
+  bg_color <- .scroll_opt(params, state, "bg_color", "grey85")
 
-  if (length(highlight)) {                       # selected groups keep color, rest grey
+  if (length(highlight)) {                       # selected groups keep color, rest -> background
     bg <- df[!(df$.col %in% highlight), , drop = FALSE]
     fg <- df[df$.col %in% highlight, , drop = FALSE]
     p <- base +
-      .scroll_point_layer(data = bg, color = "grey85", size = size, alpha = alpha, raster = raster) +
+      .scroll_point_layer(data = bg, color = bg_color, size = size, alpha = alpha, raster = raster) +
       .scroll_point_layer(ggplot2::aes(color = .data$.col), data = fg, size = size, alpha = alpha, raster = raster) +
       ggplot2::scale_color_manual(values = cols, limits = highlight) +
-      ggplot2::labs(color = color_by)
+      ggplot2::labs(color = lab)
     label_df <- fg
   } else {
     p <- base +
       .scroll_point_layer(ggplot2::aes(color = .data$.col), size = size, alpha = alpha, raster = raster) +
       ggplot2::scale_color_manual(values = cols) +
-      ggplot2::labs(color = color_by)
+      ggplot2::labs(color = lab)
     label_df <- df
   }
   # legend key glyphs, sized independently of the (small) plotted points
@@ -854,7 +862,10 @@ view_violin_multi <- function(cells, params, values_long, state = list()) {
 .scroll_dimplot_source <- function(cells, embedding, color_by) {
   df <- .scroll_embedding_xy(cells, embedding)                 # drops NA-coord cells, like the plot
   cols <- unique(c("cell", paste0(embedding, c("_1", "_2")), color_by))
-  df[, intersect(cols, names(df)), drop = FALSE]
+  out <- df[, intersect(cols, names(df)), drop = FALSE]
+  if (length(color_by) > 1)                                    # add the composite grouping column
+    out[[paste(color_by, collapse = " | ")]] <- .scroll_combo_levels(df, color_by)
+  out
 }
 
 .scroll_featureplot_source <- function(cells, embedding, feature, values) {

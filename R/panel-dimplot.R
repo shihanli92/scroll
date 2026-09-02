@@ -13,10 +13,18 @@ dimplot_ui <- function(id, data) {
       .scroll_group("Embedding",
         selectInput(ns("reduction"), "Reduction", reductions,
                     selected = .scroll_default(data, "default_embedding", reductions[[1]])),
-        selectInput(ns("colorby"), "Color by", .scroll_colorby_choices(m), selected = first_cat)),
+        # multi-select: pick >1 categorical column to colour by their "a | b" interaction
+        selectizeInput(ns("colorby"), "Color by", .scroll_colorby_choices(m),
+                       selected = first_cat, multiple = TRUE,
+                       options = list(placeholder = "Pick column(s)"))),
       .scroll_group("Groups",
         selectizeInput(ns("highlight"), "Highlight", choices = NULL, multiple = TRUE,
-                       options = list(placeholder = "All groups"))),
+                       options = list(placeholder = "All groups")),
+        # background colour for non-highlighted cells (only relevant while highlighting)
+        conditionalPanel(
+          condition = sprintf("input['%s'] && input['%s'].length > 0",
+                              ns("highlight"), ns("highlight")),
+          colourpicker::colourInput(ns("bg_color"), "Background colour", value = "grey85"))),
       .scroll_group("Appearance",
         selectInput(ns("palette"), "Palette", names(.scroll_discrete_palettes)),
         uiOutput(ns("manual")),
@@ -53,22 +61,30 @@ dimplot_server <- function(id, data, cells_r = reactive(data$cells),
     # the current value is a no-op, so the echoed round-trip does not re-render).
     red_rv <- reactiveVal(.scroll_default(data, "default_embedding",
                                           .scroll_view_embeddings(m, NULL)[[1]]))
-    cb_rv  <- reactiveVal(first_cat)
+    cb_rv  <- reactiveVal(first_cat)                    # holds 1+ column names (composite if >1)
     observeEvent(view_r(), {
       reds <- .scroll_view_embeddings(m, view_r())
       sel_red <- if (is.null(view_r()))
         .scroll_default(data, "default_embedding", reds[[1]]) else reds[[1]]
       if (!sel_red %in% reds) sel_red <- reds[[1]]
       cb <- .scroll_colorby_choices(m, view_r()); flat <- unlist(cb, use.names = FALSE)
-      cur <- cb_rv(); sel_cb <- if (!is.null(cur) && cur %in% flat) cur else flat[[1]]
+      cur <- cb_rv(); sel_cb <- if (length(cur) && all(cur %in% flat)) cur else flat[[1]]
       red_rv(sel_red); cb_rv(sel_cb)
       updateSelectInput(session, "reduction", choices = reds, selected = sel_red)
-      updateSelectInput(session, "colorby", choices = cb, selected = sel_cb)
+      updateSelectizeInput(session, "colorby", choices = cb, selected = sel_cb)
     }, ignoreNULL = FALSE, priority = 100)
     observeEvent(input$reduction, red_rv(input$reduction), ignoreInit = TRUE)
-    observeEvent(input$colorby,   cb_rv(input$colorby),    ignoreInit = TRUE)
-    is_cat <- reactive(identical(m$meta[[cb_rv()]]$type, "categorical"))
-    levels_of <- reactive(if (is_cat()) .scroll_meta_levels(data, cb_rv()) else character(0))
+    # keep the last valid selection if the box is cleared, so color_by is never empty
+    observeEvent(input$colorby, if (length(input$colorby)) cb_rv(input$colorby),
+                 ignoreInit = TRUE, ignoreNULL = FALSE)
+    # composite (>1 column) is categorical; a single column follows its manifest type
+    is_cat <- reactive({ cb <- cb_rv()
+      length(cb) > 1L || identical(m$meta[[cb]]$type, "categorical") })
+    levels_of <- reactive({ cb <- cb_rv()
+      if (!is_cat()) character(0)
+      else if (length(cb) > 1L)                          # composite levels: computed on active cells
+        sort(unique(stats::na.omit(.scroll_combo_levels(cells_r(), cb))))
+      else .scroll_meta_levels(data, cb) })
     .scroll_bind_view_cats(input, session, view_r, m, "split", prepend = c("None" = ""))
 
     observeEvent(input$colorby, {
@@ -83,14 +99,22 @@ dimplot_server <- function(id, data, cells_r = reactive(data$cells),
       }
     })
 
+    # Levels that get a manual colour picker: when highlighting, only the
+    # highlighted groups (you can't recolour cells that aren't shown) — this also
+    # keeps a big/composite column's Manual pickers to the handful in focus; when
+    # not highlighting, every level.
+    manual_levels <- reactive({
+      hl <- intersect(input$highlight %||% character(0), levels_of())
+      if (length(hl)) hl else levels_of()
+    })
     # per-group color pickers, shown only when the palette is "Manual"
     output$manual <- renderUI({
       if (!is_cat() || !identical(input$palette, "Manual")) return(NULL)
-      .scroll_manual_ui(session$ns, levels_of())
+      .scroll_manual_ui(session$ns, manual_levels())
     })
     manual_colors <- reactive({
       if (!is_cat() || !identical(input$palette, "Manual")) return(NULL)
-      .scroll_manual_colors(input, levels_of())
+      .scroll_manual_colors(input, manual_levels())
     })
 
     # DATA reactive (cells + params) invalidates only on data-input changes.
@@ -105,7 +129,8 @@ dimplot_server <- function(id, data, cells_r = reactive(data$cells),
       list(theme = theme_r(), palette = input$palette, point_size = input$size, alpha = input$alpha,
            show_labels = isTRUE(input$labels), legend = isTRUE(input$legend),
            split_by = .scroll_nz(input$split), aspect = input$aspect,
-           highlight = input$highlight, manual_colors = manual_colors())))
+           highlight = input$highlight, bg_color = input$bg_color %||% "grey85",
+           manual_colors = manual_colors())))
     build <- function(raster) {
       d <- data_r(); st <- cosmetic_r(); st$raster <- raster
       view_umap_colorby(d$cells, list(embedding = d$embedding, color_by = d$color_by), st)
