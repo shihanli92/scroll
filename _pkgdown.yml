@@ -17,6 +17,7 @@ reference:
   - scroll_build
   - scroll_build_stream
   - scroll_update
+  - scroll_add_meta
   - scroll_add_subset
   - vdj_spec
   - spatial_spec

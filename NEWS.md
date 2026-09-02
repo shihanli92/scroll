@@ -1,5 +1,16 @@
 # scroll 0.2.6
 
+## Add a metadata column with no Seurat object
+
+* New `scroll_add_meta(dir, name, values)` writes a column into a built project's
+  `cells.parquet` + `manifest.yaml` directly — no original Seurat object required, so
+  you can add a column to an already-deployed app. `values` may be a length-`n_cells`
+  vector, a barcode-named vector, a `data.frame(cell, value)`, or a `function(cells)`
+  that derives the column from existing columns. Categorical vs numeric is inferred
+  (as in `scroll_build`), and `scope =` scopes it to a subset view. Restart the app to
+  pick it up. (Use `scroll_update()` when you *do* have the object and want to pull
+  columns/embeddings/subsets from it.)
+
 ## Expression store: one Parquet file per assay
 
 * `scroll_build()` now writes the expression store as a single feature-sorted file

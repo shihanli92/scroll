@@ -122,3 +122,93 @@ scroll_update <- function(dir, object, embeddings = NULL, meta_cols = NULL,
     if (!is.null(subs_norm)) sprintf(", %d subset view(s)", length(subs_norm)) else ""))
   invisible(dir)
 }
+
+#' Add (or replace) a metadata column in a built project -- no Seurat object needed
+#'
+#' Writes a new column into a built project's `cells.parquet` and registers it in
+#' `manifest.yaml`, so it becomes selectable in the app on the next restart
+#' (Color-by / group-by and DotPlot/Violin/Proportions for a **categorical** column;
+#' FeaturePlot / Biaxial for a **numeric** one). Unlike [scroll_update()] this needs
+#' only the on-disk project, not the original Seurat object -- handy for editing a
+#' deployed app. The column must be something you can compute from what the project
+#' already holds: other metadata columns, or expression queried with
+#' [scroll_query_feature()]. The expression store is untouched.
+#'
+#' @param dir A built scroll project directory (with `cells.parquet` + `manifest.yaml`).
+#' @param name Name of the column to add. Cannot be `"cell"` (the barcode column); an
+#'   existing metadata column is replaced only when `overwrite = TRUE`.
+#' @param values The column, one of: a vector of length `n_cells` in `cells.parquet`
+#'   **row order**; a **named** vector keyed by cell barcode (unmatched cells become
+#'   `NA`); a `data.frame` with a `cell` column and one value column; or a
+#'   `function(cells)` returning one of those (it receives the loaded `cells`
+#'   data.frame, so you can derive the column from existing columns). Character /
+#'   factor / logical values register as categorical, numeric as numeric.
+#' @param scope Optional name of a subset view (a key of the manifest `subsets`); when
+#'   set, the column is scoped to that view -- its levels are computed over the view's
+#'   members only, so it surfaces only inside that View.
+#' @param overwrite Replace an existing column of the same name (default `FALSE`).
+#' @param max_levels Cap on cached categorical levels written to the manifest; above it
+#'   the level list is omitted and recomputed at runtime (default 200).
+#' @return `invisible(dir)`.
+#' @seealso [scroll_update()] to add columns/embeddings from a Seurat object.
+#' @export
+scroll_add_meta <- function(dir, name, values, scope = NULL, overwrite = FALSE,
+                            max_levels = .SCROLL_MAX_LEVELS) {
+  cells_path <- file.path(dir, "cells.parquet")
+  if (!file.exists(cells_path) || !file.exists(file.path(dir, "manifest.yaml")))
+    stop("'", dir, "' is not a built scroll project (need cells.parquet + manifest.yaml).",
+         call. = FALSE)
+  if (length(name) != 1L || is.na(name) || !nzchar(name))
+    stop("`name` must be a single non-empty string.", call. = FALSE)
+  if (identical(name, "cell"))
+    stop("`name` cannot be 'cell' (the barcode column).", call. = FALSE)
+
+  cells <- as.data.frame(arrow::read_parquet(cells_path), stringsAsFactors = FALSE)
+  n <- nrow(cells)
+  if (name %in% names(cells) && !isTRUE(overwrite))
+    stop("Column '", name, "' already exists; pass overwrite = TRUE to replace it.",
+         call. = FALSE)
+
+  if (is.function(values)) values <- values(cells)
+  if (is.data.frame(values)) {
+    if (!("cell" %in% names(values)) || ncol(values) < 2L)
+      stop("A data.frame `values` needs a `cell` column and one value column.", call. = FALSE)
+    vcol <- setdiff(names(values), "cell")[1]
+    nm <- values[[vcol]]; names(nm) <- as.character(values$cell); values <- nm
+  }
+  if (!is.null(names(values))) {
+    v <- unname(values[match(cells$cell, names(values))])   # align by barcode; NA if absent
+  } else {
+    if (length(values) != n)
+      stop("`values` has length ", length(values), " but the project has ", n,
+           " cells; pass a length-", n, " vector (row order) or a barcode-named vector.",
+           call. = FALSE)
+    v <- values
+  }
+  if (is.factor(v)) v <- as.character(v)
+
+  # scope: compute the manifest entry over the subset's members only (levels don't
+  # leak into whole-dataset selectors); the stored column keeps the caller's values.
+  man <- scroll_manifest(dir)
+  if (!is.null(scope)) {
+    if (is.null(man$subsets[[scope]]))
+      stop("No subset view '", scope, "' in the manifest.", call. = FALSE)
+    emb   <- as.character(man$subsets[[scope]]$embeddings)[1]
+    coord <- sprintf("%s_1", emb)
+    if (!coord %in% names(cells))
+      stop("Subset '", scope, "' primary embedding '", emb, "' not in cells.parquet.",
+           call. = FALSE)
+    member <- !is.na(cells[[coord]])
+    entry  <- .scroll_meta_entry(v[member], max_levels)
+    entry$scope <- scope
+  } else {
+    entry <- .scroll_meta_entry(v, max_levels)
+  }
+
+  cells[[name]] <- v
+  arrow::write_parquet(cells, cells_path, compression = "zstd")
+  man$meta[[name]] <- entry
+  # unicode = TRUE to match .scroll_write_manifest() (keeps non-ASCII feature names).
+  yaml::write_yaml(man, file.path(dir, "manifest.yaml"), unicode = TRUE)
+  invisible(dir)
+}
