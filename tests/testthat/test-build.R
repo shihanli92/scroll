@@ -20,11 +20,11 @@ test_that("manifest records assays, embeddings, and defaults", {
   expect_equal(man$embeddings$umap$dims, 2)
 })
 
-test_that("expr store is first-letter bucket-partitioned and features query", {
+test_that("expr store is a single parquet per assay and features query", {
   dir <- test_project()
   parts <- list.files(file.path(dir, "expr", "RNA"))
-  expect_true(all(grepl("^bucket=", parts)))     # v3 layout: partition by 1st char
-  expect_true("bucket=M" %in% parts)             # MS4A1 -> bucket M
+  expect_identical(parts, "part-0.parquet")      # single-file layout, no bucket= subdirs
+  expect_false(any(grepl("^bucket=", parts)))
   con <- scroll_connect(dir); on.exit(scroll_disconnect(con))
   expect_gt(nrow(scroll_query_feature(con, "RNA", "MS4A1")), 0)
 })

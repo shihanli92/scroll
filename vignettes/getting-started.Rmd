@@ -204,7 +204,7 @@ list.files("pbmc3k")
 | Artifact        | What it is                                                                                                         |
 |-----------------|--------------------------------------------------------------------------------------------------------------------|
 | `cells.parquet` | One row per cell containing metadata plus embedding coordinates.                                                   |
-| `expr/`         | Expression as a sparse, zstd-compressed Parquet store, bucketed by the first letter of each gene.                  |
+| `expr/`         | Expression as a sparse, zstd-compressed Parquet store — one feature-sorted file per assay (`expr/<assay>/part-0.parquet`). |
 | `manifest.yaml` | A machine-readable description of the build including the assays, features, embeddings, metadata and their levels. |
 | `config.yaml`   | Hand-editable app settings                                                                                         |
 | `app.R`         | The ready-to-run entry point: `library(scroll); scroll_app(".")`.                                                  |

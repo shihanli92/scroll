@@ -31,11 +31,11 @@ test_that("querying a missing feature returns zero rows, not an error", {
   expect_equal(nrow(scroll_query_feature(con, "RNA", "NOT_A_GENE")), 0)
 })
 
-test_that("scroll_query_feature matches a direct partition read (and repeats identically)", {
+test_that("scroll_query_feature matches a direct file read (and repeats identically)", {
   dir <- test_project()
   con <- scroll_connect(dir); on.exit(scroll_disconnect(con))
-  part <- list.files(file.path(dir, "expr", "RNA", "bucket=M"), full.names = TRUE)
-  direct <- as.data.frame(arrow::read_parquet(part))          # MS4A1's bucket (M) file
+  part <- file.path(dir, "expr", "RNA", "part-0.parquet")     # single per-assay file
+  direct <- as.data.frame(arrow::read_parquet(part))
   direct <- direct[direct$feature == "MS4A1", , drop = FALSE] # ...filtered to the feature
   ord <- function(d) d[order(d$cell), c("cell", "value")]
   hit <- scroll_query_feature(con, "RNA", "MS4A1")

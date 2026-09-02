@@ -16,6 +16,9 @@ test_that("scroll_build_stream assembles two sources into one store", {
   con <- scroll_connect(dir); on.exit(scroll_disconnect(con))
   q <- scroll_query_feature(con, "RNA", "CD3D")     # spans both sources
   expect_s3_class(q, "data.frame")
+  expect_gt(nrow(q), 0)
+  # the two sources' parts are compacted into one feature-sorted file per assay
+  expect_identical(list.files(file.path(dir, "expr", "RNA")), "part-0.parquet")
 })
 
 test_that("scroll_build_stream errors, naming the source, on a missing declared column", {

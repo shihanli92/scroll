@@ -1,3 +1,20 @@
+# scroll 0.2.6
+
+## Expression store: one Parquet file per assay
+
+* `scroll_build()` now writes the expression store as a single feature-sorted file
+  `expr/<assay>/part-0.parquet` instead of the former first-letter buckets
+  (`expr/<assay>/bucket=<CHAR>/…`). A benchmark on a 237k-cell store (317M nonzero
+  rows) showed the bucketing gave no retrieval advantage — a single-gene lookup is
+  pruned by Parquet **row-group min/max statistics**, which work identically in one
+  sorted file — while the single file plans slightly faster and is simpler on disk.
+* The runtime read path is unchanged (`arrow::open_dataset` + a `feature` filter is
+  layout-agnostic), so **existing bucketed projects keep working with no rebuild**,
+  and new single-file builds run on any 0.2.x runtime. Streaming builds
+  (`scroll_build_stream()`) still append one part per source and compact them into a
+  single feature-sorted file per assay at the end of the run.
+
+
 # scroll 0.2.5
 
 ## New Signature panel

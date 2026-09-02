@@ -1,20 +1,18 @@
 # Streaming/incremental build: assemble one scroll project from many sources
 # without ever holding them all in RAM. Reads one source at a time, exports its
-# expression with a running GLOBAL cell offset, moves the part-files into the
-# shared store (arrow concatenates parts within a bucket= partition), accumulates
-# the small cells frame, and writes the manifest once at the end. Idempotent and
-# append-safe: re-run as more sources arrive; sources already added are skipped.
+# expression with a running GLOBAL cell offset, moves the part-file into the shared
+# store (one part per source; arrow concatenates them), accumulates the small cells
+# frame, and writes the manifest once at the end. Idempotent and append-safe: re-run
+# as more sources arrive; sources already added are skipped. A final compaction
+# merges the per-source parts into one feature-sorted file per assay.
 
-# Move a source's exported feature partitions into the combined store, tagging the
-# part-files so they never collide across sources.
+# Move a source's exported assay part-file(s) into the combined store, tagging them
+# so they never collide across sources.
 .scroll_stream_move <- function(src_assay_dir, dst_assay_dir, tag) {
-  for (fd in list.files(src_assay_dir)) {                 # bucket=<char> partition dirs
-    dst <- file.path(dst_assay_dir, fd)
-    if (!dir.exists(dst)) dir.create(dst, recursive = TRUE, showWarnings = FALSE)
-    for (pp in list.files(file.path(src_assay_dir, fd)))
-      file.rename(file.path(src_assay_dir, fd, pp),
-                  file.path(dst, paste0(tag, "-", pp)))
-  }
+  if (!dir.exists(dst_assay_dir)) dir.create(dst_assay_dir, recursive = TRUE, showWarnings = FALSE)
+  for (pp in list.files(src_assay_dir, pattern = "\\.parquet$"))
+    file.rename(file.path(src_assay_dir, pp),
+                file.path(dst_assay_dir, paste0(tag, "-", pp)))
 }
 
 .scroll_safe_tag <- function(id) gsub("[^A-Za-z0-9]+", "_", as.character(id))

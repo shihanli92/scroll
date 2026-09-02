@@ -137,9 +137,9 @@ scroll_build <- function(object, outdir,
     }
   }
 
-  # --- compact each bucket= partition to a single part-file (one build writes ~1
-  # part/gene already; matters for streaming/appended stores). Fewer files => faster
-  # cold queries + fewer inodes.
+  # --- compact each assay to a single part-file (a single-object build already
+  # writes one pre-sorted file; this matters for streaming/appended stores, whose
+  # per-source parts are merged + feature-sorted here).
   .scroll_compact_store(outdir, quantize)
 
   # --- VDJ repertoire store (optional): bake the clone table + diversity/usage
@@ -307,40 +307,30 @@ scroll_build <- function(object, outdir,
   bnd <- c(0L, cumsum(tabulate(fi, nbins = nfeat)))   # feature f rows: (bnd[f]+1):bnd[f+1]
 
   dest  <- file.path(outdir, "expr", assay)
-  # v2 store: partition by the feature's (case-folded) first character -- a few
-  # dozen buckets instead of one directory per feature. This keeps the arrow
-  # Dataset-open cheap (dozens of dirs, not tens of thousands) while a single-gene
-  # query still reads little: rows are sorted by `feature` within each bucket, so
-  # Parquet row-group statistics prune to just that gene's row groups. `feature`
-  # is now a real column in the files (with per-feature partitioning it lived only
-  # in the path). Case is FOLDED to upper so 'Cd8a' and 'ccdc198' share bucket 'C'
-  # -- required because case-insensitive filesystems collide 'C'/'c' directories.
-  bkt <- toupper(substr(feats, 1L, 1L))
-  bkt[!grepl("^[A-Z0-9]$", bkt)] <- "_"               # non-alnum first char -> '_' bucket
+  # v2 store: one Parquet file per assay (expr/<assay>/part-<offset>.parquet) with
+  # `feature` as a real column. Rows are written sorted by feature NAME so Parquet
+  # row-group min/max statistics prune a single-gene query to just that gene's row
+  # group(s) -- the pruning, not any directory split, is what keeps a lookup cheap
+  # (benchmarked equivalent to the former first-letter bucketing). The read path
+  # (`arrow::open_dataset` on expr/<assay> + a `feature` filter) is layout-agnostic,
+  # so it reads this single file exactly as it read the old bucketed subdirs.
   vtype <- if (quantize) arrow::uint8() else arrow::float32()
   sch   <- arrow::schema(feature = arrow::utf8(), cell = arrow::int32(), value = vtype)
 
-  ubk <- sort(unique(bkt))
-  pb <- if (isTRUE(verbose)) utils::txtProgressBar(min = 0, max = length(ubk), style = 3)
-  on.exit(if (!is.null(pb)) close(pb), add = TRUE)
-  for (i in seq_along(ubk)) {
-    bf <- which(bkt == ubk[i])
-    bf <- bf[order(feats[bf])]                         # alphabetical within bucket -> tight row-group stats
-    # gather each feature's contiguous nonzero rows, in sorted-feature order
-    idx <- unlist(lapply(bf, function(f)
-      if (bnd[f + 1L] > bnd[f]) (bnd[f] + 1L):bnd[f + 1L] else integer(0)),
-      use.names = FALSE)
-    if (length(idx)) {
-      tbl <- arrow::as_arrow_table(data.frame(
-        feature = feats[fi[idx]], cell = offset + cj[idx], value = vv[idx],   # global cell index
-        stringsAsFactors = FALSE))$cast(sch)
-      bdir <- file.path(dest, paste0("bucket=", ubk[i]))
-      dir.create(bdir, recursive = TRUE, showWarnings = FALSE)
-      # unique part name per source offset so streaming builds append (don't clobber)
-      arrow::write_parquet(tbl, file.path(bdir, sprintf("part-%d.parquet", offset)),
-                           compression = "zstd")
-    }
-    if (!is.null(pb)) utils::setTxtProgressBar(pb, i)
+  ford <- order(feats)                                 # features alphabetical by name
+  # gather each feature's contiguous nonzero rows, in sorted-feature order
+  idx <- unlist(lapply(ford, function(f)
+    if (bnd[f + 1L] > bnd[f]) (bnd[f] + 1L):bnd[f + 1L] else integer(0)),
+    use.names = FALSE)
+  if (length(idx)) {
+    tbl <- arrow::as_arrow_table(data.frame(
+      feature = feats[fi[idx]], cell = offset + cj[idx], value = vv[idx],   # global cell index
+      stringsAsFactors = FALSE))$cast(sch)
+    dir.create(dest, recursive = TRUE, showWarnings = FALSE)
+    # part name carries the source offset so a streaming builder's per-source parts
+    # coexist in one dir (compacted into a single file at the end of the run).
+    arrow::write_parquet(tbl, file.path(dest, sprintf("part-%d.parquet", offset)),
+                         compression = "zstd")
   }
   list(features = feats, max = max_a, n_features = nfeat)
 }
@@ -367,24 +357,23 @@ scroll_build <- function(object, outdir,
   invisible(NULL)
 }
 
-# Compact each expr/<assay>/bucket=<char>/ that has >1 part-file into a single
-# zstd part-file, preserving the int32/float32(uint8) schema. A gene's nonzeros are
-# small, so this reads one partition at a time (flat memory). No-op for partitions
-# already holding a single file (the common single-object build).
+# Compact each expr/<assay>/ that has >1 part-file (a streaming build appends one
+# part per source) into a single zstd part-file, re-sorted by feature so row-group
+# statistics prune. Preserves the int32/float32(uint8) schema and reads one assay at
+# a time (flat memory). No-op for assays already holding a single file (the common
+# single-object build, which .scroll_export_assay writes pre-sorted).
 .scroll_compact_store <- function(outdir, quantize) {
   vtype <- if (quantize) arrow::uint8() else arrow::float32()
   sch <- arrow::schema(feature = arrow::utf8(), cell = arrow::int32(), value = vtype)
   root <- file.path(outdir, "expr")
-  for (adir in list.dirs(root, recursive = FALSE)) {
-    for (bdir in list.dirs(adir, recursive = FALSE)) {   # bucket=<char> dirs
-      parts <- list.files(bdir, pattern = "\\.parquet$", full.names = TRUE)
-      if (length(parts) <= 1L) next
-      tab <- dplyr::collect(arrow::open_dataset(bdir))   # (feature, cell, value) in RAM
-      tab <- tab[order(tab$feature), , drop = FALSE]     # re-sort so row-group stats prune
-      unlink(parts)
-      arrow::write_parquet(arrow::as_arrow_table(tab)$cast(sch),
-                           file.path(bdir, "part-0.parquet"), compression = "zstd")
-    }
+  for (adir in list.dirs(root, recursive = FALSE)) {     # expr/<assay> dirs
+    parts <- list.files(adir, pattern = "\\.parquet$", full.names = TRUE)
+    if (length(parts) <= 1L) next
+    tab <- dplyr::collect(arrow::open_dataset(adir))      # (feature, cell, value) in RAM
+    tab <- tab[order(tab$feature), , drop = FALSE]        # re-sort so row-group stats prune
+    unlink(parts)
+    arrow::write_parquet(arrow::as_arrow_table(tab)$cast(sch),
+                         file.path(adir, "part-0.parquet"), compression = "zstd")
   }
   invisible(NULL)
 }

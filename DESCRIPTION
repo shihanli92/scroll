@@ -1,7 +1,7 @@
 Package: scroll
 Type: Package
 Title: Interactive Single-Cell Explorers from Seurat Objects
-Version: 0.2.5
+Version: 0.2.6
 Authors@R:
     person("Shihan", "Li", email = "shihanli1992@gmail.com", role = c("aut", "cre"))
 Description: Turns a processed Seurat object into a polished, interactive
@@ -10,7 +10,7 @@ Description: Turns a processed Seurat object into a polished, interactive
     expression including replicate-aware pseudobulk), each with its own controls.
     A heavy offline build phase extracts a compact, sparse on-disk store (cell
     metadata and embeddings as one Parquet table, expression as a
-    bucket-partitioned Parquet store) that the app reads one feature at a time
+    one feature-sorted Parquet file per assay) that the app reads one feature at a time
     via 'arrow', so runtime memory stays flat regardless of matrix size. A
     streaming builder assembles multi-million-cell projects one source at a time.
 License: MIT + file LICENSE

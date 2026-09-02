@@ -1,17 +1,17 @@
 # v2 store: int32 cell-index + float32 values, and the store-agnostic join.
 
-test_that("v2 build: manifest flags, int32 cell, one file per partition", {
+test_that("v2 build: manifest flags, int32 cell, one file per assay", {
   skip_if_not_installed("SeuratObject")
   dir <- file.path(tempdir(), "scroll-v2-flags")
   suppressMessages(scroll_build(make_test_object(), dir, quantize = FALSE, overwrite = TRUE))
   m <- scroll_manifest(dir)
   expect_equal(m$store_version, 2L)
   expect_true(isTRUE(m$cell_index))
-  g <- list.dirs(file.path(dir, "expr", "RNA"), recursive = FALSE)[1]
-  t <- arrow::open_dataset(g)
+  adir <- file.path(dir, "expr", "RNA")
+  t <- arrow::open_dataset(adir)
   expect_equal(t$schema$GetFieldByName("cell")$type$ToString(), "int32")
   expect_equal(t$schema$GetFieldByName("value")$type$ToString(), "float")   # float32
-  expect_length(list.files(g, pattern = "\\.parquet$"), 1L)                 # compacted
+  expect_identical(list.files(adir, pattern = "\\.parquet$"), "part-0.parquet")  # single file
 })
 
 test_that("v2 query/join parity: reproduces the true expression, whole + subset", {

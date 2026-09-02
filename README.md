@@ -35,7 +35,7 @@ step.
 ```
 Seurat .rds ──scroll_build()──▶  project/            ──scroll_serve()──▶  explorer
  (heavy, once)                    cells.parquet        (light, per session)
-                                  expr/<assay>/bucket=<char>/…
+                                  expr/<assay>/part-0.parquet
                                   manifest.yaml
                                   config.yaml   ← optional defaults
                                   app.R         ← deploy to a Shiny Server
