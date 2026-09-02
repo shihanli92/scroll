@@ -1,6 +1,7 @@
 ^demo$
 ^demo/
 ^.*\.tar\.gz$
+^.*\.zip$
 ^scroll\.Rcheck$
 ^\.git$
 ^LICENSE\.md$
@@ -18,3 +19,6 @@
 ^\.claude$
 ^dev$
 ^dev/
+^pbmc3k$
+^pbmc3k/
+^USING_SCROLL\.md$
