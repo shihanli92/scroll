@@ -1,3 +1,23 @@
+# scroll 0.2.7
+
+## Faster view switches (cached + downsampled scatter renders)
+
+The DimPlot/FeaturePlot scatters no longer re-draw from scratch on every view/control
+change — three layers, measured on a 237k-cell project:
+
+* **Cache** — rendered images are memoized in Shiny's shared app-level cache keyed on
+  the active cells + controls, so returning to a (view + controls) state serves the PNG
+  without re-drawing (~ms vs a ~300-700 ms draw). On by default; `cache_plots: false`
+  disables. The shared cache also self-warms across users.
+* **On-screen downsampling** — above `options(scroll.onscreen_cap=)` (default 50k) the
+  interactive rasterized draw uses a deterministic subsample (a 237k embedding renders
+  ~2-3x faster); highlighted / expressing cells are always kept, and exports draw every
+  point.
+* **Startup warm-up** — optional `prewarm_views: N` in `config.yaml` cycles the subset
+  views once at load (behind a "Preparing views…" overlay) so the first visit to each
+  view is instant too. Off by default.
+
+
 # scroll 0.2.6
 
 ## DimPlot: colour by multiple columns + configurable highlight background

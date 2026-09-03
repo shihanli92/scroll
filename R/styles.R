@@ -55,6 +55,16 @@ body{background:var(--sc-ground); color:var(--sc-ink);
 .scroll-subset .selectize-control.single .selectize-input:after{right:12px;}
 .scroll-subset .selectize-input>.item{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 
+/* Startup warm-up overlay (shown while the subset views pre-render) */
+.scroll-warm-overlay{position:fixed; inset:0; z-index:9999; display:flex;
+  align-items:center; justify-content:center; background:rgba(251,252,253,.86);
+  backdrop-filter:blur(1px);}
+.scroll-warm-box{display:flex; align-items:center; gap:10px; font-size:14px;
+  color:#4b5563; font-weight:500;}
+.scroll-warm-spin{width:16px; height:16px; border:2px solid #d7dce3;
+  border-top-color:#2563A8; border-radius:50%; animation:scrollwarmspin .8s linear infinite;}
+@keyframes scrollwarmspin{to{transform:rotate(360deg);}}
+
 /* Manual per-level colour pickers: compact hex pills that wrap into rows */
 .scroll-manual-grid{display:flex; flex-wrap:wrap; gap:6px 8px; margin:4px 0 2px;}
 .scroll-swatch{display:flex; flex-direction:column; align-items:center; width:74px;}
@@ -261,5 +271,24 @@ window.scrollToggleControls=function(btn){
     cards.forEach(function(c){io.observe(c);});
   }
   if(document.readyState!=='loading') lazy(); else document.addEventListener('DOMContentLoaded',lazy);
+})();
+"
+
+# Startup warm-up overlay: the server sends 'scroll_warm' {show:true/false} while it
+# cycles the subset views to pre-render their cached scatters; the overlay covers the
+# viewport so the brief view-cycling isn't visible and can't be interacted with.
+.scroll_warm_js <- function() "
+(function(){
+  if(!window.Shiny) return;
+  Shiny.addCustomMessageHandler('scroll_warm', function(m){
+    var ov=document.getElementById('scroll-warm-overlay');
+    if(m && m.show){
+      if(!ov){ ov=document.createElement('div'); ov.id='scroll-warm-overlay';
+        ov.className='scroll-warm-overlay';
+        ov.innerHTML='<div class=\"scroll-warm-box\"><div class=\"scroll-warm-spin\"></div>Preparing views\\u2026</div>';
+        document.body.appendChild(ov); }
+      ov.style.display='flex';
+    } else if(ov){ ov.style.display='none'; }
+  });
 })();
 "

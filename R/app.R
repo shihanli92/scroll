@@ -516,7 +516,8 @@ scroll_reset_panels <- function() {
     theme = .scroll_theme(),
     tags$head(tags$style(HTML(.scroll_css())),
               tags$script(HTML(.scroll_spy_js())),
-              tags$script(HTML(.scroll_lazy_js()))),
+              tags$script(HTML(.scroll_lazy_js())),
+              tags$script(HTML(.scroll_warm_js()))),
     .scroll_body(data, title, panels)
   )
 }
@@ -541,6 +542,39 @@ scroll_reset_panels <- function() {
   .scroll_render_ncells(output, data$manifest, active_cells, active_view)
   .scroll_mount_panels(data, panels, active_cells, active_view, theme_rv,
                        cache_key_r = cache_key_r, cache = cache)
+  # optional startup warm-up: cycle the subset views once so their (cached) scatters
+  # pre-render, making the first visit to each view instant too. Only meaningful when
+  # caching is on; gated by config `prewarm_views` (0/absent = off).
+  prewarm <- suppressWarnings(as.integer(data$config$prewarm_views %||% 0L))
+  subs <- .scroll_subset_names(data$manifest)
+  if (!is.null(cache) && length(subs) && !is.na(prewarm) && prewarm > 0)
+    .scroll_prewarm(session, subs)
+}
+
+# Cycle the app-bar View selector through each subset view (then back to
+# whole-dataset) on a timer, behind a full-screen overlay, so each view's on-screen
+# cached panels render once and fill the plot cache. Client-driven because a server
+# plot is drawn at the client's pixel size (the bindCache store can't be pre-filled
+# offline). Runs once per session, after the initial (whole-dataset) render.
+.scroll_prewarm <- function(session, views, step_ms = 700L) {
+  queue <- c(as.list(views), "")          # each subset, then restore whole-dataset
+  counter <- 0L
+  kick <- shiny::reactiveVal(FALSE)
+  session$onFlushed(function() {
+    session$sendCustomMessage("scroll_warm", list(show = TRUE))
+    kick(TRUE)
+  }, once = TRUE)
+  shiny::observe({
+    if (!isTRUE(kick())) return()
+    counter <<- counter + 1L
+    if (counter > length(queue)) {        # done -> drop the overlay, stop the timer
+      session$sendCustomMessage("scroll_warm", list(show = FALSE))
+      return()
+    }
+    shiny::updateSelectInput(session, "scroll_view", selected = queue[[counter]])
+    shiny::invalidateLater(step_ms, session)
+  })
+  invisible(NULL)
 }
 
 # The active cell set as a reactive: the selected subset view, then narrowed by the
