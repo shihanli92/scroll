@@ -16,6 +16,13 @@
 # small test project's n so tests/direct view calls stay vector).
 .scroll_raster_threshold <- 15000L
 
+# On-screen scatter point cap: above this, the interactive (rasterized) draw uses a
+# deterministic subsample so a large embedding renders ~2x faster; exports (raster =
+# FALSE) always draw every point. Override with options(scroll.onscreen_cap = N);
+# NA disables. Chosen so a rasterized cloud looks the same as the full set.
+.SCROLL_ONSCREEN_CAP <- 50000L
+.scroll_onscreen_cap <- function() getOption("scroll.onscreen_cap", .SCROLL_ONSCREEN_CAP)
+
 # Whether to rasterize on screen: the per-panel toggle (default on) AND the point
 # count exceeding the threshold. With the toggle off, points stay vector even on
 # large datasets (slower, but exact/zoomable).

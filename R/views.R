@@ -143,6 +143,28 @@
     ggplot2::geom_point(mapping = mapping, size = size, alpha = alpha, ...)
 }
 
+# On-screen only: subsample a scatter's rows to the point cap so a large embedding
+# draws ~2x faster. Rows flagged by `keep` (e.g. highlighted or expressing cells)
+# are always retained; the rest are subsampled deterministically (fixed seed, global
+# RNG restored) so the render is reproducible and cache-stable, and the surviving
+# rows keep their current order (preserving any on-top ordering). A no-op when
+# `state$raster` is FALSE (exports/tests) or the cap is not exceeded.
+.scroll_downsample <- function(df, state, keep = NULL, cap = .scroll_onscreen_cap()) {
+  n <- nrow(df)
+  if (!isTRUE(state$raster) || is.na(cap) || n <= cap) return(df)
+  m <- if (is.null(keep)) logical(n) else { k <- as.logical(keep); k[is.na(k)] <- FALSE; k }
+  budget <- cap - sum(m)
+  if (budget <= 0) return(df[m, , drop = FALSE])            # kept rows alone fill the cap
+  pool <- which(!m)
+  if (length(pool) <= budget) return(df)                    # nothing to drop
+  old <- if (exists(".Random.seed", .GlobalEnv, inherits = FALSE)) .GlobalEnv$.Random.seed else NULL
+  set.seed(1L); pick <- sample(pool, budget)
+  if (is.null(old)) suppressWarnings(rm(list = ".Random.seed", envir = .GlobalEnv))
+  else assign(".Random.seed", old, envir = .GlobalEnv)
+  m[pick] <- TRUE
+  df[m, , drop = FALSE]
+}
+
 # The built-in views' base theme, written out element-by-element (no theme_bw()) so the
 # global theme controls own every element directly. Monochrome scheme: every foreground
 # colour (text, axis text, ticks, titles, border) is BLACK; the gridlines are WHITE and the
@@ -352,6 +374,10 @@ view_umap_colorby <- function(cells, params, state = list()) {
   composite <- length(color_by) > 1
   lab <- paste(color_by, collapse = " | ")
   df$.col <- if (composite) .scroll_combo_levels(df, color_by) else df[[color_by]]
+  # on-screen downsample for speed; keep highlighted groups (they are the focus)
+  df <- if (!composite && is.numeric(df$.col)) .scroll_downsample(df, state)
+        else .scroll_downsample(df, state,
+                                keep = as.character(df$.col) %in% (state$highlight %||% character(0)))
   size <- .scroll_opt(params, state, "point_size", 0.6)
   alpha <- .scroll_opt(params, state, "alpha", 0.85)
   raster <- isTRUE(state$raster)
@@ -511,6 +537,8 @@ view_feature_plot <- function(cells, params, values = NULL, state = list()) {
   df$.expr <- .scroll_expr_vector(df, values)
   if (isTRUE(.scroll_opt(params, state, "order", TRUE)))
     df <- df[order(df$.expr), , drop = FALSE]   # expressing cells drawn on top
+  # on-screen downsample for speed; keep expressing cells (they carry the signal)
+  df <- .scroll_downsample(df, state, keep = df$.expr > 0)
   size <- .scroll_opt(params, state, "point_size", 0.7)
   lims <- .scroll_expr_limits(df$.expr, .scroll_opt(params, state, "clip", NULL))
   p <- .scroll_base_scatter(df, embedding, .scroll_opt(params, state, "legend", TRUE)) +
