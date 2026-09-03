@@ -262,15 +262,23 @@ window.scrollToggleControls=function(btn){
 # module id, so `<id>-onscreen` lands on the module's input$onscreen.
 .scroll_lazy_js <- function() "
 (function(){
+  var wired=false;
   function lazy(){
+    if(wired || !window.Shiny) return;                 // needs Shiny.setInputValue ready
     var cards=document.querySelectorAll('.scroll-panel-card');
-    if(!cards.length || !window.Shiny) return;
+    if(!cards.length) return;
+    wired=true;
     var io=new IntersectionObserver(function(es){
-      es.forEach(function(e){ Shiny.setInputValue(e.target.id+'-onscreen', e.isIntersecting); });
-    },{rootMargin:'300px 0px 300px 0px'});
+      es.forEach(function(e){
+        Shiny.setInputValue(e.target.id+'-onscreen', e.isIntersecting, {priority:'event'});
+      });
+    },{rootMargin:'80px 0px 80px 0px'});
     cards.forEach(function(c){io.observe(c);});
   }
-  if(document.readyState!=='loading') lazy(); else document.addEventListener('DOMContentLoaded',lazy);
+  // Set up on shiny:connected (Shiny + the server-rendered cards are both ready then);
+  // running only at DOMContentLoaded misses because window.Shiny isn't defined yet.
+  if(window.jQuery) jQuery(document).on('shiny:connected', lazy);
+  else document.addEventListener('shiny:connected', lazy);
 })();
 "
 
@@ -279,16 +287,21 @@ window.scrollToggleControls=function(btn){
 # viewport so the brief view-cycling isn't visible and can't be interacted with.
 .scroll_warm_js <- function() "
 (function(){
-  if(!window.Shiny) return;
-  Shiny.addCustomMessageHandler('scroll_warm', function(m){
-    var ov=document.getElementById('scroll-warm-overlay');
-    if(m && m.show){
-      if(!ov){ ov=document.createElement('div'); ov.id='scroll-warm-overlay';
-        ov.className='scroll-warm-overlay';
-        ov.innerHTML='<div class=\"scroll-warm-box\"><div class=\"scroll-warm-spin\"></div>Preparing views\\u2026</div>';
-        document.body.appendChild(ov); }
-      ov.style.display='flex';
-    } else if(ov){ ov.style.display='none'; }
-  });
+  // The overlay div is rendered in the initial HTML (visible) when a warm-up will
+  // run, so it covers the whole startup. This just toggles it; the server sends
+  // 'scroll_warm' {show:false} when the warm-up finishes.
+  function reg(){
+    if(!window.Shiny || !Shiny.addCustomMessageHandler) return;
+    Shiny.addCustomMessageHandler('scroll_warm', function(m){
+      var ov=document.getElementById('scroll-warm-overlay'); if(!ov) return;
+      ov.style.display = (m && m.show) ? 'flex' : 'none';
+    });
+  }
+  if(window.Shiny && Shiny.addCustomMessageHandler) reg();
+  else if(window.jQuery) jQuery(document).on('shiny:connected', reg);
+  else document.addEventListener('shiny:connected', reg);
+  // failsafe: never leave the overlay up forever if 'hide' never arrives
+  setTimeout(function(){ var ov=document.getElementById('scroll-warm-overlay');
+    if(ov) ov.style.display='none'; }, 60000);
 })();
 "

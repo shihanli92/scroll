@@ -975,6 +975,7 @@ view_violin_multi <- function(cells, params, values_long, state = list()) {
 #' @export
 view_biaxial <- function(cells, params, state = list(), df = NULL) {
   if (is.null(df)) df <- .scroll_biaxial_df(cells, params)
+  df <- .scroll_downsample(df, state)          # on-screen only; full-res on export
   cols <- .scroll_group_colors(df$.col, state)
   pos_int <- function(x) if (!is.null(x) && length(x) == 1 && is.finite(x) && x >= 1) as.integer(x) else NULL
   nc <- pos_int(state$ncol); nr <- pos_int(state$nrow)

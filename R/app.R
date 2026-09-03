@@ -512,12 +512,22 @@ scroll_reset_panels <- function() {
 }
 
 .scroll_page <- function(data, title, panels) {
+  # Show the warm-up overlay from the INITIAL html (not after the first flush) when a
+  # warm-up will run, so it covers the whole startup -- the initial main-view render
+  # AND the subset cycling -- instead of appearing only after the main view has loaded.
+  prewarm <- suppressWarnings(as.integer(data$config$prewarm_views %||% 0L))
+  warming <- !is.na(prewarm) && prewarm > 0 && !isFALSE(data$config$cache_plots) &&
+             length(.scroll_subset_names(data$manifest)) > 0
+  overlay <- if (warming)
+    div(id = "scroll-warm-overlay", class = "scroll-warm-overlay",
+        div(class = "scroll-warm-box", div(class = "scroll-warm-spin"), "Preparing views\u2026"))
   bslib::page_fluid(
     theme = .scroll_theme(),
     tags$head(tags$style(HTML(.scroll_css())),
               tags$script(HTML(.scroll_spy_js())),
               tags$script(HTML(.scroll_lazy_js())),
               tags$script(HTML(.scroll_warm_js()))),
+    overlay,
     .scroll_body(data, title, panels)
   )
 }
@@ -560,10 +570,9 @@ scroll_reset_panels <- function() {
   queue <- c(as.list(views), "")          # each subset, then restore whole-dataset
   counter <- 0L
   kick <- shiny::reactiveVal(FALSE)
-  session$onFlushed(function() {
-    session$sendCustomMessage("scroll_warm", list(show = TRUE))
-    kick(TRUE)
-  }, once = TRUE)
+  # the overlay is already shown from the initial HTML (see .scroll_page); once the
+  # first (whole-dataset) render has flushed, start cycling the subset views.
+  session$onFlushed(function() kick(TRUE), once = TRUE)
   shiny::observe({
     if (!isTRUE(kick())) return()
     counter <<- counter + 1L

@@ -75,6 +75,15 @@ dimplot_server <- function(id, data, cells_r = reactive(data$cells),
       updateSelectizeInput(session, "colorby", choices = cb, selected = sel_cb)
     }, ignoreNULL = FALSE, priority = 100)
     observeEvent(input$reduction, red_rv(input$reduction), ignoreInit = TRUE)
+    # View-consistent reduction: on a view switch `cells_r` changes at once but
+    # `red_rv` can hold the previous view's embedding for a beat -- rendering that
+    # (view, stale-embedding) pair is a full cache-MISS draw. Snap a stale value to
+    # the active view's primary embedding so the render is the warmed (view, primary)
+    # HIT instead. Both data_r and the cache key read this.
+    valid_red <- reactive({
+      red <- red_rv(); reds <- .scroll_view_embeddings(m, view_r())
+      if (!is.null(red) && red %in% reds) red else reds[[1]]
+    })
     # keep the last valid selection if the box is cleared, so color_by is never empty
     observeEvent(input$colorby, if (length(input$colorby)) cb_rv(input$colorby),
                  ignoreInit = TRUE, ignoreNULL = FALSE)
@@ -120,9 +129,9 @@ dimplot_server <- function(id, data, cells_r = reactive(data$cells),
 
     # DATA reactive (cells + params) invalidates only on data-input changes.
     data_r <- reactive({
-      req(red_rv(), cb_rv())
+      req(valid_red(), cb_rv())
       cells <- cells_r()
-      list(cells = cells, embedding = red_rv(), color_by = cb_rv(),
+      list(cells = cells, embedding = valid_red(), color_by = cb_rv(),
            n = nrow(cells))
     })
     # COSMETIC reactive, debounced; restyle-only inputs (incl. highlight/manual).
@@ -141,7 +150,7 @@ dimplot_server <- function(id, data, cells_r = reactive(data$cells),
     # cache key: active cells + effective reduction/colour + raster + all cosmetics
     # (+ onscreen, so an off-screen lazy render is never cached under a shown key)
     key_r <- reactive(list(cache_key_r(), isTRUE(input$onscreen %||% TRUE),
-                           red_rv(), cb_rv(),
+                           valid_red(), cb_rv(),
                            .scroll_use_raster(input$raster, nrow(cells_r())),
                            cosmetic_r()))
     .scroll_render_cached(output, plot_r, key_r, cache)

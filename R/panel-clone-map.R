@@ -185,7 +185,8 @@ clone_map_server <- function(id, data, cells_r = shiny::reactive(data$cells),
       .scroll_manual_ui(session$ns, selected_r())
     })
 
-    plot_r <- reactive({
+    # lazy-gated: off-screen this panel does not redraw on a View / filter change
+    plot_r <- .scroll_lazy_plot(input, function() {
       cells <- cells_r()
       reds <- .scroll_view_embeddings(m, view_r())        # the active view's embeddings
       emb <- red_rv(); if (!emb %in% reds) emb <- reds[[1]]

@@ -14,8 +14,13 @@ change — three layers, measured on a 237k-cell project:
   ~2-3x faster); highlighted / expressing cells are always kept, and exports draw every
   point.
 * **Startup warm-up** — optional `prewarm_views: N` in `config.yaml` cycles the subset
-  views once at load (behind a "Preparing views…" overlay) so the first visit to each
-  view is instant too. Off by default.
+  views once at load (behind a "Preparing views…" overlay, shown from the initial page
+  so it covers the whole startup) so the first visit to each view is instant too. Off by
+  default.
+* **Off-screen panels stay off** — the on-screen render gate is now wired reliably (the
+  IntersectionObserver is set up on `shiny:connected`, not before Shiny is ready), and the
+  live declarative panels (repertoire panels, clone-map) are lazy-gated too, so a global
+  filter / View change no longer re-draws every scrolled-away panel and stalls the switch.
 
 
 # scroll 0.2.6

@@ -14,11 +14,13 @@ test_that(".scroll_prewarm runs the view-cycle sequence without error", {
     scroll:::.scroll_prewarm(session, c("a", "b"), step_ms = 10L)
   }
   shiny::testServer(srv, {
-    session$flushReact()                          # onFlushed -> show overlay, kick
+    session$flushReact()                          # onFlushed -> kick the cycle
     for (i in 1:8) { session$elapse(15); session$flushReact() }
   })
-  expect_true("show" %in% seen)                   # overlay was raised
-  expect_identical(seen[[length(seen)]], "hide")  # ...and dropped when the cycle finished
+  # the overlay is shown by the initial HTML (see .scroll_page); .scroll_prewarm only
+  # sends the 'hide' when the view-cycle finishes.
+  expect_true("hide" %in% seen)
+  expect_identical(seen[[length(seen)]], "hide")
 })
 
 test_that("prewarm stays off unless configured (no cache / no subsets / prewarm 0)", {

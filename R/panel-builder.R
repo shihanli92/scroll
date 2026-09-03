@@ -115,7 +115,8 @@ scroll_bind_levels <- function(input, session, id, from, data, selected = 1,
 #' @param placeholder Optional message shown before the first `event` fires.
 #' @return Invisibly, the plot reactive.
 #' @export
-scroll_render_plot <- function(output, id, fun, event = NULL, placeholder = NULL) {
+scroll_render_plot <- function(output, id, fun, event = NULL, placeholder = NULL,
+                               lazy = FALSE, input = NULL) {
   safe <- function() {
     # On error, `fun()` yields the message string (validation gates included);
     # a legitimate plot fn never returns a character, so is.character = error.
@@ -125,7 +126,12 @@ scroll_render_plot <- function(output, id, fun, event = NULL, placeholder = NULL
                   sprintf("Plot function returned %s, expected a ggplot.", class(res)[1])))
     res
   }
-  plot_r <- if (is.null(event)) reactive(safe()) else eventReactive(event(), safe())
+  # `lazy` gates a live (non-Compute) plot on the panel's on-screen state, so a
+  # scrolled-away panel does NOT recompute or redraw on a global filter / View
+  # change -- it reuses its last render until it is on screen again.
+  plot_r <- if (isTRUE(lazy) && is.null(event) && !is.null(input))
+              .scroll_lazy_plot(input, safe)
+            else if (is.null(event)) reactive(safe()) else eventReactive(event(), safe())
   output$plot <- renderPlot({
     if (!is.null(event) && !is.null(placeholder)) {
       ev <- tryCatch(event(), error = function(e) NULL)
@@ -513,7 +519,10 @@ register_plot_panel <- function(id, plot, controls = list(), label = id, title =
       }
       event <- if (isTRUE(compute)) reactive(input$scroll_compute) else NULL
       placeholder <- if (isTRUE(compute)) "Set the controls, then click Compute." else NULL
-      plot_r <- scroll_render_plot(output, id, body, event = event, placeholder = placeholder)
+      # live (non-Compute) declarative panels are lazy-gated: off-screen they don't
+      # redraw on a View / filter change, so they don't stall the switch flush.
+      plot_r <- scroll_render_plot(output, id, body, event = event, placeholder = placeholder,
+                                   lazy = !isTRUE(compute), input = input)
       # Export the plot's source table (attached by the plot fn) when csv is on.
       if (isTRUE(csv))
         output$csv <- .scroll_csv_handler(

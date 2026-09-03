@@ -53,7 +53,8 @@ biaxial_ui <- function(id, data) {
 }
 
 biaxial_server <- function(id, data, cells_r = reactive(data$cells),
-                           view_r = reactive(NULL), theme_r = reactive(NULL)) {
+                           view_r = reactive(NULL), theme_r = reactive(NULL),
+                           cache_key_r = reactive(NULL), cache = NULL) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     .scroll_bind_view_cats(input, session, view_r, m, "colorby")
@@ -110,7 +111,13 @@ biaxial_server <- function(id, data, cells_r = reactive(data$cells),
     }
     plot_r   <- .scroll_lazy_plot(input, function() build(.scroll_use_raster(input$raster, nrow(data_r()$df))))
     export_r <- reactive(build(FALSE))
-    output$plot <- renderPlot(plot_r())
+    # cache key: active cells + axes/source/colour + raster + cosmetics (+ onscreen)
+    key_r <- reactive(list(cache_key_r(), isTRUE(input$onscreen %||% TRUE),
+                           input$source, input$features, input$genes, gassay(),
+                           input$colorby,
+                           .scroll_use_raster(input$raster, nrow(cells_r())),
+                           cosmetic_r()))
+    .scroll_render_cached(output, plot_r, key_r, cache)
     csv_r <- reactive({ d <- data_r(); .scroll_biaxial_source(d$cells, d$params$features, d$params$color_by) })
     .scroll_plot_downloads(output, export_r, id, csv_r = csv_r)
   })
