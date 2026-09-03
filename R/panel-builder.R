@@ -113,6 +113,10 @@ scroll_bind_levels <- function(input, session, id, from, data, selected = 1,
 #'   `shiny::reactive(input$go)` for a Compute button). When it is an action-button
 #'   count, the plot waits for the first click.
 #' @param placeholder Optional message shown before the first `event` fires.
+#' @param lazy When `TRUE` (and `event` is `NULL`), gate a live plot on the panel's
+#'   on-screen state, so a scrolled-away panel reuses its last render instead of
+#'   redrawing on a global filter / View change. Requires `input`.
+#' @param input The module's `input` (only needed when `lazy = TRUE`).
 #' @return Invisibly, the plot reactive.
 #' @export
 scroll_render_plot <- function(output, id, fun, event = NULL, placeholder = NULL,

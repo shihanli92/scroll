@@ -4,7 +4,15 @@
 \alias{scroll_render_plot}
 \title{Wire a plot output with error surfacing and PNG/PDF downloads}
 \usage{
-scroll_render_plot(output, id, fun, event = NULL, placeholder = NULL)
+scroll_render_plot(
+  output,
+  id,
+  fun,
+  event = NULL,
+  placeholder = NULL,
+  lazy = FALSE,
+  input = NULL
+)
 }
 \arguments{
 \item{output}{The module's \code{output}.}
@@ -19,6 +27,12 @@ input — the message is surfaced).}
 count, the plot waits for the first click.}
 
 \item{placeholder}{Optional message shown before the first \code{event} fires.}
+
+\item{lazy}{When \code{TRUE} (and \code{event} is \code{NULL}), gate a live plot on the panel's
+on-screen state, so a scrolled-away panel reuses its last render instead of
+redrawing on a global filter / View change. Requires \code{input}.}
+
+\item{input}{The module's \code{input} (only needed when \code{lazy = TRUE}).}
 }
 \value{
 Invisibly, the plot reactive.
