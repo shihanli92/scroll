@@ -43,7 +43,8 @@ dimplot_ui <- function(id, data) {
 }
 
 dimplot_server <- function(id, data, cells_r = reactive(data$cells),
-                           view_r = reactive(NULL), theme_r = reactive(NULL)) {
+                           view_r = reactive(NULL), theme_r = reactive(NULL),
+                           cache_key_r = reactive(NULL), cache = NULL) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     cats0 <- .scroll_cat_cols(m)
@@ -137,7 +138,13 @@ dimplot_server <- function(id, data, cells_r = reactive(data$cells),
     }
     plot_r   <- .scroll_lazy_plot(input, function() build(.scroll_use_raster(input$raster, data_r()$n)))  # rasterized on screen; recomputed only on-screen
     export_r <- reactive(build(FALSE))                                         # vector for downloads
-    output$plot <- renderPlot(plot_r())
+    # cache key: active cells + effective reduction/colour + raster + all cosmetics
+    # (+ onscreen, so an off-screen lazy render is never cached under a shown key)
+    key_r <- reactive(list(cache_key_r(), isTRUE(input$onscreen %||% TRUE),
+                           red_rv(), cb_rv(),
+                           .scroll_use_raster(input$raster, nrow(cells_r())),
+                           cosmetic_r()))
+    .scroll_render_cached(output, plot_r, key_r, cache)
     csv_r <- reactive({ d <- data_r(); .scroll_dimplot_source(d$cells, d$embedding, d$color_by) })
     .scroll_plot_downloads(output, export_r, id, csv_r = csv_r)
   })

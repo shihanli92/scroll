@@ -44,7 +44,8 @@ featureplot_ui <- function(id, data) {
 }
 
 featureplot_server <- function(id, data, cells_r = reactive(data$cells),
-                               view_r = reactive(NULL), theme_r = reactive(NULL)) {
+                               view_r = reactive(NULL), theme_r = reactive(NULL),
+                               cache_key_r = reactive(NULL), cache = NULL) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     assay <- reactive(input$assay %||% m$default_assay)
@@ -137,7 +138,15 @@ featureplot_server <- function(id, data, cells_r = reactive(data$cells),
     }
     plot_r   <- .scroll_lazy_plot(input, function() build(.scroll_use_raster(input$raster, data_r()$n)))
     export_r <- reactive(build(FALSE))
-    output$plot <- renderPlot(plot_r())
+    # cache key: active cells + reduction/assay/features/blend + raster + cosmetics
+    # (+ onscreen, so an off-screen lazy render is never cached under a shown key)
+    key_r <- reactive(list(cache_key_r(), isTRUE(input$onscreen %||% TRUE),
+                           red_rv(), assay(), input$feature, input$metacol,
+                           isTRUE(input$blend), input$blend_threshold,
+                           input$blend_c1, input$blend_c2,
+                           .scroll_use_raster(input$raster, nrow(cells_r())),
+                           cosmetic_r()))
+    .scroll_render_cached(output, plot_r, key_r, cache)
     csv_r <- reactive({
       d <- data_r()
       # multi-gene grid: embedding coords + one expression column per gene

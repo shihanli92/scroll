@@ -524,17 +524,23 @@ scroll_reset_panels <- function() {
 # The per-dataset server logic, composed from four focused steps. Called flat by
 # scroll_app() and inside a moduleServer() by scroll_multi_app(), so
 # `input`/`output`/`session` carry the right namespace in both.
-.scroll_wire <- function(input, output, session, data, panels) {
+.scroll_wire <- function(input, output, session, data, panels, cache = NULL) {
   active_view <- reactive(.scroll_nz(input$scroll_view))
   # deferred filters + theme: committed only on their Apply buttons (Reset clears both)
   filt_rv  <- reactiveVal(list())
   theme_rv <- reactiveVal(list())
   active_cells <- .scroll_active_cells(input, data, active_view, filt_rv)
+  # A cheap, faithful signature of the active cell set (view + ad-hoc subset +
+  # applied filters) -- panels append their own controls to it as a plot-cache key.
+  cache_key_r <- reactive(list(active_view() %||% "",
+                               .scroll_nz(input$scroll_subset_col),
+                               input$scroll_subset_val, filt_rv()))
   .scroll_bind_subset_control(input, session, data)
   .scroll_bind_filters(input, session, data, filt_rv)
   .scroll_bind_theme(input, session, data, theme_rv)
   .scroll_render_ncells(output, data$manifest, active_cells, active_view)
-  .scroll_mount_panels(data, panels, active_cells, active_view, theme_rv)
+  .scroll_mount_panels(data, panels, active_cells, active_view, theme_rv,
+                       cache_key_r = cache_key_r, cache = cache)
 }
 
 # The active cell set as a reactive: the selected subset view, then narrowed by the
@@ -578,12 +584,15 @@ scroll_reset_panels <- function() {
 
 # Mount each panel's server, threading `active_view` only to panels that declare a
 # `view_r` formal (keeping register_panel()'s 3-arg server contract compatible).
-.scroll_mount_panels <- function(data, panels, active_cells, active_view, active_theme = reactive(NULL)) {
+.scroll_mount_panels <- function(data, panels, active_cells, active_view, active_theme = reactive(NULL),
+                                 cache_key_r = reactive(NULL), cache = NULL) {
   for (sec in panels) {
     fmls <- names(formals(sec$server))
     args <- list(sec$id, data, cells_r = active_cells)      # named so formal order can vary
-    if ("view_r" %in% fmls)  args$view_r  <- active_view
-    if ("theme_r" %in% fmls) args$theme_r <- active_theme
+    if ("view_r" %in% fmls)      args$view_r      <- active_view
+    if ("theme_r" %in% fmls)     args$theme_r     <- active_theme
+    if ("cache_key_r" %in% fmls) args$cache_key_r <- cache_key_r
+    if ("cache" %in% fmls)       args$cache       <- cache
     do.call(sec$server, args)
   }
 }
@@ -613,8 +622,12 @@ scroll_app <- function(dir = ".") {
   title <- .scroll_nz(data$config$title)
 
   ui <- .scroll_page(data, title, panels)
+  # cache rendered scatter images in Shiny's shared app-level cache so returning to
+  # a (view + controls) state serves the PNG without re-drawing. On by default;
+  # disable with `cache_plots: false` in config.yaml.
+  cache <- if (isFALSE(data$config$cache_plots)) NULL else "app"
   server <- function(input, output, session)
-    .scroll_wire(input, output, session, data, panels)
+    .scroll_wire(input, output, session, data, panels, cache = cache)
   # release the query handle's cached datasets when the app stops
   shiny::shinyApp(ui, server, onStart = function() {
     shiny::onStop(function() try(scroll_disconnect(data$con), silent = TRUE))

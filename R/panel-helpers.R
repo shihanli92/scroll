@@ -232,6 +232,19 @@
   })
 }
 
+# Wire `output$plot` from a panel's (lazy) plot reactive, optionally caching the
+# rendered IMAGE. When `cache` is non-NULL (the app passes "app" -> Shiny's shared
+# app-level cache), `bindCache` memoizes the drawn PNG keyed on `key_r()`, so
+# returning to a (view + controls) state serves the image without re-drawing
+# (~ms vs hundreds of ms). `cache = NULL` (the default, and every testServer path)
+# is the unchanged plain `renderPlot`. The key MUST capture every input `build()`
+# reads -- including `input$onscreen` -- or a cache hit could serve a stale image.
+.scroll_render_cached <- function(output, plot_r, key_r, cache = NULL) {
+  r <- shiny::renderPlot(plot_r())
+  if (!is.null(cache)) r <- shiny::bindCache(r, key_r(), cache = cache)
+  output$plot <- r
+}
+
 # Standard plot area: a small toolbar (PNG + PDF, and optionally a CSV of the
 # plot's source data) above the plot output. Pass csv = TRUE to add the CSV button
 # (the server must then wire output$csv, e.g. via .scroll_plot_downloads(csv_r=)).
