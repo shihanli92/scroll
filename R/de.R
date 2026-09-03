@@ -34,12 +34,22 @@
 #'   seed) so repeated runs match, and the session RNG is left untouched.
 #' @param progress Optional `function(fraction, detail)` called at the read and
 #'   test stages, for a UI progress bar. `NULL` (default) is a no-op.
-#' @return A data.frame of results, ranked by adjusted p-value.
+#' @return A data.frame of results, ranked by adjusted p-value, with columns
+#'   `gene`, `logFC`, `avg_log2FC`, `auc`, `pct.1`, `pct.2`, `p_val`, `p_val_adj`.
+#'   Two fold-change columns are reported because presto and Seurat define it
+#'   differently: **`logFC`** is presto's value -- a natural-log "mean of log"
+#'   difference (`mean(log-data in group1) - mean(...group2)`); **`avg_log2FC`**
+#'   matches `Seurat::FindMarkers` -- the log2 of the mean of the *un-logged*
+#'   normalized counts, `log2((sum(expm1(x1))+1)/n1) - log2((sum(expm1(x2))+1)/n2)`
+#'   (Seurat v5 `FoldChange`, pseudocount 1). For zero-inflated data `avg_log2FC` is
+#'   typically larger in magnitude than `logFC`.
 #' @details With the default quantized build (`quantize = TRUE` in
 #'   [scroll_build()]), expression values below ~`max/510` round to zero, so the
 #'   fraction-expressing columns (`pct.1`/`pct.2`) slightly under-count cells with
-#'   very low expression and p-values are approximate. Build with
-#'   `quantize = FALSE` for exact statistics.
+#'   very low expression, p-values are approximate, and `avg_log2FC` is close to but
+#'   not bit-identical to Seurat's (max abs diff ~0.01 in practice). Build with
+#'   `quantize = FALSE` for exact statistics (`avg_log2FC` then matches
+#'   `Seurat::FindMarkers` to floating-point tolerance).
 #' @export
 scroll_de <- function(data, assay, group_col, ident1, ident2 = NULL, min_pct = 0.1,
                       cells = NULL, max_cells = NULL, progress = NULL) {
@@ -106,12 +116,26 @@ scroll_de <- function(data, assay, group_col, ident1, ident2 = NULL, min_pct = 0
 
   pr(0.7, "Testing genes (Wilcoxon)...")
   res <- presto::wilcoxauc(X, labels)
+  # Seurat-compatible avg_log2FC on the SAME matrix presto tested. presto's own
+  # `logFC` is a natural-log "mean of log" difference (mean(x1) - mean(x2)); Seurat's
+  # FindMarkers reports a "log of mean" instead: log2 of the mean of the un-logged
+  # normalized counts, with pseudocount 1 added to the group SUM (Seurat v5
+  # FoldChange). We surface BOTH: `logFC` (presto, unchanged) and `avg_log2FC`.
+  # expm1() recovers the normalized counts and is applied in place (X is not used
+  # afterwards); the per-group sums are a sparse mat-vec, so this stays O(nnz)
+  # without densifying the matrix.
+  n1 <- sum(labels == "group1"); n2 <- length(labels) - n1
+  X@x <- expm1(X@x)
+  s1 <- as.vector(X %*% as.numeric(labels == "group1"))
+  s2 <- as.vector(X %*% as.numeric(labels != "group1"))
+  log2fc <- stats::setNames(log2((s1 + 1) / n1) - log2((s2 + 1) / n2), rownames(X))
   res <- res[res$group == "group1", , drop = FALSE]
   res <- res[pmax(res$pct_in, res$pct_out) >= min_pct * 100, , drop = FALSE]
   res <- res[order(res$padj, -abs(res$logFC)), , drop = FALSE]
   data.frame(
     gene = res$feature,
     logFC = round(res$logFC, 3),
+    avg_log2FC = round(unname(log2fc[res$feature]), 3),
     auc = round(res$auc, 3),
     pct.1 = round(res$pct_in / 100, 3),
     pct.2 = round(res$pct_out / 100, 3),

@@ -47,7 +47,15 @@ seed) so repeated runs match, and the session RNG is left untouched.}
 test stages, for a UI progress bar. \code{NULL} (default) is a no-op.}
 }
 \value{
-A data.frame of results, ranked by adjusted p-value.
+A data.frame of results, ranked by adjusted p-value, with columns
+\code{gene}, \code{logFC}, \code{avg_log2FC}, \code{auc}, \code{pct.1}, \code{pct.2}, \code{p_val}, \code{p_val_adj}.
+Two fold-change columns are reported because presto and Seurat define it
+differently: \strong{\code{logFC}} is presto's value -- a natural-log "mean of log"
+difference (\verb{mean(log-data in group1) - mean(...group2)}); \strong{\code{avg_log2FC}}
+matches \code{Seurat::FindMarkers} -- the log2 of the mean of the \emph{un-logged}
+normalized counts, \code{log2((sum(expm1(x1))+1)/n1) - log2((sum(expm1(x2))+1)/n2)}
+(Seurat v5 \code{FoldChange}, pseudocount 1). For zero-inflated data \code{avg_log2FC} is
+typically larger in magnitude than \code{logFC}.
 }
 \description{
 Compares \code{ident1} against \code{ident2} or against the rest of the cells when
@@ -59,6 +67,8 @@ expression matrix from the store and runs \code{\link[presto:wilcoxauc]{presto::
 With the default quantized build (\code{quantize = TRUE} in
 \code{\link[=scroll_build]{scroll_build()}}), expression values below ~\code{max/510} round to zero, so the
 fraction-expressing columns (\code{pct.1}/\code{pct.2}) slightly under-count cells with
-very low expression and p-values are approximate. Build with
-\code{quantize = FALSE} for exact statistics.
+very low expression, p-values are approximate, and \code{avg_log2FC} is close to but
+not bit-identical to Seurat's (max abs diff ~0.01 in practice). Build with
+\code{quantize = FALSE} for exact statistics (\code{avg_log2FC} then matches
+\code{Seurat::FindMarkers} to floating-point tolerance).
 }

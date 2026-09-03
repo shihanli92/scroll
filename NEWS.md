@@ -1,5 +1,15 @@
 # scroll 0.2.7
 
+## DE: Seurat-compatible `avg_log2FC` column
+
+* `scroll_de()` now also returns **`avg_log2FC`** alongside presto's `logFC`. presto's
+  `logFC` is a natural-log "mean of log" difference; `avg_log2FC` is the `log2` of the
+  mean of the un-logged normalized counts (Seurat v5 `FoldChange`, pseudocount 1), so it
+  matches `Seurat::FindMarkers` — to floating-point tolerance on a `quantize = FALSE`
+  build, and within ~0.01 on the default quantized store. (presto's `logFC` is generally
+  smaller in magnitude on zero-inflated data, which is why scroll's fold changes looked
+  smaller than Seurat's.)
+
 ## Faster view switches (cached + downsampled scatter renders)
 
 The DimPlot/FeaturePlot scatters no longer re-draw from scratch on every view/control

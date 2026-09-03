@@ -18,6 +18,28 @@ test_that("scroll_de runs presto and returns ranked marker results", {
   expect_false(is.unsorted(res$p_val_adj))                       # ranked by adjusted p
 })
 
+test_that("scroll_de avg_log2FC matches the Seurat v5 FoldChange formula", {
+  skip_if_not_installed("presto")
+  skip_if_not_installed("SeuratObject")
+  obj <- make_test_object()
+  dir <- file.path(tempdir(), "scroll-de-lfc")
+  suppressMessages(scroll_build(obj, dir, quantize = FALSE, overwrite = TRUE))   # exact store
+  data <- scroll:::.scroll_load(dir); on.exit(scroll_disconnect(data$con))
+  ct <- sort(unique(as.character(data$cells$celltype)))
+  res <- scroll_de(data, "RNA", "celltype", ident1 = ct[1], ident2 = ct[2], min_pct = 0)
+  expect_true("avg_log2FC" %in% names(res))
+  # Seurat v5 FoldChange on the object's log-normalized `data` layer: log2 of the
+  # mean of un-logged counts, pseudocount 1 added to the group sum.
+  X  <- as.matrix(SeuratObject::GetAssayData(obj, assay = "RNA", layer = "data"))
+  g1 <- colnames(obj)[obj$celltype == ct[1]]; g2 <- colnames(obj)[obj$celltype == ct[2]]
+  want <- log2((rowSums(expm1(X[, g1])) + 1) / length(g1)) -
+          log2((rowSums(expm1(X[, g2])) + 1) / length(g2))
+  g <- utils::head(res$gene, 15)
+  expect_equal(res$avg_log2FC[match(g, res$gene)], unname(round(want[g], 3)), tolerance = 1e-3)
+  # presto's logFC (mean-of-log) is a different, generally smaller-magnitude number
+  expect_false(isTRUE(all.equal(res$logFC, res$avg_log2FC)))
+})
+
 test_that("scroll_de one-vs-rest drops NA-group cells (no NA labels to presto)", {
   skip_if_not_installed("presto")
   data <- scroll:::.scroll_load(test_project())
