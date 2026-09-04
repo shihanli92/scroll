@@ -135,3 +135,13 @@ test_that("plot toolbars carry a download-scale slider wired to the dl_scale inp
   expect_match(html, "scroll-size-val")                 # live value readout
   expect_match(scroll:::.scroll_css(), "\\.scroll-size\\{")    # and styled
 })
+
+test_that("on-screen gate is a Shiny input binding (value ready before first flush)", {
+  js <- scroll:::.scroll_lazy_js()
+  expect_match(js, "Shiny\\.InputBinding")
+  expect_match(js, "inputBindings\\.register")
+  expect_match(js, "getValue")                          # supplies the initial on-screen value
+  expect_match(js, "-onscreen")                         # id maps to the module's input$onscreen
+  expect_match(js, "DOMContentLoaded")                  # registered before Shiny.initialize/bindAll
+  expect_no_match(js, "shiny:connected")                # no longer deferred to post-connect
+})

@@ -265,28 +265,51 @@ window.scrollToggleControls=function(btn){
 
 # Lazy panel rendering: report each panel card's on-screen state (viewport + a
 # margin) to its module as input$onscreen. .scroll_lazy_plot uses that to recompute
-# a panel only while it is on screen, so a View/filter change redraws just the
-# panels in view; an off-screen one refreshes when scrolled to. The card id is the
-# module id, so `<id>-onscreen` lands on the module's input$onscreen.
+# a panel only while it is on screen, so a View/filter change redraws just the panels
+# in view; an off-screen one refreshes when scrolled to. The card id is the module id,
+# so `<id>-onscreen` lands on the module's input$onscreen.
+#
+# This is a custom Shiny INPUT BINDING (not setInputValue on shiny:connected) so that
+# getValue() runs during Shiny's initial bindAll -- BEFORE the first output flush --
+# giving every panel a correct on-screen value up front. The old approach left
+# input$onscreen unset until the observer reported post-connect, so the first flush saw
+# NULL (-> the `%||% TRUE` default) and every live panel rendered at once. Registering
+# on DOMContentLoaded is in time: native DOMContentLoaded listeners run before jQuery's
+# ready callbacks (where Shiny.initialize/bindAll live), and window.Shiny is defined by
+# then (its <script> executes during parse).
 .scroll_lazy_js <- function() "
 (function(){
-  var wired=false;
-  function lazy(){
-    if(wired || !window.Shiny) return;                 // needs Shiny.setInputValue ready
-    var cards=document.querySelectorAll('.scroll-panel-card');
-    if(!cards.length) return;
-    wired=true;
-    var io=new IntersectionObserver(function(es){
-      es.forEach(function(e){
-        Shiny.setInputValue(e.target.id+'-onscreen', e.isIntersecting, {priority:'event'});
-      });
-    },{rootMargin:'80px 0px 80px 0px'});
-    cards.forEach(function(c){io.observe(c);});
+  var M=80;                                            // viewport margin (matches rootMargin)
+  function onscreen(el){
+    var r=el.getBoundingClientRect();
+    var vh=window.innerHeight||document.documentElement.clientHeight;
+    return r.bottom > -M && r.top < vh + M;            // vertical intersection (+ margin)
   }
-  // Set up on shiny:connected (Shiny + the server-rendered cards are both ready then);
-  // running only at DOMContentLoaded misses because window.Shiny isn't defined yet.
-  if(window.jQuery) jQuery(document).on('shiny:connected', lazy);
-  else document.addEventListener('shiny:connected', lazy);
+  function reg(){
+    if(window.__scrollOnReg) return;
+    if(!window.Shiny || !Shiny.InputBinding || !Shiny.inputBindings) return;
+    window.__scrollOnReg=true;
+    var b=new Shiny.InputBinding();
+    $.extend(b,{
+      find: function(scope){ return $(scope).find('.scroll-panel-card'); },
+      getId: function(el){ return el.id+'-onscreen'; },
+      // read at bind time (pre-first-flush), so off-screen panels report false up front
+      getValue: function(el){
+        return (typeof el.__scrollOn==='boolean') ? el.__scrollOn : onscreen(el);
+      },
+      subscribe: function(el, cb){
+        var io=new IntersectionObserver(function(es){
+          es.forEach(function(e){ el.__scrollOn=e.isIntersecting; });
+          cb();
+        },{rootMargin:M+'px 0px '+M+'px 0px'});
+        io.observe(el); el.__scrollIO=io;
+      },
+      unsubscribe: function(el){ if(el.__scrollIO){ el.__scrollIO.disconnect(); delete el.__scrollIO; } }
+    });
+    Shiny.inputBindings.register(b, 'scroll.onscreen');
+  }
+  if(document.readyState!=='loading') reg();           // injected after load: Shiny present
+  document.addEventListener('DOMContentLoaded', reg);  // fires before Shiny.initialize/bindAll
 })();
 "
 
