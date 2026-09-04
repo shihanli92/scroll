@@ -58,12 +58,20 @@ body{background:var(--sc-ground); color:var(--sc-ink);
 /* Startup warm-up overlay (shown while the subset views pre-render) */
 .scroll-warm-overlay{position:fixed; inset:0; z-index:9999; display:flex;
   align-items:center; justify-content:center; background:rgba(251,252,253,.86);
-  backdrop-filter:blur(1px);}
-.scroll-warm-box{display:flex; align-items:center; gap:10px; font-size:14px;
-  color:#4b5563; font-weight:500;}
+  backdrop-filter:blur(1px); opacity:1; transition:opacity .3s ease;}
+.scroll-warm-overlay.scroll-warm-hiding{opacity:0;}   /* fade out before display:none */
+.scroll-warm-box{display:flex; flex-direction:column; align-items:center; gap:12px;
+  font-size:14px; color:#4b5563; font-weight:500; min-width:240px;}
+.scroll-warm-row{display:flex; align-items:center; gap:10px;}
 .scroll-warm-spin{width:16px; height:16px; border:2px solid #d7dce3;
   border-top-color:#2563A8; border-radius:50%; animation:scrollwarmspin .8s linear infinite;}
 @keyframes scrollwarmspin{to{transform:rotate(360deg);}}
+.scroll-warm-bar{width:100%; height:4px; border-radius:2px; background:#e4e8ee; overflow:hidden;}
+.scroll-warm-fill{height:100%; width:0; background:#2563A8; border-radius:2px;
+  transition:width .35s ease;}
+/* lock page scroll while warming so scrolling can't flip panels on-screen and pollute
+   the plot cache mid-cycle (the overlay covers the page; this stops wheel/keyboard scroll) */
+body.scroll-warming{overflow:hidden;}
 
 /* Manual per-level colour pickers: compact hex pills that wrap into rows */
 .scroll-manual-grid{display:flex; flex-wrap:wrap; gap:6px 8px; margin:4px 0 2px;}
@@ -288,21 +296,35 @@ window.scrollToggleControls=function(btn){
 .scroll_warm_js <- function() "
 (function(){
   // The overlay div is rendered in the initial HTML (visible) when a warm-up will
-  // run, so it covers the whole startup. This just toggles it; the server sends
-  // 'scroll_warm' {show:false} when the warm-up finishes.
+  // run, so it covers the whole startup. The server sends 'scroll_warm'
+  // {show,text,frac}; {show:false} at the end triggers a fade-out.
+  function hide(ov){
+    document.body.classList.remove('scroll-warming');
+    ov.classList.add('scroll-warm-hiding');           // fade, then remove from flow
+    setTimeout(function(){ ov.style.display='none'; }, 340);
+  }
   function reg(){
     if(!window.Shiny || !Shiny.addCustomMessageHandler) return;
     Shiny.addCustomMessageHandler('scroll_warm', function(m){
       var ov=document.getElementById('scroll-warm-overlay'); if(!ov) return;
       if(m && m.text){ var el=ov.querySelector('.scroll-warm-msg'); if(el) el.textContent=m.text; }
-      ov.style.display = (m && m.show) ? 'flex' : 'none';
+      if(m && m.frac!=null){ var f=ov.querySelector('.scroll-warm-fill');
+        if(f) f.style.width=(Math.max(0,Math.min(1,m.frac))*100)+'%'; }
+      if(m && m.show){ ov.classList.remove('scroll-warm-hiding'); ov.style.display='flex';
+        document.body.classList.add('scroll-warming'); }
+      else { hide(ov); }
     });
   }
   if(window.Shiny && Shiny.addCustomMessageHandler) reg();
   else if(window.jQuery) jQuery(document).on('shiny:connected', reg);
   else document.addEventListener('shiny:connected', reg);
-  // failsafe: never leave the overlay up forever if 'hide' never arrives
+  // lock scroll from the initial paint (body exists only after parse, so defer)
+  function initLock(){ if(document.getElementById('scroll-warm-overlay'))
+    document.body.classList.add('scroll-warming'); }
+  if(document.readyState!=='loading') initLock();
+  else document.addEventListener('DOMContentLoaded', initLock);
+  // failsafe: never leave the overlay (or the scroll lock) up forever
   setTimeout(function(){ var ov=document.getElementById('scroll-warm-overlay');
-    if(ov) ov.style.display='none'; }, 60000);
+    if(ov && ov.style.display!=='none') hide(ov); }, 60000);
 })();
 "

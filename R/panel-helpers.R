@@ -213,8 +213,10 @@
 # guarded Suggests dep); otherwise return the output unchanged.
 .scroll_spin <- function(tag) {
   if (requireNamespace("shinycssloaders", quietly = TRUE))
+    # hide.ui = FALSE keeps the previous render visible under the spinner while a plot
+    # recomputes, so a control change doesn't blank the panel before the new image lands
     shinycssloaders::withSpinner(tag, type = 6, color = "#2563A8", size = 0.6,
-                                 proxy.height = "260px")
+                                 proxy.height = "260px", hide.ui = FALSE)
   else tag
 }
 

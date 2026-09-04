@@ -529,8 +529,11 @@ scroll_reset_panels <- function() {
   # (shown but never dismissed) only clears on the 60s JS failsafe.
   overlay <- if (warming)
     div(id = "scroll-warm-overlay", class = "scroll-warm-overlay",
-        div(class = "scroll-warm-box", div(class = "scroll-warm-spin"),
-            span(class = "scroll-warm-msg", "Preparing views\u2026")))
+        div(class = "scroll-warm-box",
+            div(class = "scroll-warm-row", div(class = "scroll-warm-spin"),
+                # labelled first stage (the initial whole-dataset render, before cycling)
+                span(class = "scroll-warm-msg", "Preparing the main view\u2026")),
+            div(class = "scroll-warm-bar", div(class = "scroll-warm-fill"))))
   bslib::page_fluid(
     theme = .scroll_theme(),
     tags$head(tags$style(HTML(.scroll_css())),
@@ -607,7 +610,9 @@ scroll_reset_panels <- function() {
   step <- function() {
     i <<- i + 1L; started <<- Sys.time()
     if (i > length(queue)) return(finish())
-    session$sendCustomMessage("scroll_warm", list(show = TRUE, text = msgs[[i]]))
+    # frac drives the overlay progress bar; reaches 1 on the final ("Finishing") step
+    session$sendCustomMessage("scroll_warm",
+      list(show = TRUE, text = msgs[[i]], frac = i / length(queue)))
     shiny::updateSelectInput(session, "scroll_view", selected = queue[[i]])
   }
   # Advance a step only when the client ECHOES the view we asked for. priority -1000

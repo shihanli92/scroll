@@ -3,13 +3,14 @@
 # config `prewarm_views` (off by default) + a cache; here we exercise the sequence.
 
 test_that(".scroll_prewarm advances on the view echo and hides only at the end", {
-  seen <- character(0); texts <- character(0)
+  seen <- character(0); texts <- character(0); fracs <- numeric(0)
   srv <- function(input, output, session) {
-    # spy on the overlay show/hide + the per-stage text
+    # spy on the overlay show/hide + the per-stage text + progress fraction
     session$sendCustomMessage <- function(type, message) {
       if (identical(type, "scroll_warm")) {
         seen[[length(seen) + 1L]] <<- if (isTRUE(message$show)) "show" else "hide"
         if (!is.null(message$text)) texts[[length(texts) + 1L]] <<- message$text
+        if (!is.null(message$frac)) fracs[[length(fracs) + 1L]] <<- message$frac
       }
       invisible()
     }
@@ -24,6 +25,8 @@ test_that(".scroll_prewarm advances on the view echo and hides only at the end",
   expect_true(any(grepl("Donor A", texts)))       # stage message uses the view labels
   expect_true("hide" %in% seen)
   expect_identical(seen[[length(seen)]], "hide")  # hide comes last (after the final view)
+  expect_false(is.unsorted(fracs))                # progress bar advances monotonically
+  expect_equal(fracs[[length(fracs)]], 1)         # ...and reaches 100% on the final step
 })
 
 test_that(".scroll_prewarm watchdog hides if a step's echo never arrives", {
