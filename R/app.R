@@ -560,7 +560,7 @@ scroll_reset_panels <- function() {
   subs <- .scroll_subset_names(data$manifest)
   if (!is.null(cache) && length(subs) && !is.na(prewarm) && prewarm > 0) {
     labels <- vapply(subs, function(s) data$manifest$subsets[[s]]$label %||% s, "")
-    .scroll_prewarm(session, subs, labels)
+    .scroll_prewarm(input, session, subs, labels)
   }
 }
 
@@ -569,28 +569,53 @@ scroll_reset_panels <- function() {
 # cached panels render once and fill the plot cache. Client-driven because a server
 # plot is drawn at the client's pixel size (the bindCache store can't be pre-filled
 # offline). Runs once per session, after the initial (whole-dataset) render.
-.scroll_prewarm <- function(session, views, labels = views, step_ms = 700L) {
+.scroll_prewarm <- function(input, session, views, labels = views, step_timeout = 20) {
   queue <- c(as.list(views), "")          # each subset, then restore whole-dataset
   # per-stage overlay message: "Preparing <label>... (i of n)", then a finishing note
   n <- length(views)
   msgs <- c(sprintf("Preparing %s\u2026 (%d of %d)", labels, seq_len(n), n),
             "Finishing\u2026")
-  counter <- 0L
-  kick <- shiny::reactiveVal(FALSE)
-  # the overlay is already shown from the initial HTML (see .scroll_page); once the
-  # first (whole-dataset) render has flushed, start cycling the subset views.
-  session$onFlushed(function() kick(TRUE), once = TRUE)
-  shiny::observe({
-    if (!isTRUE(kick())) return()
-    counter <<- counter + 1L
-    if (counter > length(queue)) {        # done -> drop the overlay, stop the timer
-      session$sendCustomMessage("scroll_warm", list(show = FALSE))
-      return()
+  i <- 0L; started <- Sys.time(); done <- FALSE
+  step_obs <- watchdog <- NULL
+  # Drop the overlay only from an onFlushed hook so the {show:FALSE} message follows
+  # the FINAL image on the wire (sendCustomMessage writes immediately; plot values are
+  # written at flushOutput) -- otherwise the overlay clears before the last render.
+  finish <- function(abort = FALSE) {
+    if (done) return(invisible(NULL))
+    done <<- TRUE
+    if (!is.null(step_obs)) step_obs$destroy()
+    if (!is.null(watchdog)) watchdog$destroy()
+    if (abort) shiny::updateSelectInput(session, "scroll_view", selected = "")
+    session$onFlushed(function()
+      session$sendCustomMessage("scroll_warm", list(show = FALSE)), once = TRUE)
+  }
+  step <- function() {
+    i <<- i + 1L; started <<- Sys.time()
+    if (i > length(queue)) return(finish())
+    session$sendCustomMessage("scroll_warm", list(show = TRUE, text = msgs[[i]]))
+    shiny::updateSelectInput(session, "scroll_view", selected = queue[[i]])
+  }
+  # Advance a step only when the client ECHOES the view we asked for. priority -1000
+  # runs after that view's (synchronous bindCache) renders in the same flush -- so the
+  # cache entry is written before we move on, and the render backlog can never spill
+  # out after the overlay clears (the reported "cycles through donors after loading").
+  step_obs <- shiny::observeEvent(input$scroll_view, {
+    if (done || i < 1L || !identical(input$scroll_view %||% "", queue[[i]])) return()
+    step()
+  }, ignoreInit = TRUE, ignoreNULL = FALSE, priority = -1000L)
+  # Watchdog: a lost echo / failed render must not strand the overlay or park the view
+  # on a donor -- after step_timeout on a step, abort (restore whole-dataset, hide).
+  watchdog <- shiny::observe({
+    shiny::invalidateLater(1000, session)
+    if (!done && i >= 1L &&
+        as.numeric(Sys.time() - started, units = "secs") > step_timeout) {
+      warning("scroll warm-up: step ", i, " did not complete in ", step_timeout,
+              "s; aborting.", call. = FALSE)
+      finish(abort = TRUE)
     }
-    session$sendCustomMessage("scroll_warm", list(show = TRUE, text = msgs[[counter]]))
-    shiny::updateSelectInput(session, "scroll_view", selected = queue[[counter]])
-    shiny::invalidateLater(step_ms, session)
   })
+  session$onSessionEnded(function() done <<- TRUE)
+  session$onFlushed(step, once = TRUE)    # start after the initial (whole-dataset) render
   invisible(NULL)
 }
 
