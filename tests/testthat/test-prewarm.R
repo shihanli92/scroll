@@ -50,3 +50,25 @@ test_that("prewarm stays off unless configured (no cache / no subsets / prewarm 
   m <- list(subsets = NULL)
   expect_length(scroll:::.scroll_subset_names(m), 0L)
 })
+
+test_that(".scroll_prewarm_on gates on prewarm_views + subsets + cache_plots", {
+  data <- scroll:::.scroll_load(subset_test_project())
+  on.exit(scroll_disconnect(data$con))
+  expect_gt(length(scroll:::.scroll_subset_names(data$manifest)), 0)   # fixture has a subset
+  data$config$prewarm_views <- 0L
+  expect_false(scroll:::.scroll_prewarm_on(data))     # off by default (0/absent)
+  data$config$prewarm_views <- 3L
+  expect_true(scroll:::.scroll_prewarm_on(data))      # subsets + prewarm -> on
+  data$config$cache_plots <- FALSE
+  expect_false(scroll:::.scroll_prewarm_on(data))     # cache disabled -> off
+})
+
+test_that(".scroll_page shows the warm-up overlay only when warming", {
+  data <- scroll:::.scroll_load(subset_test_project())
+  on.exit(scroll_disconnect(data$con))
+  panels <- scroll:::.scroll_assemble_panels(data$manifest)
+  html_on  <- as.character(scroll:::.scroll_page(data, "t", panels, warming = TRUE))
+  html_off <- as.character(scroll:::.scroll_page(data, "t", panels, warming = FALSE))
+  expect_true(grepl("scroll-warm-overlay", html_on))
+  expect_false(grepl("scroll-warm-overlay", html_off))   # preview path: no stranded overlay
+})

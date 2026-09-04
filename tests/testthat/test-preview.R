@@ -23,3 +23,22 @@ test_that("scroll_preview_panel can preview a built-in panel", {
   dir <- test_project()
   expect_s3_class(scroll_preview_panel("dotplot", dir), "shiny.appobj")
 })
+
+test_that("scroll_preview_panel never strands the warm-up overlay", {
+  # A project configured for the startup warm-up (prewarm_views + subset views) runs
+  # NO warm-up when previewed as a single panel, so its overlay must be absent -- else
+  # it would hang until the 60s JS failsafe. Copy the fixture so we don't mutate it.
+  dir <- file.path(tempdir(), "scroll-preview-warm")
+  if (dir.exists(dir)) unlink(dir, recursive = TRUE)
+  file.copy(subset_test_project(), tempdir(), recursive = TRUE)
+  file.rename(file.path(tempdir(), basename(subset_test_project())), dir)
+  cfg <- yaml::read_yaml(file.path(dir, "config.yaml"))
+  cfg$prewarm_views <- 3L                       # would gate the overlay on in scroll_app
+  yaml::write_yaml(cfg, file.path(dir, "config.yaml"))
+
+  app <- scroll_preview_panel("dimplot", dir)
+  expect_s3_class(app, "shiny.appobj")
+  ui   <- environment(app$httpHandler)$ui
+  html <- as.character(if (is.function(ui)) ui(list()) else ui)
+  expect_false(grepl("scroll-warm-overlay", html))
+})

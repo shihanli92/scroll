@@ -511,13 +511,22 @@ scroll_reset_panels <- function() {
   )
 }
 
-.scroll_page <- function(data, title, panels) {
+# Will the startup view warm-up run for this project? Config-gated (`prewarm_views`
+# > 0, `cache_plots` not disabled) and only meaningful with >=1 subset view. The
+# same gate decides both the overlay (.scroll_page) and the cycling (.scroll_wire),
+# so they never disagree -- e.g. scroll_preview_panel runs no warm-up, so no overlay.
+.scroll_prewarm_on <- function(data) {
+  n <- suppressWarnings(as.integer(data$config$prewarm_views %||% 0L))
+  !is.na(n) && n > 0 && !isFALSE(data$config$cache_plots) &&
+    length(.scroll_subset_names(data$manifest)) > 0
+}
+
+.scroll_page <- function(data, title, panels, warming = .scroll_prewarm_on(data)) {
   # Show the warm-up overlay from the INITIAL html (not after the first flush) when a
   # warm-up will run, so it covers the whole startup -- the initial main-view render
   # AND the subset cycling -- instead of appearing only after the main view has loaded.
-  prewarm <- suppressWarnings(as.integer(data$config$prewarm_views %||% 0L))
-  warming <- !is.na(prewarm) && prewarm > 0 && !isFALSE(data$config$cache_plots) &&
-             length(.scroll_subset_names(data$manifest)) > 0
+  # `warming` MUST match whether .scroll_wire will actually cycle: a stranded overlay
+  # (shown but never dismissed) only clears on the 60s JS failsafe.
   overlay <- if (warming)
     div(id = "scroll-warm-overlay", class = "scroll-warm-overlay",
         div(class = "scroll-warm-box", div(class = "scroll-warm-spin"),
@@ -536,7 +545,8 @@ scroll_reset_panels <- function() {
 # The per-dataset server logic, composed from four focused steps. Called flat by
 # scroll_app() and inside a moduleServer() by scroll_multi_app(), so
 # `input`/`output`/`session` carry the right namespace in both.
-.scroll_wire <- function(input, output, session, data, panels, cache = NULL) {
+.scroll_wire <- function(input, output, session, data, panels, cache = NULL,
+                         prewarm = TRUE) {
   active_view <- reactive(.scroll_nz(input$scroll_view))
   # deferred filters + theme: committed only on their Apply buttons (Reset clears both)
   filt_rv  <- reactiveVal(list())
@@ -544,7 +554,10 @@ scroll_reset_panels <- function() {
   active_cells <- .scroll_active_cells(input, data, active_view, filt_rv)
   # A cheap, faithful signature of the active cell set (view + ad-hoc subset +
   # applied filters) -- panels append their own controls to it as a plot-cache key.
-  cache_key_r <- reactive(list(active_view() %||% "",
+  # The leading namespace keeps datasets from colliding in the shared app-level cache
+  # under scroll_multi_app (blank "" for the flat scroll_app / preview paths).
+  ns <- session$ns("")
+  cache_key_r <- reactive(list(ns, active_view() %||% "",
                                .scroll_nz(input$scroll_subset_col),
                                input$scroll_subset_val, filt_rv()))
   .scroll_bind_subset_control(input, session, data)
@@ -555,10 +568,12 @@ scroll_reset_panels <- function() {
                        cache_key_r = cache_key_r, cache = cache)
   # optional startup warm-up: cycle the subset views once so their (cached) scatters
   # pre-render, making the first visit to each view instant too. Only meaningful when
-  # caching is on; gated by config `prewarm_views` (0/absent = off).
-  prewarm <- suppressWarnings(as.integer(data$config$prewarm_views %||% 0L))
+  # caching is on and gated by config `prewarm_views` (0/absent = off). Callers pass
+  # `prewarm = FALSE` to enable caching without cycling -- e.g. scroll_multi_app, where
+  # tabs start hidden (their on-screen-gated panels wouldn't render) and cycling every
+  # tab's View selector at once would just be noise.
   subs <- .scroll_subset_names(data$manifest)
-  if (!is.null(cache) && length(subs) && !is.na(prewarm) && prewarm > 0) {
+  if (isTRUE(prewarm) && !is.null(cache) && length(subs) && .scroll_prewarm_on(data)) {
     labels <- vapply(subs, function(s) data$manifest$subsets[[s]]$label %||% s, "")
     .scroll_prewarm(input, session, subs, labels)
   }
@@ -761,8 +776,11 @@ scroll_multi_app <- function(projects) {
   server <- function(input, output, session) {
     for (i in seq_along(datas)) local({
       ii <- i
+      # cache plots (shared app-level store, per-dataset cache keys via the namespace)
+      # but skip the view-cycling warm-up -- hidden tabs can't render it.
       moduleServer(ids[[ii]], function(input, output, session)
-        .scroll_wire(input, output, session, datas[[ii]], panels))
+        .scroll_wire(input, output, session, datas[[ii]], panels,
+                     cache = "app", prewarm = FALSE))
     })
   }
   shiny::shinyApp(ui, server, onStart = function() {
@@ -822,7 +840,9 @@ scroll_preview_panel <- function(panel, dir = ".") {
   panels <- list(spec)
   ttl <- .scroll_nz(data$config$title) %||% "scroll"
   title <- paste0(ttl, " \u00b7 preview: ", spec$id)
-  ui <- .scroll_page(data, title, panels)
+  # No warm-up in preview (no cache passed below), so never show the overlay -- else it
+  # would sit until the 60s JS failsafe on a project configured with prewarm_views.
+  ui <- .scroll_page(data, title, panels, warming = FALSE)
   server <- function(input, output, session)
     .scroll_wire(input, output, session, data, panels)
   shiny::shinyApp(ui, server, onStart = function() {
