@@ -76,6 +76,16 @@ test_that(".scroll_prewarm_on gates on prewarm_views + subsets + cache_plots", {
   expect_false(scroll:::.scroll_prewarm_on(data))     # cache disabled -> off
 })
 
+test_that("warm-up client fuse resets on activity (not a fixed wall-clock timer)", {
+  js <- scroll:::.scroll_warm_js()
+  expect_match(js, "SILENCE_MS")                       # activity-reset silence fuse
+  expect_match(js, "function arm\\(")
+  expect_no_match(js, "60000")                         # the old fixed 60s-from-load fuse is gone
+  # the fuse is rearmed inside the message handler, so progress keeps it from firing
+  handler <- sub(".*addCustomMessageHandler\\('scroll_warm'", "", js)
+  expect_match(handler, "arm\\(\\)")
+})
+
 test_that(".scroll_page shows the warm-up overlay only when warming", {
   data <- scroll:::.scroll_load(subset_test_project())
   on.exit(scroll_disconnect(data$con))

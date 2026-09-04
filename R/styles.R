@@ -295,18 +295,34 @@ window.scrollToggleControls=function(btn){
 # viewport so the brief view-cycling isn't visible and can't be interacted with.
 .scroll_warm_js <- function() "
 (function(){
-  // The overlay div is rendered in the initial HTML (visible) when a warm-up will
-  // run, so it covers the whole startup. The server sends 'scroll_warm'
-  // {show,text,frac}; {show:false} at the end triggers a fade-out.
+  // Client failsafe: hide the overlay only after the server has been SILENT this long.
+  // The server drives a step at least every step_timeout (20s) -- or aborts and sends
+  // {show:false} -- so a healthy (even long) warm-up keeps resetting this and never
+  // trips it; it fires only when the server never responds (dead/dropped session,
+  // where the overlay -- painted in the initial HTML -- would otherwise sit forever).
+  var SILENCE_MS = 30000;
+  var fuse = null;
   function hide(ov){
+    if(fuse){ clearTimeout(fuse); fuse=null; }
     document.body.classList.remove('scroll-warming');
     ov.classList.add('scroll-warm-hiding');           // fade, then remove from flow
     setTimeout(function(){ ov.style.display='none'; }, 340);
+  }
+  // (re)arm the silence fuse; each progress message resets the clock. No-op when there
+  // is no overlay (no warm-up), so it never fires on a plain app.
+  function arm(){
+    if(!document.getElementById('scroll-warm-overlay')) return;
+    if(fuse) clearTimeout(fuse);
+    fuse = setTimeout(function(){
+      var ov=document.getElementById('scroll-warm-overlay');
+      if(ov && ov.style.display!=='none') hide(ov);
+    }, SILENCE_MS);
   }
   function reg(){
     if(!window.Shiny || !Shiny.addCustomMessageHandler) return;
     Shiny.addCustomMessageHandler('scroll_warm', function(m){
       var ov=document.getElementById('scroll-warm-overlay'); if(!ov) return;
+      arm();                                            // progress -> reset the silence fuse
       if(m && m.text){ var el=ov.querySelector('.scroll-warm-msg'); if(el) el.textContent=m.text; }
       if(m && m.frac!=null){ var f=ov.querySelector('.scroll-warm-fill');
         if(f) f.style.width=(Math.max(0,Math.min(1,m.frac))*100)+'%'; }
@@ -315,16 +331,14 @@ window.scrollToggleControls=function(btn){
       else { hide(ov); }
     });
   }
-  if(window.Shiny && Shiny.addCustomMessageHandler) reg();
-  else if(window.jQuery) jQuery(document).on('shiny:connected', reg);
-  else document.addEventListener('shiny:connected', reg);
-  // lock scroll from the initial paint (body exists only after parse, so defer)
-  function initLock(){ if(document.getElementById('scroll-warm-overlay'))
-    document.body.classList.add('scroll-warming'); }
+  function onConnect(){ reg(); arm(); }                 // fresh window for the first message
+  if(window.Shiny && Shiny.addCustomMessageHandler) onConnect();
+  else if(window.jQuery) jQuery(document).on('shiny:connected', onConnect);
+  else document.addEventListener('shiny:connected', onConnect);
+  // lock scroll + arm the fuse from the initial paint (body exists only after parse)
+  function initLock(){ if(document.getElementById('scroll-warm-overlay')){
+    document.body.classList.add('scroll-warming'); arm(); } }
   if(document.readyState!=='loading') initLock();
   else document.addEventListener('DOMContentLoaded', initLock);
-  // failsafe: never leave the overlay (or the scroll lock) up forever
-  setTimeout(function(){ var ov=document.getElementById('scroll-warm-overlay');
-    if(ov && ov.style.display!=='none') hide(ov); }, 60000);
 })();
 "
