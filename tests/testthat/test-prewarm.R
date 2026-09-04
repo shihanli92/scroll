@@ -54,14 +54,24 @@ test_that("prewarm stays off unless configured (no cache / no subsets / prewarm 
   expect_length(scroll:::.scroll_subset_names(m), 0L)
 })
 
+test_that(".scroll_prewarm_flag reads prewarm_views as an on/off flag", {
+  f <- scroll:::.scroll_prewarm_flag
+  expect_true(f(TRUE)); expect_true(f(3L)); expect_true(f(3.0)); expect_true(f("true"))
+  expect_true(f("yes")); expect_true(f("1"))
+  expect_false(f(NULL)); expect_false(f(FALSE)); expect_false(f(0L)); expect_false(f(NA))
+  expect_false(f("false")); expect_false(f("off")); expect_false(f(c(1, 2)))  # not a scalar
+})
+
 test_that(".scroll_prewarm_on gates on prewarm_views + subsets + cache_plots", {
   data <- scroll:::.scroll_load(subset_test_project())
   on.exit(scroll_disconnect(data$con))
   expect_gt(length(scroll:::.scroll_subset_names(data$manifest)), 0)   # fixture has a subset
   data$config$prewarm_views <- 0L
   expect_false(scroll:::.scroll_prewarm_on(data))     # off by default (0/absent)
+  data$config$prewarm_views <- TRUE
+  expect_true(scroll:::.scroll_prewarm_on(data))      # boolean flag: on
   data$config$prewarm_views <- 3L
-  expect_true(scroll:::.scroll_prewarm_on(data))      # subsets + prewarm -> on
+  expect_true(scroll:::.scroll_prewarm_on(data))      # numeric back-compat: any >0 -> on
   data$config$cache_plots <- FALSE
   expect_false(scroll:::.scroll_prewarm_on(data))     # cache disabled -> off
 })

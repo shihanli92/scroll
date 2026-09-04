@@ -23,10 +23,11 @@ change — three layers, measured on a 237k-cell project:
   interactive rasterized draw uses a deterministic subsample (a 237k embedding renders
   ~2-3x faster); highlighted / expressing cells are always kept, and exports draw every
   point.
-* **Startup warm-up** — optional `prewarm_views: N` in `config.yaml` cycles the subset
-  views once at load (behind a "Preparing views…" overlay, shown from the initial page
-  so it covers the whole startup) so the first visit to each view is instant too. Off by
-  default.
+* **Startup warm-up** — set `prewarm_views: true` in `config.yaml` (any positive number
+  also works; off by default) to cycle **all** subset views once at load so the first
+  visit to each is instant too. It runs behind a progress overlay (shown from the initial
+  page, so it covers the whole startup), steps as each view's render completes, locks page
+  scroll while it runs, and fades out when done.
 * **Off-screen panels stay off** — the on-screen render gate is now wired reliably (the
   IntersectionObserver is set up on `shiny:connected`, not before Shiny is ready), and the
   live declarative panels (repertoire panels, clone-map) are lazy-gated too, so a global

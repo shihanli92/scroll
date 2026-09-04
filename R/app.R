@@ -511,13 +511,25 @@ scroll_reset_panels <- function() {
   )
 }
 
+# Parse the `prewarm_views` config value as an on/off flag: does the startup warm-up
+# run? It is a flag, not a count -- when on, EVERY subset view warms (the value's
+# magnitude is not a per-view cap). Accepts `true`/`false`, or a number kept for
+# back-compat where any value > 0 means on; absent/0/false/NA means off.
+.scroll_prewarm_flag <- function(x) {
+  if (is.null(x) || (length(x) != 1L)) return(FALSE)
+  if (is.logical(x))   return(isTRUE(x))
+  if (is.numeric(x))   return(!is.na(x) && x > 0)
+  if (is.character(x)) return(tolower(trimws(x)) %in% c("true", "yes", "on", "1"))
+  FALSE
+}
+
 # Will the startup view warm-up run for this project? Config-gated (`prewarm_views`
-# > 0, `cache_plots` not disabled) and only meaningful with >=1 subset view. The
-# same gate decides both the overlay (.scroll_page) and the cycling (.scroll_wire),
-# so they never disagree -- e.g. scroll_preview_panel runs no warm-up, so no overlay.
+# on, `cache_plots` not disabled) and only meaningful with >=1 subset view. The same
+# gate decides both the overlay (.scroll_page) and the cycling (.scroll_wire), so they
+# never disagree -- e.g. scroll_preview_panel runs no warm-up, so no overlay.
 .scroll_prewarm_on <- function(data) {
-  n <- suppressWarnings(as.integer(data$config$prewarm_views %||% 0L))
-  !is.na(n) && n > 0 && !isFALSE(data$config$cache_plots) &&
+  .scroll_prewarm_flag(data$config$prewarm_views) &&
+    !isFALSE(data$config$cache_plots) &&
     length(.scroll_subset_names(data$manifest)) > 0
 }
 
