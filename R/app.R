@@ -520,7 +520,8 @@ scroll_reset_panels <- function() {
              length(.scroll_subset_names(data$manifest)) > 0
   overlay <- if (warming)
     div(id = "scroll-warm-overlay", class = "scroll-warm-overlay",
-        div(class = "scroll-warm-box", div(class = "scroll-warm-spin"), "Preparing views\u2026"))
+        div(class = "scroll-warm-box", div(class = "scroll-warm-spin"),
+            span(class = "scroll-warm-msg", "Preparing views\u2026")))
   bslib::page_fluid(
     theme = .scroll_theme(),
     tags$head(tags$style(HTML(.scroll_css())),
@@ -557,8 +558,10 @@ scroll_reset_panels <- function() {
   # caching is on; gated by config `prewarm_views` (0/absent = off).
   prewarm <- suppressWarnings(as.integer(data$config$prewarm_views %||% 0L))
   subs <- .scroll_subset_names(data$manifest)
-  if (!is.null(cache) && length(subs) && !is.na(prewarm) && prewarm > 0)
-    .scroll_prewarm(session, subs)
+  if (!is.null(cache) && length(subs) && !is.na(prewarm) && prewarm > 0) {
+    labels <- vapply(subs, function(s) data$manifest$subsets[[s]]$label %||% s, "")
+    .scroll_prewarm(session, subs, labels)
+  }
 }
 
 # Cycle the app-bar View selector through each subset view (then back to
@@ -566,8 +569,12 @@ scroll_reset_panels <- function() {
 # cached panels render once and fill the plot cache. Client-driven because a server
 # plot is drawn at the client's pixel size (the bindCache store can't be pre-filled
 # offline). Runs once per session, after the initial (whole-dataset) render.
-.scroll_prewarm <- function(session, views, step_ms = 700L) {
+.scroll_prewarm <- function(session, views, labels = views, step_ms = 700L) {
   queue <- c(as.list(views), "")          # each subset, then restore whole-dataset
+  # per-stage overlay message: "Preparing <label>... (i of n)", then a finishing note
+  n <- length(views)
+  msgs <- c(sprintf("Preparing %s\u2026 (%d of %d)", labels, seq_len(n), n),
+            "Finishing\u2026")
   counter <- 0L
   kick <- shiny::reactiveVal(FALSE)
   # the overlay is already shown from the initial HTML (see .scroll_page); once the
@@ -580,6 +587,7 @@ scroll_reset_panels <- function() {
       session$sendCustomMessage("scroll_warm", list(show = FALSE))
       return()
     }
+    session$sendCustomMessage("scroll_warm", list(show = TRUE, text = msgs[[counter]]))
     shiny::updateSelectInput(session, "scroll_view", selected = queue[[counter]])
     shiny::invalidateLater(step_ms, session)
   })

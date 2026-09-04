@@ -294,6 +294,7 @@ window.scrollToggleControls=function(btn){
     if(!window.Shiny || !Shiny.addCustomMessageHandler) return;
     Shiny.addCustomMessageHandler('scroll_warm', function(m){
       var ov=document.getElementById('scroll-warm-overlay'); if(!ov) return;
+      if(m && m.text){ var el=ov.querySelector('.scroll-warm-msg'); if(el) el.textContent=m.text; }
       ov.style.display = (m && m.show) ? 'flex' : 'none';
     });
   }
