@@ -1,3 +1,26 @@
+# scroll 0.2.8
+
+## Startup warm-up & on-screen rendering
+
+* **No more post-overlay cycling.** The startup view warm-up now advances as each view's
+  render *completes* (event-driven on the view echo) instead of on a fixed timer, so the
+  DimPlot no longer visibly cycles through subset views after the "Preparing views"
+  overlay clears. A per-step watchdog aborts and hides the overlay if a step stalls.
+* **Panels gate correctly at first load.** The on-screen render gate is now a Shiny input
+  binding, so each panel's on-screen state is known *before* the first flush -- only
+  panels in view render up front, off-screen ones wait until scrolled to (previously all
+  live panels rendered at once on load).
+* **Overlay polish** -- a labelled first stage ("Preparing the main view..."), a progress
+  bar, page-scroll lock while warming (so scrolling can't pollute the plot cache
+  mid-cycle), and a fade-out. The client failsafe now fires on server *silence* (rearmed
+  on each step) rather than a fixed 60s wall-clock, so a long but healthy warm-up is never
+  cut short.
+* **`prewarm_views` is an on/off flag.** `prewarm_views: true` (or any positive number)
+  warms all subset views; `false`/`0`/absent is off. The number never was a per-view cap.
+* **`scroll_preview_panel()`** no longer shows a stranded overlay on a warm-up-configured
+  project (it runs no warm-up), and **`scroll_multi_app()`** now caches rendered plots
+  (per-dataset cache keys) like `scroll_app()`.
+
 # scroll 0.2.7
 
 ## DE: Seurat-compatible `avg_log2FC` column
