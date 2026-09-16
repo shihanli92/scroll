@@ -33,13 +33,16 @@ scroll_pseudobulk_stability(
 one-vs-rest (all cells not in \code{ident1}, restricted to observed combinations).}
 
 \item{replicate_col}{Metadata column defining biological replicates. \code{NULL} or
-\code{"no_replicate"} pseudo-replicates the two groups directly (pooling each
-group's cells) instead of using a real replicate column.}
+\code{"no_replicate"} pseudo-replicates the two groups directly (a disjoint
+partition of each group's cells) instead of using a real replicate column.
+Cells with a missing replicate value are excluded (and reported) rather than
+silently dropped; a named column that is absent is an error.}
 
-\item{min_cells}{Minimum cells for a pseudobulk sample to be kept.}
+\item{min_cells}{Minimum cells for a pseudobulk sample to be kept (a per-sample
+floor, applied to real replicates and to each pseudo-partition bin).}
 
-\item{n_pseudo, cells_per_pseudo}{Pseudo-replicate fallback: number of
-pseudo-replicates and cells sampled per pseudo-replicate.}
+\item{n_pseudo, cells_per_pseudo}{Pseudo-replicate partition: number of
+pseudo-replicates and the maximum cells per pseudo-replicate.}
 
 \item{cells}{Cells to test over (default \code{data$cells}).}
 

@@ -44,12 +44,16 @@
 #'   (Seurat v5 `FoldChange`, pseudocount 1). For zero-inflated data `avg_log2FC` is
 #'   typically larger in magnitude than `logFC`.
 #' @details With the default quantized build (`quantize = TRUE` in
-#'   [scroll_build()]), expression values below ~`max/510` round to zero, so the
-#'   fraction-expressing columns (`pct.1`/`pct.2`) slightly under-count cells with
-#'   very low expression, p-values are approximate, and `avg_log2FC` is close to but
-#'   not bit-identical to Seurat's (max abs diff ~0.01 in practice). Build with
-#'   `quantize = FALSE` for exact statistics (`avg_log2FC` then matches
-#'   `Seurat::FindMarkers` to floating-point tolerance).
+#'   [scroll_build()]), expression values below ~`max/510` round to zero. Such a
+#'   floored value is still stored (as an explicit zero), so `pct.1`/`pct.2` are
+#'   unaffected; instead those cells become tied at zero, which makes the Wilcoxon
+#'   p-values approximate, and `avg_log2FC` close to but not bit-identical to
+#'   Seurat's (max abs diff ~0.04, median ~0.005 in practice; see
+#'   `dev/validate_de_vs_findmarkers.R`). Build with `quantize = FALSE` for exact
+#'   statistics -- `avg_log2FC`, `pct`, and the p-value ranking then match
+#'   `Seurat::FindMarkers` to scroll's output rounding (Seurat's default `wilcox`
+#'   test itself dispatches to presto when it is installed, so the two run the
+#'   same Wilcoxon).
 #' @export
 scroll_de <- function(data, assay, group_col, ident1, ident2 = NULL, min_pct = 0.1,
                       cells = NULL, max_cells = NULL, progress = NULL) {

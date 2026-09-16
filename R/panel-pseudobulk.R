@@ -7,6 +7,44 @@
   sort(unique(combo[!is.na(combo)]))
 }
 
+# Tidy limma design column names for display: "(Intercept)" -> "int",
+# "groupgroup1" -> "group1", "replicate<level>" -> "<level>".
+.scroll_tidy_design_cols <- function(nm) {
+  nm <- sub("^\\(Intercept\\)$", "int", nm)
+  nm <- sub("^groupgroup", "group", nm)
+  sub("^replicate", "", nm)
+}
+
+# Small HTML table for a (samples x terms) design matrix.
+.scroll_matrix_html <- function(D) {
+  tags$div(class = "scroll-designmat-wrap",
+    tags$table(class = "scroll-designmat",
+      tags$tr(tags$th(""), lapply(colnames(D), function(c) tags$th(c))),
+      lapply(seq_len(nrow(D)), function(i)
+        tags$tr(tags$th(rownames(D)[i]),
+                lapply(D[i, ], function(v) tags$td(format(v)))))))
+}
+
+# Model formula + a collapsible, capped design matrix for the previewed samples.
+# The matrix is the exact model scroll_pseudobulk_de() will fit; a high-cardinality
+# replicate is capped to a one-line summary so it never bloats the sidebar.
+.scroll_pseudobulk_design_ui <- function(sm) {
+  n1 <- sum(sm$samp$group == "group1"); n2 <- sum(sm$samp$group == "group2")
+  small <- function(txt) div(class = "scroll-desc", style = "margin:4px 0 0; font-size:11px", txt)
+  if (n1 < 2 || n2 < 2)
+    return(small(sprintf("Model: needs >= 2 samples/group (have %d vs %d).", n1, n2)))
+  ds <- .scroll_pseudobulk_design(sm$samp, sm$regime, "auto")
+  head <- small(tagList(tags$b("Model: "), ds$formula,
+                        sprintf("  (%d vs %d samples)", n1, n2)))
+  D <- ds$design
+  if (nrow(D) > 16 || ncol(D) > 12)                  # keep the sidebar sane
+    return(tagList(head, small(sprintf("design matrix %d x %d - too large to show.",
+                                       nrow(D), ncol(D)))))
+  rownames(D) <- sm$samp$psample
+  colnames(D) <- .scroll_tidy_design_cols(colnames(D))
+  tagList(head, .scroll_details("Design matrix", open = FALSE, .scroll_matrix_html(D)))
+}
+
 pseudobulk_de_ui <- function(id, data) {
   ns <- NS(id)
   m <- data$manifest
@@ -33,11 +71,15 @@ pseudobulk_de_ui <- function(id, data) {
                     c("No replicate (pseudo)" = "no_replicate", stats::setNames(cats, cats))),
         if (length(assays) > 1) selectInput(ns("assay"), "Assay", assays, selected = m$default_assay)),
       .scroll_group("Preview",                       # live: one coloured medoid per sample
-        plotOutput(ns("preview"), height = "170px")),
+        plotOutput(ns("preview"), height = "170px"),
+        uiOutput(ns("design"))),                      # model formula + design matrix
       .scroll_group("Pseudobulk",
         sliderInput(ns("mincells"), "Min cells / sample", 3, 200, 10, 1),
         numericInput(ns("npseudo"), "Pseudo-reps (if no replicate)", 3, min = 2, max = 10),
-        numericInput(ns("cellsper"), "Cells / pseudo-rep", 50, min = 5, max = 2000)),
+        numericInput(ns("cellsper"), "Max cells / pseudo-rep", 50, min = 5, max = 2000),
+        div(class = "scroll-desc", style = "margin:2px 0 0; font-size:11px",
+            "Pseudo-reps are a disjoint partition (no shared cells); a group needs ",
+            "at least Pseudo-reps x Min cells cells.")),
       .scroll_group("Stability",
         numericInput(ns("runs"), "Runs (re-sample; pseudo only)", 1, min = 1, max = 100),
         sliderInput(ns("stabcut"), "Consistency cutoff", 0, 1, 0.8, 0.05)),
@@ -109,16 +151,40 @@ pseudobulk_de_server <- function(id, data, cells_r = reactive(data$cells),
     # group2), so users see how cells compact into samples as they pick controls.
     preview_in <- .scroll_cosmetic(reactive(list(
       cells = cells_r(), agg = input$aggregate_by, ident1 = input$ident1,
-      ident2 = input$ident2, rep = input$replicate,
+      ident2 = input$ident2, rep = input$replicate, mincells = input$mincells,
+      npseudo = input$npseudo, cellsper = input$cellsper,
       emb = .scroll_preview_embedding(data, view_r()))))   # default for whole dataset, else the view's
+
+    # The exact samples the compute will build (metadata-only; no counts query), so
+    # the preview medoids AND the design matrix match scroll_pseudobulk_de.
+    pb_samples <- reactive({
+      p <- preview_in()
+      if (!length(p$agg) || !length(p$ident1)) return(NULL)
+      rep_col <- if (!is.null(p$rep) && nzchar(p$rep)) p$rep else "no_replicate"
+      tryCatch(
+        .scroll_pseudobulk_samples(p$cells, seq_len(nrow(p$cells)), p$agg, p$ident1,
+          if (length(p$ident2)) p$ident2 else NULL, rep_col,
+          p$mincells %||% 10, p$npseudo %||% 3, p$cellsper %||% 50, seed = 1L),
+        error = function(e) list(err = conditionMessage(e)))
+    })
+
+    # medoid per actual pseudobulk sample (one per group x replicate, or per
+    # pseudo-partition bin) -- so the preview counts match what Compute uses.
     output$preview <- renderPlot({
       p <- preview_in(); req(length(p$agg) > 0, p$emb)
-      combo <- .scroll_combo_levels(p$cells, p$agg)
-      grp <- .scroll_combo_group(combo, p$ident1, p$ident2)
-      samp <- if (!is.null(p$rep) && nzchar(p$rep) && p$rep != "no_replicate" &&
-                  p$rep %in% names(p$cells))
-                paste(combo, as.character(p$cells[[p$rep]]), sep = " :: ") else combo
-      view_contrast_medoids(p$cells, p$emb, samp, grp)
+      sm <- pb_samples()
+      validate(need(!is.null(sm), "Pick Group 1 to preview the samples."),
+               need(is.null(sm$err), sm$err))
+      samp_vec <- rep(NA_character_, nrow(p$cells)); grp_vec <- samp_vec
+      samp_vec[sm$mapping$cell] <- sm$mapping$psample
+      grp_vec[sm$mapping$cell]  <- sm$mapping$group
+      view_contrast_medoids(p$cells, p$emb, samp_vec, grp_vec)
+    })
+
+    # the model that will be fit: formula + a collapsible, capped design matrix
+    output$design <- renderUI({
+      sm <- pb_samples(); if (is.null(sm) || !is.null(sm$err)) return(NULL)
+      .scroll_pseudobulk_design_ui(sm)
     })
 
     # stability = re-run the pseudo-replication K times (pseudo mode only). The
@@ -152,16 +218,27 @@ pseudobulk_de_server <- function(id, data, cells_r = reactive(data$cells),
 
     output$note <- renderUI({
       req(input$compute > 0); r <- result(); if (!is.null(r$err)) return(NULL)
-      mk <- function(txt) div(class = "scroll-desc", style = "margin:0 0 8px; color:#B45309", txt)
+      amber <- function(txt) div(class = "scroll-desc", style = "margin:0 0 8px; color:#B45309", txt)
+      note  <- function(txt) div(class = "scroll-desc", style = "margin:0 0 8px", txt)
       if (!is.null(r$runs))
-        mk(sprintf(paste("Stability across %d pseudo-replicate runs - sel_freq is a",
+        return(amber(sprintf(paste("Stability across %d pseudo-replicate runs - sel_freq is a",
                          "robustness heuristic, not a p-value; prefer real replicates."),
-                   length(r$runs)))
-      else if (isTRUE(attr(r$ok, "pseudo"))) {
-        n <- attr(r$ok, "n_samples")
-        mk(sprintf(paste("Pseudo-replicates used (no biological replicates): %d vs %d",
-                         "samples - treat p-values with caution."), n[["group1"]], n[["group2"]]))
-      } else NULL
+                   length(r$runs))))
+      res <- r$ok; n <- attr(res, "n_samples")
+      na <- attr(res, "dropped_na") %||% 0L
+      na_txt <- if (isTRUE(na > 0)) sprintf(" %d cells with a missing replicate excluded.", na) else ""
+      switch(attr(res, "regime") %||% "pseudo",
+        "real-paired" = note(sprintf(
+          "Paired design (~ replicate + group): %d vs %d replicate samples.%s",
+          n[["group1"]], n[["group2"]], na_txt)),
+        "real-unpaired" = note(sprintf(
+          "Real replicates (~ group): %d vs %d samples.%s",
+          n[["group1"]], n[["group2"]], na_txt)),
+        "mixed" = amber(sprintf(paste("Some groups lacked replicates; pseudo-replicates used",
+          "there (%d vs %d samples) - treat with caution.%s"),
+          n[["group1"]], n[["group2"]], na_txt)),
+        amber(sprintf(paste("Pseudo-replicates used (no biological replicates): %d vs %d",
+          "samples - treat p-values with caution."), n[["group1"]], n[["group2"]])))
     })
 
     # display columns differ between single-run and stability results

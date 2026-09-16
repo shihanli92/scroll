@@ -501,7 +501,7 @@ view_contrast_preview <- function(cells, embedding, labels, cap = 500L) {
 #' @param group Per-cell group label ("group1" / "group2" / `NA`).
 #' @return A ggplot.
 #' @export
-view_contrast_medoids <- function(cells, embedding, sample, group) {
+view_contrast_medoids <- function(cells, embedding, sample, group, subtitle = NULL) {
   base <- .scroll_umap_outline(cells, embedding)
   if (is.null(base)) return(.scroll_preview_empty("No embedding coordinates"))
   cells$.samp <- as.character(sample)
@@ -519,8 +519,9 @@ view_contrast_medoids <- function(cells, embedding, sample, group) {
                         data = meds, size = 2.6, alpha = 0.95) +
     ggplot2::scale_color_manual(
       values = c(group1 = "#B2182B", group2 = "#2166AC"), guide = "none") +
-    ggplot2::labs(subtitle = sprintf("pseudobulk samples: group1 = %d, group2 = %d",
-                                     sum(meds$.grp == "group1"), sum(meds$.grp == "group2")))
+    ggplot2::labs(subtitle = subtitle %||%
+      sprintf("pseudobulk samples: group1 = %d, group2 = %d",
+              sum(meds$.grp == "group1"), sum(meds$.grp == "group2")))
 }
 
 #' Embedding colored by a feature's expression

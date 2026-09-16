@@ -34,6 +34,7 @@ body{background:var(--sc-ground); color:var(--sc-ink);
 .scroll-logo{font-weight:800; letter-spacing:-.02em;}
 .scroll-slash{color:var(--sc-faint);}
 .scroll-dataset{font-weight:600; color:var(--sc-muted);}
+.scroll-version{font-size:11px; font-weight:600; color:var(--sc-faint); font-variant-numeric:tabular-nums; padding:1px 6px; border:1px solid var(--sc-line-2); border-radius:6px; align-self:center;}
 .scroll-stats{display:flex; gap:0;}
 .scroll-stat{display:flex; flex-direction:column; padding:0 18px; border-left:1px solid var(--sc-line-2);}
 .scroll-stat:first-child{border-left:0;}
@@ -102,6 +103,14 @@ body.scroll-warming{overflow:hidden;}
 .scroll-ctl-toggle.is-collapsed::before{content:'\\00AB';}    /* < : show the rail */
 .scroll-layout.controls-collapsed{grid-template-columns:200px minmax(0,1fr);}
 .scroll-layout.controls-collapsed>.scroll-filters{display:none;}
+/* pseudobulk design matrix (compact, monospace; scrolls if wide) */
+.scroll-designmat-wrap{overflow-x:auto; max-width:100%;}
+.scroll-designmat{border-collapse:collapse; font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:10px; font-variant-numeric:tabular-nums;}
+.scroll-designmat th,.scroll-designmat td{padding:1px 5px; text-align:center; white-space:nowrap;}
+.scroll-designmat th{color:var(--sc-muted); font-weight:600;}
+.scroll-designmat th:first-child{text-align:left; color:var(--sc-faint); font-weight:500;}
+.scroll-designmat td{color:var(--sc-ink);}
 /* collapsible <details> sections (Theme / Filters, and Theme's sub-sections) */
 .scroll-ctl-details{border-bottom:1px solid var(--sc-line);}
 .scroll-ctl-details:last-child{border-bottom:none;}

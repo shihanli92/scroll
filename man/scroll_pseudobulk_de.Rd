@@ -11,6 +11,7 @@ scroll_pseudobulk_de(
   ident1,
   ident2 = NULL,
   replicate_col = NULL,
+  paired = c("auto", "yes", "no"),
   min_cells = 10,
   n_pseudo = 3,
   cells_per_pseudo = 50,
@@ -32,27 +33,40 @@ scroll_pseudobulk_de(
 one-vs-rest (all cells not in \code{ident1}, restricted to observed combinations).}
 
 \item{replicate_col}{Metadata column defining biological replicates. \code{NULL} or
-\code{"no_replicate"} pseudo-replicates the two groups directly (pooling each
-group's cells) instead of using a real replicate column.}
+\code{"no_replicate"} pseudo-replicates the two groups directly (a disjoint
+partition of each group's cells) instead of using a real replicate column.
+Cells with a missing replicate value are excluded (and reported) rather than
+silently dropped; a named column that is absent is an error.}
 
-\item{min_cells}{Minimum cells for a pseudobulk sample to be kept.}
+\item{paired}{Whether to block on the replicate in the design when replicates
+are shared across both groups: \code{"auto"} (default) blocks when possible,
+\code{"yes"} forces it (falls back with a warning if not fittable), \code{"no"} always
+uses \code{~ group}.}
 
-\item{n_pseudo, cells_per_pseudo}{Pseudo-replicate fallback: number of
-pseudo-replicates and cells sampled per pseudo-replicate.}
+\item{min_cells}{Minimum cells for a pseudobulk sample to be kept (a per-sample
+floor, applied to real replicates and to each pseudo-partition bin).}
+
+\item{n_pseudo, cells_per_pseudo}{Pseudo-replicate partition: number of
+pseudo-replicates and the maximum cells per pseudo-replicate.}
 
 \item{cells}{Cells to test over (default \code{data$cells}).}
 
-\item{seed}{Integer seed for the pseudo-replicate draw, so a compute is
+\item{seed}{Integer seed for the pseudo-replicate partition, so a compute is
 reproducible and the caller's RNG stream is left untouched. \code{NULL} uses the
-current RNG state (used internally to vary draws across stability runs).}
+current RNG state (used internally to vary draws across stability runs).
+Real-replicate results are seed-independent (no random draw).}
 
 \item{progress}{Optional \verb{function(fraction, detail)} called at the aggregate
 and model-fit stages, for a UI progress bar. \code{NULL} (default) is a no-op.}
 }
 \value{
 A data.frame (\code{gene}, \code{logFC}, \code{avg_expr}, \code{p_val}, \code{p_val_adj}) ranked
-by adjusted p-value; positive \code{logFC} is up in \code{ident1}. The attribute
-\code{"pseudo"} is \code{TRUE} when pseudo-replicates were used.
+by adjusted p-value; positive \code{logFC} is up in \code{ident1}. \code{logFC}/\code{avg_expr}
+are log2 (limma's \code{logFC}/\code{AveExpr}). Attributes: \code{"pseudo"} (TRUE when any
+pseudo-replicates were used), \code{"regime"} (\code{"real-paired"}, \code{"real-unpaired"},
+\code{"mixed"}, or \code{"pseudo"}), \code{"design"} (the model formula), \code{"n_samples"}
+(per group), \code{"sample_sizes"} (cells per sample), and \code{"dropped_na"} (cells
+excluded for a missing replicate value).
 }
 \description{
 Aggregates cells into pseudobulk samples by summing raw counts, then compares
@@ -63,5 +77,17 @@ group (either may name several). Pseudobulk samples come from \code{replicate_co
 when real replicates exist, otherwise from random pseudo-replicates.
 }
 \details{
+With a real \code{replicate_col}, each replicate contributes \strong{one sample per group}
+(summing across the combinations it spans). When >= 2 replicate levels are
+shared across both groups the design is \strong{paired} (\code{~ replicate + group});
+otherwise it is \code{~ group}. A group with fewer than two qualifying replicates
+falls back to pseudo-replicates for that group (a "mixed" run).
+
+Pseudo-replicates are a \strong{disjoint partition} of a group's cells into
+\code{n_pseudo} non-overlapping samples (never sharing a cell), each requiring
+\code{min_cells} cells; the group must therefore hold at least
+\code{n_pseudo * min_cells} cells or the call errors. Pseudo-replication understates
+biological variance and is anti-conservative — prefer a real replicate column.
+
 Requires a counts store — build with \code{\link[=scroll_build]{scroll_build()}} \code{counts = TRUE}.
 }

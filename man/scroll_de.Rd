@@ -65,10 +65,14 @@ expression matrix from the store and runs \code{\link[presto:wilcoxauc]{presto::
 }
 \details{
 With the default quantized build (\code{quantize = TRUE} in
-\code{\link[=scroll_build]{scroll_build()}}), expression values below ~\code{max/510} round to zero, so the
-fraction-expressing columns (\code{pct.1}/\code{pct.2}) slightly under-count cells with
-very low expression, p-values are approximate, and \code{avg_log2FC} is close to but
-not bit-identical to Seurat's (max abs diff ~0.01 in practice). Build with
-\code{quantize = FALSE} for exact statistics (\code{avg_log2FC} then matches
-\code{Seurat::FindMarkers} to floating-point tolerance).
+\code{\link[=scroll_build]{scroll_build()}}), expression values below ~\code{max/510} round to zero. Such a
+floored value is still stored (as an explicit zero), so \code{pct.1}/\code{pct.2} are
+unaffected; instead those cells become tied at zero, which makes the Wilcoxon
+p-values approximate, and \code{avg_log2FC} close to but not bit-identical to
+Seurat's (max abs diff ~0.04, median ~0.005 in practice; see
+\code{dev/validate_de_vs_findmarkers.R}). Build with \code{quantize = FALSE} for exact
+statistics -- \code{avg_log2FC}, \code{pct}, and the p-value ranking then match
+\code{Seurat::FindMarkers} to scroll's output rounding (Seurat's default \code{wilcox}
+test itself dispatches to presto when it is installed, so the two run the
+same Wilcoxon).
 }

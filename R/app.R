@@ -433,6 +433,11 @@ scroll_reset_panels <- function() {
   if (!is.null(title))
     brand <- c(brand, list(span(class = "scroll-slash", "/"),
                            span(class = "scroll-dataset", title)))
+  # scroll package version badge; shown by default, hide with `show_version: false`
+  ver <- tryCatch(as.character(utils::packageVersion("scroll")), error = function(e) NULL)
+  if (!isFALSE(data$config$show_version) && !is.null(ver))
+    brand <- c(brand, list(span(class = "scroll-version", title = "scroll version",
+                                paste0("v", ver))))
   # Reprocessed subset views: pick a linked view (restricts every panel + swaps
   # to the subset's embedding). Shown only when the build declared `subsets`.
   subs <- .scroll_subset_names(m)
@@ -464,7 +469,7 @@ scroll_reset_panels <- function() {
     view_ui,
     subset_ui,
     div(class = "scroll-stats",
-        .scroll_stat(textOutput(ns("scroll_ncells"), inline = TRUE), "cells"),
+        .scroll_stat(uiOutput(ns("scroll_ncells"), inline = TRUE), "cells"),
         .scroll_stat(format(m$assays[[assay]]$n_features, big.mark = ","), "genes"),
         .scroll_stat(paste(.scroll_assays_of(m), collapse = ", "), "assays"),
         .scroll_stat(paste(.scroll_reductions(m), collapse = ", "), "reductions")),
@@ -675,14 +680,18 @@ scroll_reset_panels <- function() {
   })
 }
 
-# The app-bar "N of total [ \u00b7 view]" cell-count readout.
+# The app-bar "N of total [ &middot; view]" cell-count readout. Rendered as HTML
+# with an ASCII "&middot;" entity (not a raw U+00B7): a UTF-8-marked separator
+# serializes to a literal "<U+00B7>" when the app runs under a non-UTF-8 server
+# locale (e.g. a C-locale Shiny Server). The view label goes through the tagList
+# text node, so it is auto-escaped.
 .scroll_render_ncells <- function(output, m, active_cells, active_view) {
-  output$scroll_ncells <- renderText({
+  output$scroll_ncells <- renderUI({
     n <- nrow(active_cells()); tot <- m$n_cells
     lab <- if (!is.null(active_view())) m$subsets[[active_view()]]$label
     base <- if (n < tot) sprintf("%s of %s", format(n, big.mark = ","),
                                  format(tot, big.mark = ",")) else format(tot, big.mark = ",")
-    if (!is.null(lab)) paste0(base, " \u00b7 ", lab) else base
+    if (!is.null(lab)) tagList(base, HTML(" &middot; "), lab) else base
   })
   # The cell-count sits in the app bar's flex row, which can have zero layout size
   # when the output first binds -- Shiny then treats it as hidden and suspends it, so

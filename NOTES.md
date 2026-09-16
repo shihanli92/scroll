@@ -87,6 +87,15 @@ top-3 blockers + documented the quantization caveat). Items below were
   FeaturePlot when cell counts climb past what canvas renders smoothly (~100k+).
 - **Block-wise build** for very large objects (the export currently builds the
   triplet in one pass).
+- **Pseudobulk `duplicateCorrelation`** (deferred, 0.2.9). The paired real-replicate
+  path fits an explicit `~ replicate + group` block (deterministic, simple). For many
+  unbalanced donors `limma::duplicateCorrelation` (block = replicate) can be the better
+  estimator; slot it as a `paired`/`method` option later. See `scroll_pseudobulk_de()`.
+- **Pseudobulk covariates.** Only `group` (+ optional replicate block) enter the design;
+  a general `covariates =` (extra metadata terms) is a natural follow-up.
+- **Counts in streaming builds.** `scroll_build_stream()` hard-codes `has_counts = FALSE`,
+  so the Pseudobulk panel is unavailable on streamed (large/multi-source) projects — the
+  case where flat-RAM pseudobulk is most valuable. Write per-source counts parts + compact.
 
 ## Known behavior (documented, working as intended)
 

@@ -88,7 +88,7 @@ spatial_ui <- function(id, data) {
       selectInput(ns("dpalette"), "Palette (categorical)", names(.scroll_discrete_palettes))),
     sliderInput(ns("size"), "Spot size", 0.2, 4, 1.4, 0.2),
     if (has_img) checkboxInput(ns("image"), "Show tissue image", TRUE),
-    tags$p(class = "scroll-desc", "Drag to zoom \u00b7 double-click to reset."))
+    tags$p(class = "scroll-desc", HTML("Drag to zoom &middot; double-click to reset.")))
   bslib::layout_columns(
     col_widths = c(3, 9), class = "scroll-panel",
     div(class = "scroll-controls", do.call(.scroll_group, c(list("Controls"), ctl))),

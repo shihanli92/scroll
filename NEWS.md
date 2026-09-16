@@ -1,3 +1,37 @@
+# scroll 0.2.9
+
+## Pseudobulk DE: sounder replicate handling
+
+* **Pseudo-replicates are now a disjoint partition.** `scroll_pseudobulk_de()` splits a
+  group's cells into `n_pseudo` *non-overlapping* samples instead of drawing overlapping
+  random subsets. The previous draws could return identical samples whenever a group had
+  `<= cells_per_pseudo` cells (within-group variance 0 -> spurious significance); the
+  partition makes the variance real. A group must now hold at least `n_pseudo * min_cells`
+  cells or the call errors clearly; `min_cells` is a per-sample floor and `cells_per_pseudo`
+  a per-sample cap.
+* **Replicate-aware design.** With a real `replicate_col`, each replicate now contributes
+  **one sample per group** (summing across the combinations it spans) rather than one per
+  combination -- removing the pseudo-replication of biological replicates. When >= 2
+  replicate levels are shared across both groups the design is **paired**
+  (`~ replicate + group`); otherwise `~ group`. A new `paired = c("auto","yes","no")`
+  argument controls this. The tested coefficient is located by name, so it is correct with
+  or without the replicate block.
+* **No more silent fallbacks.** A named `replicate_col` that is absent is now an error;
+  cells with a missing replicate value are counted and reported (a warning + a `dropped_na`
+  attribute) instead of being dropped silently; a group that lacks real replicates falls
+  back to pseudo-replicates as a reported "mixed" run.
+* **Honest panel labelling.** The Pseudobulk panel's note now reflects the actual regime
+  (`real-paired` / `real-unpaired` / `mixed` / `pseudo`) with the sample counts, and the
+  controls document the partition requirement.
+* Result attributes gained `regime`, `design`, `sample_sizes`, and `dropped_na`.
+* **Note:** these are deliberate statistical corrections, so pseudobulk results computed
+  before 0.2.9 will change (previously inflated significance becomes more conservative).
+
+## App
+
+* The app bar shows the scroll package version (e.g. `v0.2.9`); hide it with
+  `show_version: false` in a project's `config.yaml`.
+
 # scroll 0.2.8
 
 ## Startup warm-up & on-screen rendering

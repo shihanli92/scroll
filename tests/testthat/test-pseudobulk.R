@@ -74,24 +74,186 @@ test_that("no_replicate pseudo-replicates the two groups (pooled across combos)"
   combos <- scroll:::.scroll_combo_choices(data$cells, c("celltype", "condition"))
   g1 <- grep("^T ", combos, value = TRUE)   # T | ctrl, T | treat  (2 combos)
   g2 <- grep("^B ", combos, value = TRUE)
+  # 2 disjoint pseudo-reps per group (bins ~half the group; big enough for voom on
+  # the sparse synthetic counts). Group-based: pooled across the 2 combos each.
   res <- scroll_pseudobulk_de(data, "RNA", aggregate_cols = c("celltype", "condition"),
                               ident1 = g1, ident2 = g2, replicate_col = "no_replicate",
-                              n_pseudo = 4, cells_per_pseudo = 20, min_cells = 5)
+                              n_pseudo = 2, cells_per_pseudo = 30, min_cells = 5)
   expect_true(attr(res, "pseudo"))
-  # group-based: 4 pseudo-reps per group regardless of the 2 combos each pools
-  expect_equal(unname(attr(res, "n_samples")), c(4L, 4L))
+  expect_equal(unname(attr(res, "n_samples")), c(2L, 2L))
 })
 
 test_that("scroll_pseudobulk_de errors clearly on too-few samples / no counts", {
   skip_if_not_installed("edgeR"); skip_if_not_installed("limma")
   data <- scroll:::.scroll_load(test_project())
   on.exit(scroll_disconnect(data$con))
-  # min_cells too high -> not enough samples per group
+  # min_cells too high -> no real replicates qualify, pseudo fallback can't fill bins
   expect_error(
     scroll_pseudobulk_de(data, "RNA", aggregate_cols = "celltype",
                          ident1 = "T", ident2 = "B", replicate_col = "condition",
                          min_cells = 1000),
-    "pseudobulk samples")
+    "needs >=")
+})
+
+test_that(".scroll_pseudobulk_design blocks on the replicate only when paired", {
+  # paired: >= 2 replicate levels shared across both groups
+  samp_p <- data.frame(psample = paste(rep(c("group1","group2"), each = 3), rep(1:3, 2)),
+                       group = rep(c("group1","group2"), each = 3),
+                       rep = as.character(rep(1:3, 2)), stringsAsFactors = FALSE)
+  dp <- scroll:::.scroll_pseudobulk_design(samp_p, "real-paired", "auto")
+  expect_equal(dp$formula, "~ replicate + group")
+  expect_true(any(grepl("^replicate", colnames(dp$design))))
+  expect_match(colnames(dp$design)[dp$coef], "^group")   # tested coef is the group term
+  # unpaired / pseudo -> ~ group
+  du <- scroll:::.scroll_pseudobulk_design(samp_p, "real-unpaired", "auto")
+  expect_equal(du$formula, "~ group")
+  # forcing paired = "yes" on a non-paired regime warns and falls back
+  dy <- scroll:::.scroll_pseudobulk_design(samp_p, "real-unpaired", "yes")
+  expect_equal(dy$formula, "~ group"); expect_false(is.null(dy$warn))
+})
+
+test_that(".scroll_pseudobulk_samples returns the samples the compute uses", {
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  sm <- scroll:::.scroll_pseudobulk_samples(
+    data$cells, seq_len(nrow(data$cells)), "celltype", "T", "B",
+    "condition", min_cells = 5, n_pseudo = 3, cells_per_pseudo = 50)
+  expect_setequal(names(sm$samp), c("psample", "group", "rep"))
+  expect_equal(sm$regime, "real-paired")             # condition spans T and B
+  expect_true(all(c("group1","group2") %in% sm$samp$group))
+})
+
+test_that(".scroll_partition_reps builds disjoint, floored, capped pseudo-reps", {
+  set.seed(1)
+  # 30 cells, 3 reps, min 5: balanced bins of 10, no shared cells, union within input
+  reps <- scroll:::.scroll_partition_reps(1:30, "g", "group1",
+                                          min_cells = 5, n_pseudo = 3, cells_per_pseudo = 50)
+  expect_length(reps, 3)
+  all_cells <- unlist(lapply(reps, `[[`, "cell"))
+  expect_false(any(duplicated(all_cells)))          # DISJOINT: never share a cell
+  expect_true(all(all_cells %in% 1:30))
+  expect_true(all(vapply(reps, nrow, integer(1)) >= 5))
+  # cap: 3 bins of ~10 capped at 4 -> exactly 4 each, still disjoint
+  capped <- scroll:::.scroll_partition_reps(1:30, "g", "group1",
+                                            min_cells = 4, n_pseudo = 3, cells_per_pseudo = 4)
+  expect_true(all(vapply(capped, nrow, integer(1)) == 4))
+  expect_false(any(duplicated(unlist(lapply(capped, `[[`, "cell")))))
+  # too small to fill n_pseudo bins of min_cells -> empty (caller turns into an error)
+  expect_length(scroll:::.scroll_partition_reps(1:10, "g", "group1",
+                                                min_cells = 5, n_pseudo = 3, cells_per_pseudo = 50), 0)
+})
+
+test_that("no_replicate refuses when a group can't fill n_pseudo x min_cells", {
+  skip_if_not_installed("edgeR"); skip_if_not_installed("limma")
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  expect_error(
+    scroll_pseudobulk_de(data, "RNA", aggregate_cols = "celltype",
+                         ident1 = "T", ident2 = "B", replicate_col = "no_replicate",
+                         n_pseudo = 5, min_cells = 200),   # 5 x 200 = 1000 > group size
+    "needs >=")
+})
+
+test_that("real replicates shared across groups give a paired design", {
+  skip_if_not_installed("edgeR"); skip_if_not_installed("limma")
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  # condition (ctrl/treat) spans both T and B -> paired
+  res <- scroll_pseudobulk_de(data, "RNA", aggregate_cols = "celltype",
+                              ident1 = "T", ident2 = "B",
+                              replicate_col = "condition", min_cells = 5)
+  expect_equal(attr(res, "regime"), "real-paired")
+  expect_equal(attr(res, "design"), "~ replicate + group")
+  expect_false(attr(res, "pseudo"))
+  # paired vs forcing ~ group on the same data differ (blocking changes the fit)
+  unp <- scroll_pseudobulk_de(data, "RNA", aggregate_cols = "celltype",
+                              ident1 = "T", ident2 = "B",
+                              replicate_col = "condition", min_cells = 5, paired = "no")
+  expect_equal(attr(unp, "design"), "~ group")
+  j <- merge(res, unp, by = "gene")
+  expect_false(isTRUE(all.equal(j$p_val.x, j$p_val.y)))
+})
+
+test_that("disjoint real replicates give an unpaired design", {
+  skip_if_not_installed("edgeR"); skip_if_not_installed("limma")
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  cells <- data$cells
+  # donors disjoint across T (d1/d2) and B (d3/d4): no replicate shared -> unpaired
+  ct <- as.character(cells$celltype)
+  set.seed(3)
+  cells$donor <- ifelse(ct == "T", sample(c("d1", "d2"), nrow(cells), TRUE),
+                 ifelse(ct == "B", sample(c("d3", "d4"), nrow(cells), TRUE), NA))
+  res <- scroll_pseudobulk_de(data, "RNA", aggregate_cols = "celltype",
+                              ident1 = "T", ident2 = "B",
+                              replicate_col = "donor", min_cells = 5, cells = cells)
+  expect_equal(attr(res, "regime"), "real-unpaired")
+  expect_equal(attr(res, "design"), "~ group")
+  expect_false(attr(res, "pseudo"))
+})
+
+test_that("missing replicate values are reported, not silently dropped", {
+  skip_if_not_installed("edgeR"); skip_if_not_installed("limma")
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  cells <- data$cells
+  cells$donor <- ifelse(as.character(cells$celltype) == "T",
+                        sample(c("d1", "d2"), nrow(cells), TRUE),
+                        sample(c("d1", "d2"), nrow(cells), TRUE))
+  cells$donor[1:5] <- NA                     # some cells lack a replicate value
+  expect_warning(
+    res <- scroll_pseudobulk_de(data, "RNA", aggregate_cols = "celltype",
+                                ident1 = "T", ident2 = "B",
+                                replicate_col = "donor", min_cells = 3, cells = cells),
+    "missing")
+  expect_gt(attr(res, "dropped_na"), 0)
+})
+
+test_that("a named replicate column that is absent is an error", {
+  skip_if_not_installed("edgeR"); skip_if_not_installed("limma")
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  expect_error(
+    scroll_pseudobulk_de(data, "RNA", aggregate_cols = "celltype",
+                         ident1 = "T", ident2 = "B", replicate_col = "nope"),
+    "not found")
+})
+
+test_that("logFC sign points up in ident1 (coefficient found by name)", {
+  skip_if_not_installed("edgeR"); skip_if_not_installed("limma")
+  # a project with a gene deliberately high in condition = treat
+  dir <- file.path(tempdir(), "scroll-pb-sign")
+  if (!dir.exists(file.path(dir, "counts"))) {
+    obj <- make_test_object(n = 120, seed = 5)
+    cm <- as.matrix(SeuratObject::GetAssayData(obj, layer = "counts"))
+    treat <- obj$condition == "treat"
+    cm["G1", treat]  <- cm["G1", treat] + 40L      # strong signal up in treat
+    cm["G2", !treat] <- cm["G2", !treat] + 40L     # and one up in ctrl
+    obj <- SeuratObject::SetAssayData(obj, layer = "counts",
+                                      new.data = Matrix::Matrix(cm, sparse = TRUE))
+    obj <- SeuratObject::SetAssayData(obj, layer = "data",
+             new.data = Matrix::Matrix(.lognorm(cm, 1e4), sparse = TRUE))
+    suppressMessages(scroll_build(obj, dir, assays = "RNA", counts = TRUE, overwrite = TRUE))
+  }
+  data <- scroll:::.scroll_load(dir); on.exit(scroll_disconnect(data$con))
+  res <- scroll_pseudobulk_de(data, "RNA", aggregate_cols = "condition",
+                              ident1 = "treat", ident2 = "ctrl",
+                              replicate_col = "no_replicate",
+                              n_pseudo = 3, cells_per_pseudo = 15, min_cells = 5)
+  expect_gt(res$logFC[res$gene == "G1"], 0)        # up in ident1 (treat)
+  expect_lt(res$logFC[res$gene == "G2"], 0)        # up in ctrl -> negative
+})
+
+test_that("cells = restricts the aggregation", {
+  skip_if_not_installed("edgeR"); skip_if_not_installed("limma")
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  sub <- data$cells[data$cells$celltype %in% c("T", "B"), , drop = FALSE]
+  res <- scroll_pseudobulk_de(data, "RNA", aggregate_cols = "celltype",
+                              ident1 = "T", ident2 = "B", replicate_col = "no_replicate",
+                              n_pseudo = 3, cells_per_pseudo = 20, min_cells = 5, cells = sub)
+  # every pseudo-sample's cells drawn only from the T/B subset
+  expect_lte(sum(attr(res, "sample_sizes")), nrow(sub))
 })
 
 test_that(".scroll_stability_aggregate scores selection frequency + sign agreement", {
@@ -185,9 +347,20 @@ test_that("pseudobulk_de_server renders a live sample preview without Compute", 
   ct <- sort(unique(as.character(data$cells$celltype)))[[1]]
   shiny::testServer(scroll:::pseudobulk_de_server, args = list(data = data), {
     session$setInputs(aggregate_by = "celltype", ident1 = ct, ident2 = character(0),
-                      replicate = "no_replicate")
+                      replicate = "no_replicate", mincells = 3, npseudo = 2, cellsper = 20)
     session$elapse(200)
     expect_no_error(output$preview)
+  })
+})
+
+test_that("pseudobulk_de_server preview renders for a real replicate (group x rep)", {
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  shiny::testServer(scroll:::pseudobulk_de_server, args = list(data = data), {
+    session$setInputs(aggregate_by = "celltype", ident1 = "T", ident2 = "B",
+                      replicate = "condition", mincells = 5, npseudo = 3)
+    session$elapse(200)
+    expect_no_error(output$preview)      # keys by (group x replicate), applies min-cells
   })
 })
 
@@ -198,7 +371,7 @@ test_that("pseudobulk_de_server preview follows the active subset view's embeddi
   shiny::testServer(scroll:::pseudobulk_de_server,
                     args = list(data = data, view_r = reactive("tcell")), {
     session$setInputs(aggregate_by = "tsub", ident1 = "Tfh", ident2 = character(0),
-                      replicate = "no_replicate")
+                      replicate = "no_replicate", mincells = 3, npseudo = 2, cellsper = 20)
     session$elapse(200)
     expect_equal(preview_in()$emb, "umap_tcell")       # NOT the global umap
     expect_no_error(output$preview)
