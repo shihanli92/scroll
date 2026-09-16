@@ -11,11 +11,12 @@
   a per-sample cap.
 * **Replicate-aware design.** With a real `replicate_col`, each replicate now contributes
   **one sample per group** (summing across the combinations it spans) rather than one per
-  combination -- removing the pseudo-replication of biological replicates. When >= 2
-  replicate levels are shared across both groups the design is **paired**
-  (`~ replicate + group`); otherwise `~ group`. A new `paired = c("auto","yes","no")`
-  argument controls this. The tested coefficient is located by name, so it is correct with
-  or without the replicate block.
+  combination -- removing the pseudo-replication of biological replicates. The model uses
+  the no-intercept (means) parameterization `~ 0 + group`, or `~ 0 + group + replicate`
+  when >= 2 replicate levels are shared across both groups (a **paired** design); the
+  group1-vs-group2 effect is tested as the `group1 - group2` contrast
+  (`limma::contrasts.fit`). A new `paired = c("auto","yes","no")` argument controls the
+  blocking.
 * **No more silent fallbacks.** A named `replicate_col` that is absent is now an error;
   cells with a missing replicate value are counted and reported (a warning + a `dropped_na`
   attribute) instead of being dropped silently; a group that lacks real replicates falls

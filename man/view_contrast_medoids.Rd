@@ -4,7 +4,7 @@
 \alias{view_contrast_medoids}
 \title{Live Pseudobulk preview: sample medoids over the embedding outline}
 \usage{
-view_contrast_medoids(cells, embedding, sample, group)
+view_contrast_medoids(cells, embedding, sample, group, subtitle = NULL)
 }
 \arguments{
 \item{cells}{The cells data.frame (must carry the embedding's \verb{_1}/\verb{_2} coords).}

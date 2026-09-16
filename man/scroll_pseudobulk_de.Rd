@@ -41,7 +41,7 @@ silently dropped; a named column that is absent is an error.}
 \item{paired}{Whether to block on the replicate in the design when replicates
 are shared across both groups: \code{"auto"} (default) blocks when possible,
 \code{"yes"} forces it (falls back with a warning if not fittable), \code{"no"} always
-uses \code{~ group}.}
+uses \code{~ 0 + group}.}
 
 \item{min_cells}{Minimum cells for a pseudobulk sample to be kept (a per-sample
 floor, applied to real replicates and to each pseudo-partition bin).}
@@ -78,10 +78,13 @@ when real replicates exist, otherwise from random pseudo-replicates.
 }
 \details{
 With a real \code{replicate_col}, each replicate contributes \strong{one sample per group}
-(summing across the combinations it spans). When >= 2 replicate levels are
-shared across both groups the design is \strong{paired} (\code{~ replicate + group});
-otherwise it is \code{~ group}. A group with fewer than two qualifying replicates
-falls back to pseudo-replicates for that group (a "mixed" run).
+(summing across the combinations it spans). The model uses the no-intercept
+(means) parameterization: \code{~ 0 + group}, or \code{~ 0 + group + replicate} when >= 2
+replicate levels are shared across both groups (a \strong{paired} design). The
+group1-vs-group2 effect is tested as the \code{group1 - group2} contrast
+(\code{limma::contrasts.fit}), so a positive \code{logFC} is up in \code{ident1}. A group with
+fewer than two qualifying replicates falls back to pseudo-replicates for that
+group (a "mixed" run).
 
 Pseudo-replicates are a \strong{disjoint partition} of a group's cells into
 \code{n_pseudo} non-overlapping samples (never sharing a cell), each requiring

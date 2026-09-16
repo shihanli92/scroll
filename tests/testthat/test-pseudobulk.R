@@ -101,15 +101,18 @@ test_that(".scroll_pseudobulk_design blocks on the replicate only when paired", 
                        group = rep(c("group1","group2"), each = 3),
                        rep = as.character(rep(1:3, 2)), stringsAsFactors = FALSE)
   dp <- scroll:::.scroll_pseudobulk_design(samp_p, "real-paired", "auto")
-  expect_equal(dp$formula, "~ replicate + group")
+  expect_equal(dp$formula, "~ 0 + group + replicate")
+  expect_false(any(grepl("Intercept", colnames(dp$design))))   # no-intercept means model
   expect_true(any(grepl("^replicate", colnames(dp$design))))
-  expect_match(colnames(dp$design)[dp$coef], "^group")   # tested coef is the group term
-  # unpaired / pseudo -> ~ group
+  # contrast tests group1 - group2
+  expect_equal(unname(dp$contrast["groupgroup1"]), 1)
+  expect_equal(unname(dp$contrast["groupgroup2"]), -1)
+  # unpaired / pseudo -> ~ 0 + group
   du <- scroll:::.scroll_pseudobulk_design(samp_p, "real-unpaired", "auto")
-  expect_equal(du$formula, "~ group")
+  expect_equal(du$formula, "~ 0 + group")
   # forcing paired = "yes" on a non-paired regime warns and falls back
   dy <- scroll:::.scroll_pseudobulk_design(samp_p, "real-unpaired", "yes")
-  expect_equal(dy$formula, "~ group"); expect_false(is.null(dy$warn))
+  expect_equal(dy$formula, "~ 0 + group"); expect_false(is.null(dy$warn))
 })
 
 test_that(".scroll_pseudobulk_samples returns the samples the compute uses", {
@@ -163,13 +166,13 @@ test_that("real replicates shared across groups give a paired design", {
                               ident1 = "T", ident2 = "B",
                               replicate_col = "condition", min_cells = 5)
   expect_equal(attr(res, "regime"), "real-paired")
-  expect_equal(attr(res, "design"), "~ replicate + group")
+  expect_equal(attr(res, "design"), "~ 0 + group + replicate")
   expect_false(attr(res, "pseudo"))
   # paired vs forcing ~ group on the same data differ (blocking changes the fit)
   unp <- scroll_pseudobulk_de(data, "RNA", aggregate_cols = "celltype",
                               ident1 = "T", ident2 = "B",
                               replicate_col = "condition", min_cells = 5, paired = "no")
-  expect_equal(attr(unp, "design"), "~ group")
+  expect_equal(attr(unp, "design"), "~ 0 + group")
   j <- merge(res, unp, by = "gene")
   expect_false(isTRUE(all.equal(j$p_val.x, j$p_val.y)))
 })
@@ -188,7 +191,7 @@ test_that("disjoint real replicates give an unpaired design", {
                               ident1 = "T", ident2 = "B",
                               replicate_col = "donor", min_cells = 5, cells = cells)
   expect_equal(attr(res, "regime"), "real-unpaired")
-  expect_equal(attr(res, "design"), "~ group")
+  expect_equal(attr(res, "design"), "~ 0 + group")
   expect_false(attr(res, "pseudo"))
 })
 
@@ -371,7 +374,7 @@ test_that("pseudobulk_de_server preview follows the active subset view's embeddi
   shiny::testServer(scroll:::pseudobulk_de_server,
                     args = list(data = data, view_r = reactive("tcell")), {
     session$setInputs(aggregate_by = "tsub", ident1 = "Tfh", ident2 = character(0),
-                      replicate = "no_replicate", mincells = 3, npseudo = 2, cellsper = 20)
+                      replicate = "no_replicate", mincells = 2, npseudo = 2, cellsper = 20)
     session$elapse(200)
     expect_equal(preview_in()$emb, "umap_tcell")       # NOT the global umap
     expect_no_error(output$preview)

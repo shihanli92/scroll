@@ -150,27 +150,30 @@
   pm
 }
 
-# Build the limma design for a sample table. Block on the replicate
-# (`~ replicate + group`) when the regime is paired and the design stays
-# estimable, else `~ group`. The tested coefficient is found by name so it is
-# correct with or without a leading replicate block. Rows follow samp row order;
-# `group2` is the reference level so a positive coefficient is up in ident1.
+# Build the limma design for a sample table using the no-intercept (means)
+# parameterization: `~ 0 + group` (each group is its own column), blocking on the
+# replicate (`~ 0 + group + replicate`) when the regime is paired and the design
+# stays estimable. The group1-vs-group2 effect is a `contrast` over the columns
+# (+1 group1, -1 group2), tested via limma::contrasts.fit -- so a positive logFC
+# is up in ident1. Rows follow samp row order.
 .scroll_pseudobulk_design <- function(samp, regime, paired = "auto") {
   group <- factor(samp$group, levels = c("group2", "group1"))
   use_paired <- switch(paired, auto = , yes = identical(regime, "real-paired"), no = FALSE)
   warn <- NULL
   if (identical(paired, "yes") && !identical(regime, "real-paired"))
-    warn <- "paired = 'yes' but no replicate is shared across both groups; using ~ group."
-  design <- stats::model.matrix(~ group); formula <- "~ group"
+    warn <- "paired = 'yes' but no replicate is shared across both groups; using ~ 0 + group."
+  design <- stats::model.matrix(~ 0 + group); formula <- "~ 0 + group"
   if (use_paired) {
     replicate <- factor(samp$rep)
-    cand <- stats::model.matrix(~ replicate + group)
+    cand <- stats::model.matrix(~ 0 + group + replicate)
     if (qr(cand)$rank == ncol(cand) && (nrow(cand) - ncol(cand)) >= 1) {
-      design <- cand; formula <- "~ replicate + group"
-    } else warn <- "Paired design is not estimable here; using ~ group."
+      design <- cand; formula <- "~ 0 + group + replicate"
+    } else warn <- "Paired design is not estimable here; using ~ 0 + group."
   }
-  list(design = design, formula = formula,
-       coef = utils::tail(grep("^group", colnames(design)), 1L),
+  # contrast: group1 - group2 (other terms 0). Columns are "groupgroup1"/"groupgroup2".
+  contrast <- stats::setNames(numeric(ncol(design)), colnames(design))
+  contrast["groupgroup1"] <- 1; contrast["groupgroup2"] <- -1
+  list(design = design, formula = formula, contrast = contrast,
        group = group, warn = warn)
 }
 
@@ -184,10 +187,13 @@
 #' when real replicates exist, otherwise from random pseudo-replicates.
 #'
 #' With a real `replicate_col`, each replicate contributes **one sample per group**
-#' (summing across the combinations it spans). When >= 2 replicate levels are
-#' shared across both groups the design is **paired** (`~ replicate + group`);
-#' otherwise it is `~ group`. A group with fewer than two qualifying replicates
-#' falls back to pseudo-replicates for that group (a "mixed" run).
+#' (summing across the combinations it spans). The model uses the no-intercept
+#' (means) parameterization: `~ 0 + group`, or `~ 0 + group + replicate` when >= 2
+#' replicate levels are shared across both groups (a **paired** design). The
+#' group1-vs-group2 effect is tested as the `group1 - group2` contrast
+#' (`limma::contrasts.fit`), so a positive `logFC` is up in `ident1`. A group with
+#' fewer than two qualifying replicates falls back to pseudo-replicates for that
+#' group (a "mixed" run).
 #'
 #' Pseudo-replicates are a **disjoint partition** of a group's cells into
 #' `n_pseudo` non-overlapping samples (never sharing a cell), each requiring
@@ -211,7 +217,7 @@
 #' @param paired Whether to block on the replicate in the design when replicates
 #'   are shared across both groups: `"auto"` (default) blocks when possible,
 #'   `"yes"` forces it (falls back with a warning if not fittable), `"no"` always
-#'   uses `~ group`.
+#'   uses `~ 0 + group`.
 #' @param min_cells Minimum cells for a pseudobulk sample to be kept (a per-sample
 #'   floor, applied to real replicates and to each pseudo-partition bin).
 #' @param n_pseudo,cells_per_pseudo Pseudo-replicate partition: number of
@@ -270,16 +276,19 @@ scroll_pseudobulk_de <- function(data, assay, aggregate_cols, ident1, ident2 = N
   M[cbind(match(agg$feature, feats), match(agg$psample, ps))] <- as.integer(agg$count)
 
   pr(0.7, "Fitting model (edgeR / limma-voom)...")
-  # design rows follow samp order = the M columns (ps); positive coef = up in ident1
+  # no-intercept (means) design; the group1 - group2 effect is a contrast tested
+  # via contrasts.fit, so positive logFC is up in ident1. design rows follow samp
+  # order = the M columns (ps).
   ds <- .scroll_pseudobulk_design(samp, sm$regime, paired)
   if (!is.null(ds$warn)) warning(ds$warn, call. = FALSE)
-  group <- ds$group; design <- ds$design; gcoef <- ds$coef; design_formula <- ds$formula
+  group <- ds$group; design <- ds$design; design_formula <- ds$formula
 
   dge <- edgeR::DGEList(counts = M, group = group)
   keep <- edgeR::filterByExpr(dge, group = group)
   dge <- edgeR::calcNormFactors(dge[keep, , keep.lib.sizes = FALSE])
-  fit <- limma::eBayes(limma::lmFit(limma::voom(dge, design), design))
-  tt <- limma::topTable(fit, coef = gcoef, number = Inf, sort.by = "P")
+  fit <- limma::lmFit(limma::voom(dge, design), design)
+  fit <- limma::eBayes(limma::contrasts.fit(fit, ds$contrast))
+  tt <- limma::topTable(fit, coef = 1, number = Inf, sort.by = "P")
 
   res <- data.frame(
     gene = rownames(tt),
