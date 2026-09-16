@@ -40,15 +40,18 @@
 # min_cells). Seeding is handled by the caller via .scroll_with_seed().
 .scroll_partition_reps <- function(cellv, tag, group, min_cells, n_pseudo, cells_per_pseudo) {
   n <- length(cellv)
-  if (n < n_pseudo * min_cells) return(list())          # can't fill n_pseudo bins
+  bin <- n %/% n_pseudo                                  # smallest balanced bin (before cap)
+  per <- min(bin, cells_per_pseudo)                      # cells emitted per bin (cap = cells_per_pseudo)
+  if (n_pseudo < 1L || per < min_cells) return(list())   # can't meet the per-sample floor
   idx <- sample.int(n)                                   # shuffle once (seeded upstream)
-  sizes <- rep(n %/% n_pseudo, n_pseudo)                 # balanced bin sizes (differ by <=1)
+  sizes <- rep(bin, n_pseudo)                            # balanced bin sizes (differ by <=1)
   rem <- n %% n_pseudo
   if (rem) sizes[seq_len(rem)] <- sizes[seq_len(rem)] + 1L
-  cap <- max(cells_per_pseudo, min_cells)               # never cap below the floor
   ends <- cumsum(sizes); starts <- ends - sizes + 1L
   lapply(seq_len(n_pseudo), function(k) {
-    take <- utils::head(idx[starts[k]:ends[k]], cap)     # disjoint bin, capped from above
+    # disjoint bin, capped from above at cells_per_pseudo (min_cells is only a floor,
+    # it never inflates the sample size).
+    take <- utils::head(idx[starts[k]:ends[k]], cells_per_pseudo)
     data.frame(cell = cellv[take], psample = paste0(tag, " :: pseudo", k),
                group = group, rep = NA_character_, stringsAsFactors = FALSE)
   })
@@ -73,13 +76,15 @@
     identical(replicate_col, "no_replicate")
 
   part <- function(g) {                       # disjoint pseudo-partition for a group
+    ng <- sum(df$grp == g)
     made <- .scroll_partition_reps(df$cell[df$grp == g], g, g,
                                    min_cells, n_pseudo, cells_per_pseudo)
-    if (!length(made))                        # pool too small to fill n_pseudo bins
-      stop(sprintf(paste0("Group %s has %d cells but needs >= %d (n_pseudo x ",
-                          "Min cells) to build %d pseudo-replicates. Lower Pseudo-reps ",
-                          "or Min cells, widen the contrast, or use a replicate column."),
-                   sub("group", "", g), sum(df$grp == g), n_pseudo * min_cells, n_pseudo),
+    if (!length(made))                        # can't meet the per-sample floor
+      stop(sprintf(paste0("Group %s: cannot build %d pseudo-replicates (needs >= %d cells ",
+                          "each; group has %d cells, Cells/pseudo-rep = %d). Lower Pseudo-reps ",
+                          "or Min cells, raise Cells/pseudo-rep, widen the contrast, or use a ",
+                          "replicate column."),
+                   sub("group", "", g), n_pseudo, min_cells, ng, cells_per_pseudo),
            call. = FALSE)
     made
   }

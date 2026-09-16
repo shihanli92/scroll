@@ -15,14 +15,25 @@
   sub("^replicate", "", nm)
 }
 
-# Small HTML table for a (samples x terms) design matrix.
-.scroll_matrix_html <- function(D) {
+# Small HTML table for a (samples x terms) design matrix. `footer` (a numeric
+# vector aligned to the columns) is appended as a highlighted "contrast" row;
+# `counts` (per-row cell counts) is shown as a trailing "cells" column.
+.scroll_matrix_html <- function(D, footer = NULL, counts = NULL) {
+  cell_col <- !is.null(counts)
+  ccell <- function(x) if (cell_col) tags$td(class = "scroll-designmat-n", x)
+  foot <- if (!is.null(footer))
+    tags$tr(class = "scroll-designmat-contrast",
+            tags$th("contrast"),
+            lapply(footer, function(v) tags$td(format(v))), ccell(""))
   tags$div(class = "scroll-designmat-wrap",
     tags$table(class = "scroll-designmat",
-      tags$tr(tags$th(""), lapply(colnames(D), function(c) tags$th(c))),
+      tags$tr(tags$th(""), lapply(colnames(D), function(c) tags$th(c)),
+              if (cell_col) tags$th(class = "scroll-designmat-n", "cells")),
       lapply(seq_len(nrow(D)), function(i)
         tags$tr(tags$th(rownames(D)[i]),
-                lapply(D[i, ], function(v) tags$td(format(v)))))))
+                lapply(D[i, ], function(v) tags$td(format(v))),
+                ccell(format(counts[i], big.mark = ",")))),
+      foot))
 }
 
 # Model formula + a collapsible, capped design matrix for the previewed samples.
@@ -34,15 +45,30 @@
   if (n1 < 2 || n2 < 2)
     return(small(sprintf("Model: needs >= 2 samples/group (have %d vs %d).", n1, n2)))
   ds <- .scroll_pseudobulk_design(sm$samp, sm$regime, "auto")
+  # cells per sample (= per group x replicate) and per-group totals
+  ncell <- as.integer(table(sm$mapping$psample)[sm$samp$psample]); ncell[is.na(ncell)] <- 0L
+  g1c <- sum(ncell[sm$samp$group == "group1"]); g2c <- sum(ncell[sm$samp$group == "group2"])
   head <- small(tagList(tags$b("Model: "), ds$formula,
                         sprintf("  (%d vs %d samples)", n1, n2)))
+  cellsln <- small(tagList(tags$b("Cells: "),
+                    sprintf("group1 = %s, group2 = %s",
+                            format(g1c, big.mark = ","), format(g2c, big.mark = ","))))
+  # the tested effect: group1 - group2 (positive logFC = up in ident1)
+  pos <- .scroll_tidy_design_cols(names(ds$contrast)[ds$contrast > 0])
+  neg <- .scroll_tidy_design_cols(names(ds$contrast)[ds$contrast < 0])
+  contr <- small(tagList(tags$b("Contrast: "), paste(pos, "-", neg),
+                         tags$span(style = "color:var(--sc-faint)", "  (up = ident1)")))
   D <- ds$design
   if (nrow(D) > 16 || ncol(D) > 12)                  # keep the sidebar sane
-    return(tagList(head, small(sprintf("design matrix %d x %d - too large to show.",
-                                       nrow(D), ncol(D)))))
+    return(tagList(head, cellsln, contr,
+                   small(sprintf("design matrix %d x %d - too large to show.",
+                                 nrow(D), ncol(D)))))
   rownames(D) <- sm$samp$psample
   colnames(D) <- .scroll_tidy_design_cols(colnames(D))
-  tagList(head, .scroll_details("Design matrix", open = FALSE, .scroll_matrix_html(D)))
+  tagList(head, cellsln, contr,
+          .scroll_details("Design matrix", open = FALSE,
+                          .scroll_matrix_html(D, footer = as.numeric(ds$contrast),
+                                              counts = ncell)))
 }
 
 pseudobulk_de_ui <- function(id, data) {

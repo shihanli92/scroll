@@ -111,6 +111,9 @@ body.scroll-warming{overflow:hidden;}
 .scroll-designmat th{color:var(--sc-muted); font-weight:600;}
 .scroll-designmat th:first-child{text-align:left; color:var(--sc-faint); font-weight:500;}
 .scroll-designmat td{color:var(--sc-ink);}
+.scroll-designmat-contrast th,.scroll-designmat-contrast td{border-top:1px solid var(--sc-line-2);
+  color:var(--sc-accent); font-weight:700; padding-top:2px;}
+.scroll-designmat-n{border-left:1px solid var(--sc-line-2); color:var(--sc-muted); text-align:right;}
 /* collapsible <details> sections (Theme / Filters, and Theme's sub-sections) */
 .scroll-ctl-details{border-bottom:1px solid var(--sc-line);}
 .scroll-ctl-details:last-child{border-bottom:none;}
