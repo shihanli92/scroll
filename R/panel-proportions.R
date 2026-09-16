@@ -11,7 +11,9 @@ proportions_ui <- function(id, data) {
       class = "scroll-controls",
       .scroll_group("Composition",
         selectInput(ns("group"), "Group by (x)", stats::setNames(cats, cats), selected = x_default),
-        selectInput(ns("fill"), "Fill by", stats::setNames(cats, cats), selected = cats[[1]])),
+        # multi-select: pick >1 column to fill by their "a | b" interaction (like DimPlot colour-by)
+        selectizeInput(ns("fill"), "Fill by", stats::setNames(cats, cats), selected = cats[[1]],
+                       multiple = TRUE, options = list(plugins = list("remove_button")))),
       .scroll_group("Appearance",
         selectInput(ns("palette"), "Palette", .scroll_cat_palettes()),
         uiOutput(ns("manual")),
@@ -27,9 +29,21 @@ proportions_server <- function(id, data, cells_r = reactive(data$cells),
                                view_r = reactive(NULL), theme_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
-    .scroll_bind_view_cats(input, session, view_r, m, c("group", "fill"))
-    # per-fill color pickers when the palette is "Manual" (levels of Fill by)
-    lvl_r <- reactive({ req(input$fill); .scroll_meta_levels(data, input$fill) })
+    .scroll_bind_view_cats(input, session, view_r, m, "group")   # single-select x
+    # Fill by is multi-select (interaction), so bind it like DimPlot's colour-by:
+    # keep the in-view categorical columns, defaulting to the first if none survive.
+    observeEvent(view_r(), {
+      cats_v <- .scroll_cat_cols(m, view_r())
+      sel <- intersect(input$fill, cats_v); if (!length(sel) && length(cats_v)) sel <- cats_v[[1]]
+      updateSelectizeInput(session, "fill",
+                           choices = stats::setNames(cats_v, cats_v), selected = sel)
+    }, ignoreNULL = FALSE)
+    # per-fill color pickers when the palette is "Manual": levels of the (possibly
+    # composite) Fill-by, computed on the active cells for >1 column.
+    lvl_r <- reactive({ req(input$fill)
+      if (length(input$fill) > 1L)
+        sort(unique(stats::na.omit(.scroll_combo_levels(cells_r(), input$fill))))
+      else .scroll_meta_levels(data, input$fill) })
     output$manual <- renderUI(
       if (identical(input$palette, "Manual")) .scroll_manual_ui(session$ns, lvl_r()))
     manual_colors <- reactive(

@@ -30,7 +30,7 @@ de_ui <- function(id, data) {
         sliderInput(ns("topn"), "Show top", 10, 300, 50, 10),
         bslib::input_switch(ns("export_all"), "Export all genes (CSV)", FALSE)),
       .scroll_group("Volcano",
-        sliderInput(ns("lfc"), "logFC cutoff", 0, 3, 1, 0.1),
+        sliderInput(ns("lfc"), "avg_log2FC cutoff", 0, 3, 1, 0.1),
         numericInput(ns("padj"), "Adj. p cutoff", 0.05, min = 0, max = 1, step = 0.01),
         sliderInput(ns("labeln"), "Label top", 0, 40, 15, 1),
         .scroll_aspect_input(ns)),
@@ -134,7 +134,8 @@ de_server <- function(id, data, cells_r = reactive(data$cells),
 
     volcano_r <- reactive({
       view_volcano(de_df(),
-                   params = list(lfc = input$lfc, padj = input$padj, label_n = input$labeln),
+                   params = list(lfc = input$lfc, padj = input$padj, label_n = input$labeln,
+                                 fc_col = "avg_log2FC", fc_label = "avg_log2FC"),
                    state = list(aspect = input$aspect, theme = theme_r()))
     })
     output$plot <- renderPlot(volcano_r())

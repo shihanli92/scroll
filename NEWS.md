@@ -1,3 +1,17 @@
+# scroll 0.2.10
+
+## DE & composition panels
+
+* **Volcano plots the Seurat-style fold change.** The DE (Wilcoxon) volcano now uses
+  `avg_log2FC` (log2 fold change) on the x-axis and for the up/down threshold, instead of
+  presto's natural-log `logFC` -- more interpretable and consistent with the DE table. The
+  Pseudobulk volcano is unchanged (its `logFC` is already log2). `view_volcano()` gained
+  `fc_col`/`fc_label` params (default `logFC`); non-finite fold changes are dropped.
+* **Composition: fill by multiple columns.** The Proportions panel's "Fill by" is now a
+  multi-select that fills by the `a | b` interaction of the chosen categorical columns --
+  the same pattern as DimPlot's colour-by. `view_proportions()` and its CSV export build
+  the interaction; Manual colours use the observed interaction levels.
+
 # scroll 0.2.9
 
 ## Pseudobulk DE: sounder replicate handling

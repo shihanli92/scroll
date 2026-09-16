@@ -108,6 +108,28 @@ test_that("violin honours palette/jitter/legend; proportions honours normalize",
   expect_equal(pc$labels$y, "cells")     # raw counts, not "composition"
 })
 
+test_that("proportions fills by the interaction of >1 column", {
+  cells <- read_cells(test_project())
+  p <- view_proportions(cells, list(group_by = "condition", fill_by = c("celltype", "condition")))
+  expect_s3_class(p, "ggplot")
+  expect_equal(p$labels$fill, "celltype | condition")          # composite fill
+  # the fill categories are the observed interaction levels
+  fills <- unique(as.character(ggplot2::ggplot_build(p)$plot$data$fill))
+  expect_true(any(grepl(" | ", fills, fixed = TRUE)))
+})
+
+test_that("view_volcano plots the requested fold-change column", {
+  de <- data.frame(gene = c("A", "B", "C"),
+                   logFC = c(0.2, -0.2, 0.1), avg_log2FC = c(2, -2, 0),
+                   p_val_adj = c(1e-5, 1e-5, 0.9))
+  expect_equal(view_volcano(de)$labels$x, "logFC")                       # default
+  p <- view_volcano(de, params = list(fc_col = "avg_log2FC", fc_label = "avg_log2FC", lfc = 1))
+  expect_equal(p$labels$x, "avg_log2FC")
+  # up/down classification now uses avg_log2FC (|2| >= 1), not logFC (|0.2| < 1)
+  sig <- ggplot2::ggplot_build(p)$plot$data$sig
+  expect_setequal(as.character(sig), c("up", "down", "ns"))
+})
+
 test_that("de_table returns a data.frame (and a message when absent)", {
   df <- data.frame(gene = c("A", "B"), avg_log2FC = c(1.2, -0.5))
   expect_s3_class(view_de_table(df, list(top = 1)), "data.frame")

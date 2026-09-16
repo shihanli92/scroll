@@ -931,8 +931,8 @@ view_violin_multi <- function(cells, params, values_long, state = list()) {
 
 # proportions is group x category counts -> no barcode; export counts + fraction.
 .scroll_proportions_source <- function(cells, group_by, fill_by) {
-  tab <- as.data.frame(table(group    = as.character(cells[[group_by]]),
-                             category = as.character(cells[[fill_by]])),
+  tab <- as.data.frame(table(group    = .scroll_combo_levels(cells, group_by),
+                             category = .scroll_combo_levels(cells, fill_by)),
                        stringsAsFactors = FALSE)
   totals <- stats::aggregate(Freq ~ group, tab, sum)
   tab <- merge(tab, totals, by = "group", suffixes = c("", "_total"))
@@ -1006,8 +1006,11 @@ view_proportions <- function(cells, params, state = list()) {
   for (col in c(x, fill)) if (is.null(col) || !col %in% names(cells))
     stop("proportions needs `group_by` and `fill_by` metadata columns.",
          call. = FALSE)
-  tab <- as.data.frame(table(x = as.character(cells[[x]]),
-                             fill = as.character(cells[[fill]])),
+  # group_by / fill_by may name >1 column -> use their "a | b" interaction (as
+  # DimPlot's colour-by does).
+  x_lab <- paste(x, collapse = " | "); fill_lab <- paste(fill, collapse = " | ")
+  tab <- as.data.frame(table(x = .scroll_combo_levels(cells, x),
+                             fill = .scroll_combo_levels(cells, fill)),
                        stringsAsFactors = FALSE)
   normalize <- isTRUE(.scroll_opt(params, state, "normalize", TRUE))
   # no lower expansion so the bars sit flush on the x-axis; small headroom on top
@@ -1028,7 +1031,7 @@ view_proportions <- function(cells, params, state = list()) {
     ggplot2::geom_col(width = 0.8, color = "black", linewidth = 0.2) +
     ggplot2::scale_fill_manual(values = cols) +
     yscale +
-    ggplot2::labs(x = x, y = ylab, fill = fill)
+    ggplot2::labs(x = x_lab, y = ylab, fill = fill_lab)
   p <- p + .scroll_box_theme(.scroll_opt(params, state, "legend", TRUE))
   .scroll_apply_aspect(p, state$aspect %||% 1, state$theme)
 }
@@ -1063,26 +1066,33 @@ view_volcano <- function(de, params = list(), state = list()) {
              ggplot2::theme_void())
   lfc <- params$lfc %||% 1
   pcut <- params$padj %||% 0.05
+  # which fold-change column to plot (DE uses Seurat-style avg_log2FC; pseudobulk's
+  # own logFC is already log2). Falls back to logFC for back-compat.
+  fc_col <- params$fc_col %||% "logFC"
+  if (!fc_col %in% names(de)) fc_col <- "logFC"
+  fc_label <- params$fc_label %||% fc_col
   d <- de
+  d$.fc <- d[[fc_col]]
+  d <- d[is.finite(d$.fc), , drop = FALSE]           # drop non-finite fold changes
   d$neglog <- -log10(pmax(d$p_val_adj, 1e-300))     # avoid Inf when padj underflows to 0
   d$sig <- factor("ns", levels = c("down", "ns", "up"))
-  d$sig[d$p_val_adj < pcut & d$logFC >= lfc] <- "up"
-  d$sig[d$p_val_adj < pcut & d$logFC <= -lfc] <- "down"
+  d$sig[d$p_val_adj < pcut & d$.fc >= lfc] <- "up"
+  d$sig[d$p_val_adj < pcut & d$.fc <= -lfc] <- "down"
   cols <- c(down = "#2563A8", ns = "grey78", up = "#C4453B")
 
-  p <- ggplot2::ggplot(d, ggplot2::aes(.data$logFC, .data$neglog, color = .data$sig)) +
+  p <- ggplot2::ggplot(d, ggplot2::aes(.data$.fc, .data$neglog, color = .data$sig)) +
     ggplot2::geom_point(size = 1, alpha = 0.75) +
     ggplot2::scale_color_manual(values = cols, guide = "none") +
     ggplot2::geom_vline(xintercept = c(-lfc, lfc), linetype = "dashed", color = "grey60") +
     ggplot2::geom_hline(yintercept = -log10(pcut), linetype = "dashed", color = "grey60") +
-    ggplot2::labs(x = "logFC", y = "-log10 adjusted p") +
+    ggplot2::labs(x = fc_label, y = "-log10 adjusted p") +
     .scroll_base_theme(axis_text = TRUE)
 
   n <- params$label_n %||% 15
   lab <- d[d$sig != "ns", , drop = FALSE]
   lab <- utils::head(lab[order(-lab$neglog), , drop = FALSE], n)
   if (n > 0 && nrow(lab)) {
-    aes_lab <- ggplot2::aes(x = .data$logFC, y = .data$neglog, label = .data$gene)
+    aes_lab <- ggplot2::aes(x = .data$.fc, y = .data$neglog, label = .data$gene)
     p <- p + if (requireNamespace("ggrepel", quietly = TRUE))
       ggrepel::geom_text_repel(data = lab, mapping = aes_lab, inherit.aes = FALSE,
                                size = 3, color = "black", max.overlaps = 20)
