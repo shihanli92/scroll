@@ -14,6 +14,8 @@
   * **Bar width** slider.
   * **Fill by** multiple columns can now be **combined** into one interaction plot or
     **faceted** -- as a grid or **stacked rows** (like the stacked violin).
+  * **Aesthetics:** bar outline width, group/fill ordering (alphabetical / total or
+    abundance / reverse), segment labels (count or percent), and horizontal bars.
   * (Bar position stack/fill/dodge landed in 0.2.10.)
 
 # scroll 0.2.10

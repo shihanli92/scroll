@@ -1109,6 +1109,20 @@ view_proportions <- function(cells, params, state = list()) {
   tab <- as.data.frame(table(x = .scroll_combo_levels(cells, x),
                              fill = .scroll_combo_levels(cells, fill)),
                        stringsAsFactors = FALSE)
+  tab$pct <- stats::ave(tab$Freq, tab$x, FUN = function(z) if (sum(z) > 0) z / sum(z) else z)
+  # ordering: fill (stack/legend) and x (axis) levels. Colours are keyed by name,
+  # so reordering levels keeps each category's colour stable.
+  tot <- function(v) tapply(tab$Freq, tab[[v]], sum)
+  fill_lv <- switch(.scroll_opt(params, state, "fill_order", "alpha"),
+    abundance = names(sort(tot("fill"), decreasing = TRUE)),
+    reverse   = rev(sort(unique(tab$fill))),
+    sort(unique(tab$fill)))
+  x_lv <- switch(.scroll_opt(params, state, "x_order", "alpha"),
+    total   = names(sort(tot("x"), decreasing = TRUE)),
+    reverse = rev(sort(unique(tab$x))),
+    sort(unique(tab$x)))
+  tab$fill <- factor(tab$fill, levels = fill_lv)
+  tab$x    <- factor(tab$x, levels = x_lv)
   # bar position: "fill" (100% composition), "stack" (raw counts), "dodge"
   # (grouped counts). Back-compat: derive from the old `normalize` flag if unset.
   position <- .scroll_opt(params, state, "position", NULL)
@@ -1126,13 +1140,34 @@ view_proportions <- function(cells, params, state = list()) {
     pos <- "stack"; ylab <- "cells"
     yscale <- ggplot2::scale_y_continuous(expand = yexp)
   }
-  cols <- .scroll_group_colors(tab$fill, state)
+  cols <- .scroll_group_colors(as.character(tab$fill), state)
   bw <- .scroll_opt(params, state, "bar_width", 0.8)
+  outline <- .scroll_opt(params, state, "outline", 0.2)
   p <- ggplot2::ggplot(tab, ggplot2::aes(x = .data$x, y = .data$Freq, fill = .data$fill)) +
-    ggplot2::geom_col(width = bw, color = "black", linewidth = 0.2, position = pos) +
+    ggplot2::geom_col(width = bw, color = if (outline > 0) "black" else NA,
+                      linewidth = outline, position = pos) +
     ggplot2::scale_fill_manual(values = cols) +
     yscale +
     ggplot2::labs(x = x_lab, y = ylab, fill = fill_lab)
+  # segment labels: count or percent, placed to match the bar position
+  labs_mode <- .scroll_opt(params, state, "labels", "none")
+  if (!identical(labs_mode, "none")) {
+    tab$.lab <- if (identical(labs_mode, "percent"))
+                  scales::percent(tab$pct, accuracy = 1) else format(tab$Freq, big.mark = ",")
+    tab$.lab[tab$Freq == 0] <- ""
+    if (identical(position, "dodge"))                # above each dodged bar
+      p <- p + ggplot2::geom_text(ggplot2::aes(label = .data$.lab), data = tab,
+                                  position = ggplot2::position_dodge(width = bw),
+                                  vjust = -0.3, size = 2.8, color = "grey15")
+    else {                                           # centred in each segment
+      lpos <- if (identical(position, "fill")) ggplot2::position_fill(vjust = 0.5)
+              else ggplot2::position_stack(vjust = 0.5)
+      p <- p + ggplot2::geom_text(ggplot2::aes(label = .data$.lab), data = tab,
+                                  position = lpos, size = 2.8, color = "grey15")
+    }
+  }
+  if (isTRUE(.scroll_opt(params, state, "horizontal", FALSE)))
+    p <- p + ggplot2::coord_flip()
   p <- p + .scroll_box_theme(.scroll_opt(params, state, "legend", TRUE))
   .scroll_apply_aspect(p, state$aspect %||% 1, state$theme)
 }

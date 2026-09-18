@@ -25,9 +25,18 @@ proportions_ui <- function(id, data) {
                     c("Fill (100%)" = "fill", "Stack (counts)" = "stack",
                       "Grouped (dodge)" = "dodge"), selected = "fill"),
         sliderInput(ns("barwidth"), "Bar width", 0.3, 1, 0.8, 0.05),
+        sliderInput(ns("outline"), "Bar outline", 0, 1, 0.2, 0.1),
         selectInput(ns("palette"), "Palette", .scroll_cat_palettes()),
         uiOutput(ns("manual")),
         bslib::input_switch(ns("legend"), "Legend", TRUE)),
+      .scroll_group("Order & labels",
+        selectInput(ns("xorder"), "Order groups",
+                    c("Alphabetical" = "alpha", "Total count" = "total", "Reverse" = "reverse")),
+        selectInput(ns("fillorder"), "Order fill",
+                    c("Alphabetical" = "alpha", "Abundance" = "abundance", "Reverse" = "reverse")),
+        selectInput(ns("labels"), "Segment labels",
+                    c("None" = "none", "Count" = "count", "Percent" = "percent")),
+        bslib::input_switch(ns("horizontal"), "Horizontal bars", FALSE)),
       .scroll_group("Layout", .scroll_aspect_input(ns))
     ),
     .scroll_plot_area(ns, "460px", csv = TRUE)
@@ -64,6 +73,9 @@ proportions_server <- function(id, data, cells_r = reactive(data$cells),
     cosmetic_r <- .scroll_cosmetic(reactive(
       list(theme = theme_r(), palette = input$palette, position = input$position,
            fill_layout = input$filllayout %||% "combine", bar_width = input$barwidth %||% 0.8,
+           outline = input$outline %||% 0.2, x_order = input$xorder %||% "alpha",
+           fill_order = input$fillorder %||% "alpha", labels = input$labels %||% "none",
+           horizontal = isTRUE(input$horizontal),
            legend = isTRUE(input$legend), aspect = input$aspect,
            manual_colors = manual_colors())))
     plot_r <- .scroll_lazy_plot(input, function() {

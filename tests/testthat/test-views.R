@@ -163,6 +163,20 @@ test_that("proportions facets one composition per fill column (grid/stacked)", {
   expect_equal(pc$labels$fill, "celltype | condition")
 })
 
+test_that("proportions aesthetics: ordering, labels, orientation", {
+  cells <- read_cells(test_project())
+  base <- list(group_by = "condition", fill_by = "celltype")
+  p <- view_proportions(cells, base, state = list(x_order = "total", fill_order = "abundance",
+                                                  labels = "percent", horizontal = TRUE, outline = 0))
+  expect_s3_class(p, "ggplot")
+  geoms <- vapply(p$layers, function(l) class(l$geom)[1], character(1))
+  expect_true("GeomText" %in% geoms)              # a label layer was added
+  expect_s3_class(p$coordinates, "CoordFlip")     # horizontal
+  # count labels also work in stack position
+  pc <- view_proportions(cells, base, state = list(position = "stack", labels = "count"))
+  expect_true("GeomText" %in% vapply(pc$layers, function(l) class(l$geom)[1], character(1)))
+})
+
 test_that("proportions honours bar width", {
   cells <- read_cells(test_project())
   p <- view_proportions(cells, list(group_by = "condition", fill_by = "celltype"), state = list(bar_width = 0.5))
