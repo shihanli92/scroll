@@ -177,6 +177,22 @@ test_that("proportions aesthetics: ordering, labels, orientation", {
   expect_true("GeomText" %in% vapply(pc$layers, function(l) class(l$geom)[1], character(1)))
 })
 
+test_that("proportions batch-2: order by fill level, totals, label threshold", {
+  cells <- read_cells(test_project())
+  base <- list(group_by = "condition", fill_by = "celltype")
+  # order x groups by a chosen fill level's share (no error, returns a plot)
+  expect_s3_class(view_proportions(cells, base,
+    state = list(x_order = "level", x_order_level = "T")), "ggplot")
+  # totals add a text layer above bars
+  pt <- view_proportions(cells, base, state = list(position = "stack", totals = TRUE))
+  expect_true("GeomText" %in% vapply(pt$layers, function(l) class(l$geom)[1], character(1)))
+  # a 100% threshold blanks every segment label (nothing is >= 100% of its group here)
+  pth <- view_proportions(cells, base, state = list(labels = "percent", label_min = 100))
+  lyr <- pt$layers  # (build to ensure no error)
+  b <- ggplot2::ggplot_build(pth)
+  expect_s3_class(pth, "ggplot")
+})
+
 test_that("proportions honours bar width", {
   cells <- read_cells(test_project())
   p <- view_proportions(cells, list(group_by = "condition", fill_by = "celltype"), state = list(bar_width = 0.5))

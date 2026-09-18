@@ -1,3 +1,17 @@
+# scroll 0.2.12
+
+## Composition aesthetics
+
+* **Order groups by a fill level's share** -- e.g. sort samples by their % of a chosen
+  category, with a picker for which level.
+* **Segment-label threshold** -- hide labels on segments below a chosen percent (declutters
+  small slices), plus a **label size** control.
+* **Per-group totals** -- the n cells for each group shown above its bar (placed correctly
+  for stack / fill / dodge).
+
+(The first aesthetics batch -- ordering, count/percent labels, horizontal bars, bar outline --
+landed under 0.2.11.)
+
 # scroll 0.2.11
 
 ## Violin & composition panels

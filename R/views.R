@@ -1117,7 +1117,13 @@ view_proportions <- function(cells, params, state = list()) {
     abundance = names(sort(tot("fill"), decreasing = TRUE)),
     reverse   = rev(sort(unique(tab$fill))),
     sort(unique(tab$fill)))
-  x_lv <- switch(.scroll_opt(params, state, "x_order", "alpha"),
+  x_order <- .scroll_opt(params, state, "x_order", "alpha")
+  x_level <- .scroll_opt(params, state, "x_order_level", NULL)   # order x by this fill level's share
+  x_lv <- if (identical(x_order, "level") && !is.null(x_level) && x_level %in% tab$fill) {
+    sub <- tab[tab$fill == x_level, , drop = FALSE]
+    ord <- as.character(sub$x[order(-sub$pct)])
+    c(ord, setdiff(sort(unique(tab$x)), ord))                    # groups lacking the level last
+  } else switch(x_order,
     total   = names(sort(tot("x"), decreasing = TRUE)),
     reverse = rev(sort(unique(tab$x))),
     sort(unique(tab$x)))
@@ -1149,22 +1155,39 @@ view_proportions <- function(cells, params, state = list()) {
     ggplot2::scale_fill_manual(values = cols) +
     yscale +
     ggplot2::labs(x = x_lab, y = ylab, fill = fill_lab)
-  # segment labels: count or percent, placed to match the bar position
+  # segment labels: count or percent, placed to match the bar position; segments
+  # below the threshold (percent of their group) are left unlabelled.
   labs_mode <- .scroll_opt(params, state, "labels", "none")
+  lab_size <- .scroll_opt(params, state, "label_size", 2.8)
   if (!identical(labs_mode, "none")) {
     tab$.lab <- if (identical(labs_mode, "percent"))
                   scales::percent(tab$pct, accuracy = 1) else format(tab$Freq, big.mark = ",")
     tab$.lab[tab$Freq == 0] <- ""
+    thr <- .scroll_opt(params, state, "label_min", 0)
+    if (thr > 0) tab$.lab[tab$pct * 100 < thr] <- ""
     if (identical(position, "dodge"))                # above each dodged bar
       p <- p + ggplot2::geom_text(ggplot2::aes(label = .data$.lab), data = tab,
                                   position = ggplot2::position_dodge(width = bw),
-                                  vjust = -0.3, size = 2.8, color = "grey15")
+                                  vjust = -0.3, size = lab_size, color = "grey15")
     else {                                           # centred in each segment
       lpos <- if (identical(position, "fill")) ggplot2::position_fill(vjust = 0.5)
               else ggplot2::position_stack(vjust = 0.5)
       p <- p + ggplot2::geom_text(ggplot2::aes(label = .data$.lab), data = tab,
-                                  position = lpos, size = 2.8, color = "grey15")
+                                  position = lpos, size = lab_size, color = "grey15")
     }
+  }
+  # per-group total above each bar (n cells)
+  if (isTRUE(.scroll_opt(params, state, "totals", FALSE))) {
+    td <- stats::aggregate(Freq ~ x, tab, sum)
+    td$x <- factor(as.character(td$x), levels = x_lv)
+    td$.lab <- format(td$Freq, big.mark = ",")
+    td$.y <- if (identical(position, "fill")) 1
+             else if (identical(position, "dodge"))
+               as.numeric(tapply(tab$Freq, tab$x, max)[as.character(td$x)])
+             else td$Freq
+    p <- p + ggplot2::geom_text(data = td, ggplot2::aes(x = .data$x, y = .data$.y,
+               label = .data$.lab), inherit.aes = FALSE, vjust = -0.4,
+               size = lab_size, color = "grey30")
   }
   if (isTRUE(.scroll_opt(params, state, "horizontal", FALSE)))
     p <- p + ggplot2::coord_flip()

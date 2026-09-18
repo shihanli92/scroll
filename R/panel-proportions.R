@@ -31,11 +31,18 @@ proportions_ui <- function(id, data) {
         bslib::input_switch(ns("legend"), "Legend", TRUE)),
       .scroll_group("Order & labels",
         selectInput(ns("xorder"), "Order groups",
-                    c("Alphabetical" = "alpha", "Total count" = "total", "Reverse" = "reverse")),
+                    c("Alphabetical" = "alpha", "Total count" = "total",
+                      "By fill level" = "level", "Reverse" = "reverse")),
+        conditionalPanel("input['xorder'] == 'level'", ns = ns,
+          selectInput(ns("orderlevel"), "Order by level", choices = NULL)),
         selectInput(ns("fillorder"), "Order fill",
                     c("Alphabetical" = "alpha", "Abundance" = "abundance", "Reverse" = "reverse")),
         selectInput(ns("labels"), "Segment labels",
                     c("None" = "none", "Count" = "count", "Percent" = "percent")),
+        conditionalPanel("input['labels'] != 'none'", ns = ns,
+          sliderInput(ns("labelmin"), "Hide labels below (%)", 0, 50, 0, 1),
+          sliderInput(ns("labelsize"), "Label size", 1.5, 6, 2.8, 0.1)),
+        bslib::input_switch(ns("totals"), "Show group totals", FALSE),
         bslib::input_switch(ns("horizontal"), "Horizontal bars", FALSE)),
       .scroll_group("Layout", .scroll_aspect_input(ns))
     ),
@@ -66,6 +73,12 @@ proportions_server <- function(id, data, cells_r = reactive(data$cells),
       if (identical(input$palette, "Manual")) .scroll_manual_ui(session$ns, lvl_r()))
     manual_colors <- reactive(
       if (identical(input$palette, "Manual")) .scroll_manual_colors(input, lvl_r()))
+    # "order groups by fill level" picker tracks the current fill levels
+    observeEvent(lvl_r(), {
+      lv <- lvl_r(); cur <- isolate(input$orderlevel)
+      updateSelectInput(session, "orderlevel", choices = lv,
+                        selected = if (!is.null(cur) && cur %in% lv) cur else lv[[1]])
+    })
     data_r <- reactive({
       req(input$group, input$fill)
       list(cells = cells_r(), group_by = input$group, fill_by = input$fill)
@@ -74,7 +87,9 @@ proportions_server <- function(id, data, cells_r = reactive(data$cells),
       list(theme = theme_r(), palette = input$palette, position = input$position,
            fill_layout = input$filllayout %||% "combine", bar_width = input$barwidth %||% 0.8,
            outline = input$outline %||% 0.2, x_order = input$xorder %||% "alpha",
-           fill_order = input$fillorder %||% "alpha", labels = input$labels %||% "none",
+           x_order_level = input$orderlevel, fill_order = input$fillorder %||% "alpha",
+           labels = input$labels %||% "none", label_min = input$labelmin %||% 0,
+           label_size = input$labelsize %||% 2.8, totals = isTRUE(input$totals),
            horizontal = isTRUE(input$horizontal),
            legend = isTRUE(input$legend), aspect = input$aspect,
            manual_colors = manual_colors())))
