@@ -825,29 +825,53 @@ view_dotplot <- function(cells, params, expr_long, state = list(), assembly = NU
 #' @return A ggplot.
 #' @export
 view_violin <- function(cells, params, values = NULL, state = list()) {
+  # group_by may name >1 column (use their "a | b" interaction, like DimPlot);
+  # split_by (optional) draws side-by-side coloured violins within each group.
   group_by <- .scroll_group_col(params, state)
-  if (is.null(group_by) || !group_by %in% names(cells))
+  if (is.null(group_by) || !all(group_by %in% names(cells)))
     stop("violin needs a valid `group_by` metadata column.", call. = FALSE)
-  df <- data.frame(cell = cells$cell, group = as.character(cells[[group_by]]),
+  split_by <- params$split_by; split_by <- split_by[nzchar(split_by %||% "")]
+  has_split <- length(split_by) > 0 && all(split_by %in% names(cells))
+  group_lab <- paste(group_by, collapse = " | ")
+  df <- data.frame(cell = cells$cell, group = .scroll_combo_levels(cells, group_by),
                    stringsAsFactors = FALSE)
+  if (has_split) df$.split <- .scroll_combo_levels(cells, split_by)
   # value axis: a numeric metadata column (params$value_col) or a queried feature
   df$expr <- if (!is.null(params$value_col))
                suppressWarnings(as.numeric(cells[[params$value_col]]))
              else .scroll_expr_vector(cells, values)
-  df <- df[!is.na(df$expr) & !is.na(df$group), , drop = FALSE]
-  cols <- .scroll_group_colors(df$group, state)
-  p <- ggplot2::ggplot(df, ggplot2::aes(x = .data$group, y = .data$expr,
-                                        fill = .data$group)) +
-    ggplot2::geom_violin(scale = "width", trim = TRUE, linewidth = 0.3)
-  if (isTRUE(.scroll_opt(params, state, "jitter", FALSE)))
-    p <- p + ggplot2::geom_jitter(size = 0.2, alpha = 0.3, width = 0.2,
-                                  show.legend = FALSE)
+  ok <- !is.na(df$expr) & !is.na(df$group)
+  if (has_split) ok <- ok & !is.na(df$.split)
+  df <- df[ok, , drop = FALSE]
+  df$.fill <- if (has_split) df$.split else df$group      # colour by split, else group
+  cols <- .scroll_group_colors(df$.fill, state)
+  # split -> dodge the violins so each group's split levels sit side by side
+  vpos <- if (has_split) ggplot2::position_dodge(width = 0.9) else "dodge"
+  vwidth <- .scroll_opt(params, state, "violin_width", 0.9)     # violin fatness
+  p <- ggplot2::ggplot(df, ggplot2::aes(x = .data$group, y = .data$expr, fill = .data$.fill)) +
+    ggplot2::geom_violin(scale = "width", width = vwidth, trim = TRUE, linewidth = 0.3,
+                         position = vpos)
+  if (isTRUE(.scroll_opt(params, state, "jitter", FALSE))) {
+    psize  <- .scroll_opt(params, state, "point_size", 0.2)
+    palpha <- .scroll_opt(params, state, "point_alpha", 0.3)
+    pfrac  <- .scroll_opt(params, state, "point_frac", 1)        # subsample for a cleaner view
+    dfp <- if (pfrac < 1 && nrow(df) > 1)
+             df[sample.int(nrow(df), max(1L, round(nrow(df) * pfrac))), , drop = FALSE] else df
+    p <- p + if (has_split)
+      ggplot2::geom_point(data = dfp, position = ggplot2::position_jitterdodge(
+        jitter.width = 0.15, dodge.width = 0.9), size = psize, alpha = palpha, show.legend = FALSE)
+    else
+      ggplot2::geom_jitter(data = dfp, size = psize, alpha = palpha, width = 0.2, show.legend = FALSE)
+  }
+  # split violins are unreadable without a legend, so force it on then
+  legend <- has_split || isTRUE(.scroll_opt(params, state, "legend", FALSE))
   p <- p +
     ggplot2::scale_fill_manual(values = cols) +
     # no lower expansion so the violins sit flush on the axis; small headroom on top
     ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0, 0.05))) +
-    ggplot2::labs(x = group_by, y = params$feature %||% "expression", fill = group_by) +
-    .scroll_box_theme(.scroll_opt(params, state, "legend", FALSE))
+    ggplot2::labs(x = group_lab, y = params$feature %||% "expression",
+                  fill = if (has_split) paste(split_by, collapse = " | ") else group_lab) +
+    .scroll_box_theme(legend)
   .scroll_apply_aspect(p, state$aspect %||% 1, state$theme)
 }
 
@@ -870,12 +894,70 @@ view_violin_multi <- function(cells, params, values_long, state = list()) {
   panels <- lapply(feats, function(g) {
     v <- if (!is.null(values_long) && nrow(values_long))
            values_long[values_long$feature == g, c("cell", "value"), drop = FALSE] else NULL
-    view_violin(cells, list(feature = g, group_by = params$group_by), v, state)
+    view_violin(cells, list(feature = g, group_by = params$group_by,
+                            split_by = params$split_by), v, state)
   })
   if (length(panels) == 1 || !requireNamespace("patchwork", quietly = TRUE))
     return(panels[[1]])
   ncol <- params$ncol %||% ceiling(sqrt(length(panels)))
   patchwork::wrap_plots(panels, ncol = ncol)
+}
+
+#' Stacked violin plot (one compact row per gene)
+#'
+#' The Seurat-style stacked violin: every gene is a thin row of violins sharing
+#' the group x-axis, faceted vertically. Compact for comparing many genes at once.
+#' Points are intentionally omitted (they clutter the stacked rows).
+#'
+#' @param cells The cells data.frame.
+#' @param params List with `group_by`, `features`, optional `split_by`.
+#' @param values_long A data.frame(feature, cell, value) for the genes, or `NULL`.
+#' @param state Optional toggle state (`palette`, `violin_width`, `manual_colors`,
+#'   `legend`, `aspect`, `theme`).
+#' @return A ggplot.
+#' @export
+view_violin_stacked <- function(cells, params, values_long, state = list()) {
+  feats <- params$features
+  group_by <- params$group_by
+  if (is.null(group_by) || !all(group_by %in% names(cells)))
+    stop("stacked violin needs a valid `group_by` metadata column.", call. = FALSE)
+  split_by <- params$split_by; split_by <- split_by[nzchar(split_by %||% "")]
+  has_split <- length(split_by) > 0 && all(split_by %in% names(cells))
+  group_lab <- paste(group_by, collapse = " | ")
+  base <- data.frame(cell = cells$cell, group = .scroll_combo_levels(cells, group_by),
+                     stringsAsFactors = FALSE)
+  if (has_split) base$.split <- .scroll_combo_levels(cells, split_by)
+  rows <- lapply(feats, function(g) {
+    v <- if (!is.null(values_long) && nrow(values_long))
+           values_long[values_long$feature == g, c("cell", "value"), drop = FALSE] else NULL
+    data.frame(base, feature = g, expr = .scroll_expr_vector(base, v), stringsAsFactors = FALSE)
+  })
+  df <- do.call(rbind, rows)
+  ok <- !is.na(df$expr) & !is.na(df$group); if (has_split) ok <- ok & !is.na(df$.split)
+  df <- df[ok, , drop = FALSE]
+  df$feature <- factor(df$feature, levels = feats)        # keep the picked gene order
+  df$.fill <- if (has_split) df$.split else df$group
+  cols <- .scroll_group_colors(df$.fill, state)
+  vpos <- if (has_split) ggplot2::position_dodge(width = 0.9) else "dodge"
+  vwidth <- .scroll_opt(params, state, "violin_width", 0.9)
+  legend <- has_split || isTRUE(.scroll_opt(params, state, "legend", FALSE))
+  p <- ggplot2::ggplot(df, ggplot2::aes(x = .data$group, y = .data$expr, fill = .data$.fill)) +
+    ggplot2::geom_violin(scale = "width", width = vwidth, trim = TRUE, linewidth = 0.2,
+                         position = vpos) +
+    ggplot2::facet_grid(rows = ggplot2::vars(.data$feature), scales = "free_y", switch = "y") +
+    ggplot2::scale_fill_manual(values = cols) +
+    ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0, 0.05))) +
+    ggplot2::labs(x = group_lab, y = NULL,
+                  fill = if (has_split) paste(split_by, collapse = " | ") else group_lab) +
+    .scroll_box_theme(legend) +
+    ggplot2::theme(axis.text.y = ggplot2::element_blank(),
+                   axis.ticks.y = ggplot2::element_blank(),
+                   panel.spacing.y = ggplot2::unit(1, "pt"),
+                   strip.placement = "outside",
+                   strip.text.y.left = ggplot2::element_text(angle = 0, hjust = 1))
+  p <- p + .scroll_ggtheme(state$theme)
+  if (!is.null(state$aspect)) p <- p + ggplot2::theme(aspect.ratio = state$aspect)
+  p
 }
 
 # Long data.frame of all column pairs (one facet per pair), NA rows dropped.
@@ -904,11 +986,14 @@ view_violin_multi <- function(cells, params, values_long, state = list()) {
   out
 }
 
-.scroll_violin_source <- function(cells, group_by, feature, values, value_col = NULL) {
+.scroll_violin_source <- function(cells, group_by, feature, values, value_col = NULL,
+                                  split_by = NULL) {
   expr <- if (!is.null(value_col)) suppressWarnings(as.numeric(cells[[value_col]]))
           else .scroll_expr_vector(cells, values)
   out <- data.frame(cell = cells$cell, stringsAsFactors = FALSE)
-  out[[group_by]] <- as.character(cells[[group_by]])
+  out[[paste(group_by, collapse = " | ")]] <- .scroll_combo_levels(cells, group_by)
+  if (length(split_by))
+    out[[paste(split_by, collapse = " | ")]] <- .scroll_combo_levels(cells, split_by)
   out[[feature]] <- expr
   out
 }
@@ -1006,29 +1091,45 @@ view_proportions <- function(cells, params, state = list()) {
   for (col in c(x, fill)) if (is.null(col) || !col %in% names(cells))
     stop("proportions needs `group_by` and `fill_by` metadata columns.",
          call. = FALSE)
+  # multi-fill layout: "combine" (one interaction plot, default) vs facet the
+  # columns -- "grid" (square-ish) or "stacked" (one row per column, like the
+  # stacked violin). Each facet is an independent composition (own levels + legend).
+  layout <- .scroll_opt(params, state, "fill_layout",
+                        if (isTRUE(.scroll_opt(params, state, "facet", FALSE))) "grid" else "combine")
+  if (layout %in% c("grid", "stacked") && length(fill) > 1) {
+    panels <- lapply(fill, function(f)
+      view_proportions(cells, list(group_by = x, fill_by = f), state))
+    if (!requireNamespace("patchwork", quietly = TRUE)) return(panels[[1]])
+    ncol <- if (identical(layout, "stacked")) 1L else ceiling(sqrt(length(panels)))
+    return(patchwork::wrap_plots(panels, ncol = ncol))
+  }
   # group_by / fill_by may name >1 column -> use their "a | b" interaction (as
   # DimPlot's colour-by does).
   x_lab <- paste(x, collapse = " | "); fill_lab <- paste(fill, collapse = " | ")
   tab <- as.data.frame(table(x = .scroll_combo_levels(cells, x),
                              fill = .scroll_combo_levels(cells, fill)),
                        stringsAsFactors = FALSE)
-  normalize <- isTRUE(.scroll_opt(params, state, "normalize", TRUE))
+  # bar position: "fill" (100% composition), "stack" (raw counts), "dodge"
+  # (grouped counts). Back-compat: derive from the old `normalize` flag if unset.
+  position <- .scroll_opt(params, state, "position", NULL)
+  if (is.null(position))
+    position <- if (isTRUE(.scroll_opt(params, state, "normalize", TRUE))) "fill" else "stack"
   # no lower expansion so the bars sit flush on the x-axis; small headroom on top
   yexp <- ggplot2::expansion(mult = c(0, 0.05))
-  if (normalize) {
-    totals <- stats::aggregate(Freq ~ x, tab, sum)
-    tab <- merge(tab, totals, by = "x", suffixes = c("", ".total"))
-    tab$y <- ifelse(tab$Freq.total > 0, tab$Freq / tab$Freq.total, 0)
+  if (identical(position, "fill")) {         # geom_col normalizes each x-stack to 1
+    pos <- "fill"; ylab <- "composition"
     yscale <- ggplot2::scale_y_continuous(labels = scales::percent, expand = yexp)
-    ylab <- "composition"
-  } else {
-    tab$y <- tab$Freq
+  } else if (identical(position, "dodge")) {
+    pos <- ggplot2::position_dodge(preserve = "single"); ylab <- "cells"
     yscale <- ggplot2::scale_y_continuous(expand = yexp)
-    ylab <- "cells"
+  } else {                                    # stack
+    pos <- "stack"; ylab <- "cells"
+    yscale <- ggplot2::scale_y_continuous(expand = yexp)
   }
   cols <- .scroll_group_colors(tab$fill, state)
-  p <- ggplot2::ggplot(tab, ggplot2::aes(x = .data$x, y = .data$y, fill = .data$fill)) +
-    ggplot2::geom_col(width = 0.8, color = "black", linewidth = 0.2) +
+  bw <- .scroll_opt(params, state, "bar_width", 0.8)
+  p <- ggplot2::ggplot(tab, ggplot2::aes(x = .data$x, y = .data$Freq, fill = .data$fill)) +
+    ggplot2::geom_col(width = bw, color = "black", linewidth = 0.2, position = pos) +
     ggplot2::scale_fill_manual(values = cols) +
     yscale +
     ggplot2::labs(x = x_lab, y = ylab, fill = fill_lab)

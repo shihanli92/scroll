@@ -81,6 +81,7 @@ reference:
   - view_biaxial
   - view_dotplot
   - view_violin
+  - view_violin_stacked
   - view_proportions
   - view_de_table
   - view_volcano

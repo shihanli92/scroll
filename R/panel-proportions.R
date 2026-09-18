@@ -13,11 +13,20 @@ proportions_ui <- function(id, data) {
         selectInput(ns("group"), "Group by (x)", stats::setNames(cats, cats), selected = x_default),
         # multi-select: pick >1 column to fill by their "a | b" interaction (like DimPlot colour-by)
         selectizeInput(ns("fill"), "Fill by", stats::setNames(cats, cats), selected = cats[[1]],
-                       multiple = TRUE, options = list(plugins = list("remove_button")))),
+                       multiple = TRUE, options = list(plugins = list("remove_button"))),
+        # with >1 fill column: combine into one interaction plot, or facet one per
+        # column -- as a grid or stacked rows (like the stacked violin)
+        conditionalPanel("input['fill'] && input['fill'].length > 1", ns = ns,
+          selectInput(ns("filllayout"), "Fill columns",
+                      c("Combine levels" = "combine", "Facet (grid)" = "grid",
+                        "Facet (stacked rows)" = "stacked"), selected = "combine"))),
       .scroll_group("Appearance",
+        selectInput(ns("position"), "Bars",
+                    c("Fill (100%)" = "fill", "Stack (counts)" = "stack",
+                      "Grouped (dodge)" = "dodge"), selected = "fill"),
+        sliderInput(ns("barwidth"), "Bar width", 0.3, 1, 0.8, 0.05),
         selectInput(ns("palette"), "Palette", .scroll_cat_palettes()),
         uiOutput(ns("manual")),
-        bslib::input_switch(ns("normalize"), "Normalize to 100%", TRUE),
         bslib::input_switch(ns("legend"), "Legend", TRUE)),
       .scroll_group("Layout", .scroll_aspect_input(ns))
     ),
@@ -53,7 +62,8 @@ proportions_server <- function(id, data, cells_r = reactive(data$cells),
       list(cells = cells_r(), group_by = input$group, fill_by = input$fill)
     })
     cosmetic_r <- .scroll_cosmetic(reactive(
-      list(theme = theme_r(), palette = input$palette, normalize = isTRUE(input$normalize),
+      list(theme = theme_r(), palette = input$palette, position = input$position,
+           fill_layout = input$filllayout %||% "combine", bar_width = input$barwidth %||% 0.8,
            legend = isTRUE(input$legend), aspect = input$aspect,
            manual_colors = manual_colors())))
     plot_r <- .scroll_lazy_plot(input, function() {

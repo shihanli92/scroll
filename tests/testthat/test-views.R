@@ -108,6 +108,69 @@ test_that("violin honours palette/jitter/legend; proportions honours normalize",
   expect_equal(pc$labels$y, "cells")     # raw counts, not "composition"
 })
 
+test_that("violin split-by draws grouped violins; group-by can be composite", {
+  cells <- read_cells(test_project())
+  vals <- data.frame(cell = cells$cell, value = runif(nrow(cells)))
+  p <- view_violin(cells, list(feature = "CD3D", group_by = "celltype", split_by = "condition"), vals)
+  expect_s3_class(p, "ggplot")
+  expect_equal(p$labels$fill, "condition")           # coloured by the split, not the group
+  # composite group-by (interaction)
+  p2 <- view_violin(cells, list(feature = "CD3D", group_by = c("celltype", "condition")), vals)
+  expect_equal(p2$labels$x, "celltype | condition")
+})
+
+test_that("view_violin point controls subsample and apply size/opacity", {
+  cells <- read_cells(test_project())
+  vals <- data.frame(cell = cells$cell, value = runif(nrow(cells)))
+  p <- view_violin(cells, list(feature = "X", group_by = "celltype"), vals,
+                   state = list(jitter = TRUE, point_size = 1, point_alpha = 0.5, point_frac = 0.1))
+  b <- ggplot2::ggplot_build(p)
+  npts <- nrow(b$data[[2]])                 # the jitter layer
+  expect_gt(npts, 0)
+  expect_lt(npts, nrow(cells))              # subsampled to ~10%
+})
+
+test_that("view_violin_stacked facets one compact row per gene", {
+  data <- scroll:::.scroll_load(test_project()); on.exit(scroll_disconnect(data$con))
+  vl <- data$queryN("RNA", c("CD3D", "CD8A"))
+  p <- view_violin_stacked(data$cells, list(group_by = "celltype",
+                                            features = c("CD3D", "CD8A")), vl)
+  expect_s3_class(p, "ggplot")
+  b <- ggplot2::ggplot_build(p)
+  expect_gte(length(unique(b$layout$layout$feature)), 2)   # one facet row per gene
+})
+
+test_that("proportions position controls stack / fill / dodge", {
+  cells <- read_cells(test_project())
+  base <- list(group_by = "condition", fill_by = "celltype")
+  expect_equal(view_proportions(cells, base, state = list(position = "stack"))$labels$y, "cells")
+  expect_equal(view_proportions(cells, base, state = list(position = "fill"))$labels$y, "composition")
+  expect_s3_class(view_proportions(cells, base, state = list(position = "dodge")), "ggplot")
+  # back-compat: old `normalize` flag still maps to fill/stack
+  expect_equal(view_proportions(cells, base, state = list(normalize = FALSE))$labels$y, "cells")
+})
+
+test_that("proportions facets one composition per fill column (grid/stacked)", {
+  cells <- read_cells(test_project())
+  fills <- c("celltype", "condition")
+  is_multi <- function(p) if (requireNamespace("patchwork", quietly = TRUE))
+    expect_s3_class(p, "patchwork") else expect_s3_class(p, "ggplot")
+  is_multi(view_proportions(cells, list(group_by = "condition", fill_by = fills), state = list(fill_layout = "grid")))
+  is_multi(view_proportions(cells, list(group_by = "condition", fill_by = fills), state = list(fill_layout = "stacked")))
+  is_multi(view_proportions(cells, list(group_by = "condition", fill_by = fills), state = list(facet = TRUE)))  # back-compat
+  # combine (default) stays a single combined-interaction plot
+  pc <- view_proportions(cells, list(group_by = "condition", fill_by = fills), state = list(fill_layout = "combine"))
+  expect_equal(pc$labels$fill, "celltype | condition")
+})
+
+test_that("proportions honours bar width", {
+  cells <- read_cells(test_project())
+  p <- view_proportions(cells, list(group_by = "condition", fill_by = "celltype"), state = list(bar_width = 0.5))
+  b <- ggplot2::ggplot_build(p)
+  expect_s3_class(p, "ggplot")
+  expect_true(any(abs(b$data[[1]]$xmax - b$data[[1]]$xmin - 0.5) < 1e-6))  # bars are 0.5 wide
+})
+
 test_that("proportions fills by the interaction of >1 column", {
   cells <- read_cells(test_project())
   p <- view_proportions(cells, list(group_by = "condition", fill_by = c("celltype", "condition")))

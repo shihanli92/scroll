@@ -1,3 +1,21 @@
+# scroll 0.2.11
+
+## Violin & composition panels
+
+* **Violin: grouped, stacked, and cleaner points.**
+  * **Split-by** draws side-by-side coloured violins within each group (Seurat `split.by`).
+  * **Group-by** is multi-select -- group by the `a | b` interaction of several columns.
+  * **Stacked violin** (`view_violin_stacked`): one compact faceted row per gene sharing the
+    group axis (points off in this mode).
+  * **Point controls** when points are shown: size, opacity, and a subsample slider for a
+    cleaner view.
+  * **Violin width** slider.
+* **Composition: bar shape and multi-fill layout.**
+  * **Bar width** slider.
+  * **Fill by** multiple columns can now be **combined** into one interaction plot or
+    **faceted** -- as a grid or **stacked rows** (like the stacked violin).
+  * (Bar position stack/fill/dodge landed in 0.2.10.)
+
 # scroll 0.2.10
 
 ## DE & composition panels
