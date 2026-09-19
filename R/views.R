@@ -118,11 +118,16 @@
 # to `cells$.gidx`), a v1 result on the barcode string (matched to `cells$cell`).
 # A cell absent from `values` => 0 (the store is sparse). Positional int match is
 # faster than the old string-hash join and also correct under app-bar subsets.
+# The per-cell join key matching a query result's `cell` column: barcodes for a v1
+# result (character `cell`), else the v2 global int index `.gidx` (or row order as a
+# last resort). One place so every join treats v1/v2 identically.
+.scroll_cell_key <- function(cells, values) {
+  if (is.character(values$cell)) cells$cell
+  else cells$.gidx %||% seq_len(nrow(cells))
+}
 .scroll_expr_vector <- function(cells, values) {
   if (is.null(values) || !nrow(values)) return(rep(0, nrow(cells)))
-  key <- if (is.character(values$cell)) cells$cell
-         else if (!is.null(cells$.gidx)) cells$.gidx else seq_len(nrow(cells))
-  expr <- values$value[match(key, values$cell)]
+  expr <- values$value[match(.scroll_cell_key(cells, values), values$cell)]
   expr[is.na(expr)] <- 0
   as.numeric(expr)
 }
@@ -708,8 +713,7 @@ view_feature_blend <- function(cells, params, values1, values2, state = list()) 
   nposM <- sumM
   if (!is.null(expr_long) && nrow(expr_long) > 0 && nk > 0) {
     e <- expr_long
-    key <- if (is.character(e$cell)) cells$cell         # v2 int .gidx / v1 barcode
-           else if (!is.null(cells$.gidx)) cells$.gidx else seq_len(nrow(cells))
+    key <- .scroll_cell_key(cells, e)                    # v2 int .gidx / v1 barcode
     gi <- match(gvec[match(e$cell, key)], groups)        # group index per expr row
     fi <- match(e$feature, features)                     # feature index per expr row
     ok <- !is.na(gi) & !is.na(fi)
@@ -727,10 +731,16 @@ view_feature_blend <- function(cells, params, values1, values2, state = list()) 
        n = ng, groups = groups)
 }
 
-# Per-gene (row) z-score across columns; constant rows -> 0 (matches DotPlot).
+# Per-gene (row) z-score across columns; constant/NA-sd rows -> 0 (matches DotPlot).
+# Vectorised so it always preserves the matrix shape + dimnames (an apply()-based
+# version collapses to a vector when ncol == 1, e.g. a single-level group column).
 .scroll_row_zscore <- function(M) {
-  t(apply(M, 1, function(x) { s <- stats::sd(x)
-    if (is.na(s) || s == 0) x * 0 else (x - mean(x)) / s }))
+  mu <- rowMeans(M)
+  s  <- sqrt(rowSums((M - mu)^2) / max(1L, ncol(M) - 1L))
+  bad <- is.na(s) | s == 0
+  Z <- (M - mu) / ifelse(bad, 1, s)
+  Z[bad, ] <- 0
+  Z
 }
 
 .scroll_dotplot_assemble <- function(cells, features, group_by, expr_long,
@@ -776,7 +786,7 @@ view_feature_blend <- function(cells, params, values1, values2, state = list()) 
 view_dotplot <- function(cells, params, expr_long, state = list(), assembly = NULL) {
   if (is.null(assembly)) {
     group_by <- .scroll_group_col(params, state)
-    if (is.null(group_by) || !group_by %in% names(cells))
+    if (!length(group_by) || !all(group_by %in% names(cells)))
       stop("dotplot needs a valid `group_by` metadata column.", call. = FALSE)
     assembly <- .scroll_dotplot_assemble(
       cells, unlist(params$features), group_by, expr_long,
@@ -802,7 +812,8 @@ view_dotplot <- function(cells, params, expr_long, state = list(), assembly = NU
   # aspect.ratio letterboxes the panel, which would detach the aplot trees, so
   # apply it only to the plain (untreed) dot plot; with dendrograms the composite
   # fills the fixed canvas.
-  if (is.null(hr) && is.null(hc)) p <- .scroll_apply_aspect(p, state$aspect %||% 1, state$theme)
+  p <- p + .scroll_ggtheme(state$theme)                    # global theme override always applies
+  if (is.null(hr) && is.null(hc)) p <- .scroll_apply_aspect(p, state$aspect %||% 1)  # aspect only when untreed
   .scroll_dotplot_trees(p, hr, hc)
 }
 
@@ -871,12 +882,16 @@ view_dotplot <- function(cells, params, expr_long, state = list(), assembly = NU
     } else ii
   })
   sub <- cells[idx, , drop = FALSE]; subg <- gvec[idx]   # sampled order
-  Mt <- vapply(features, function(f) {
-    v <- if (!is.null(expr_long) && nrow(expr_long))
-           expr_long[expr_long$feature == f, c("cell", "value"), drop = FALSE] else NULL
-    .scroll_expr_vector(sub, v)                          # dense, zero-filled, .gidx-joined
-  }, numeric(nrow(sub)))
-  M <- t(Mt); rownames(M) <- features
+  if (!nrow(sub)) stop("No cells in the current selection.", call. = FALSE)
+  # one O(nnz) scatter into a genes x cells matrix (absent => 0), instead of one
+  # full expr_long scan per gene; always a matrix even for a single cell/gene.
+  M <- matrix(0, length(features), nrow(sub), dimnames = list(features, NULL))
+  if (!is.null(expr_long) && nrow(expr_long)) {
+    fi <- match(expr_long$feature, features)
+    ci <- match(expr_long$cell, .scroll_cell_key(sub, expr_long))
+    ok <- !is.na(fi) & !is.na(ci)
+    M[cbind(fi[ok], ci[ok])] <- expr_long$value[ok]
+  }
   scaled <- identical(scale, "zscore")
   if (scaled) M <- .scroll_row_zscore(M)
   # order columns: group blocks, and WITHIN each block by PC1 of the expression
@@ -979,6 +994,7 @@ view_heatmap <- function(cells, params, expr_long, state = list(), assembly = NU
   clip <- .scroll_opt(params, state, "clip", 2.5)
   pal <- .scroll_opt(params, state, "palette", if (scaled) "RdBu" else "magma")
   legname <- if (scaled) "z-score" else if (identical(assembly$stat, "frac")) "% expr." else "mean expr."
+  showleg <- .scroll_opt(params, state, "legend", TRUE)
   lims <- if (scaled) c(-clip, clip) else NULL
   feats_lev <- rev(assembly$feature_order); n <- nrow(M)   # y = i corresponds to feats_lev[i]
   # "mark" a chosen subset of genes with side labels + elbow leaders; needs aplot,
@@ -1007,7 +1023,7 @@ view_heatmap <- function(cells, params, expr_long, state = list(), assembly = NU
       ggplot2::geom_raster() +
       fillscale + ggplot2::scale_x_continuous(expand = c(0, 0)) + yscale +
       ggplot2::labs(x = xlab, y = NULL) +
-      .scroll_base_theme(axis_text = TRUE) +
+      .scroll_base_theme(legend = showleg, axis_text = TRUE) +
       ggplot2::theme(axis.text.x = ggplot2::element_blank(),
                      axis.ticks.x = ggplot2::element_blank(),
                      panel.spacing.x = ggplot2::unit(1, "pt"),
@@ -1025,12 +1041,13 @@ view_heatmap <- function(cells, params, expr_long, state = list(), assembly = NU
     ggplot2::geom_tile(color = "white", linewidth = 0.2) +
     fillscale + ggplot2::scale_x_discrete(expand = c(0, 0)) + yscale +
     ggplot2::labs(x = glab, y = NULL) +
-    .scroll_base_theme(axis_text = TRUE, x_angle = 45) +
+    .scroll_base_theme(legend = showleg, axis_text = TRUE, x_angle = 45) +
     ggplot2::theme(panel.grid = ggplot2::element_blank()) + hide_y
+  p <- p + .scroll_ggtheme(state$theme)                    # global theme override always applies
   if (use_marks)
     return(aplot::insert_right(p, .scroll_heatmap_marks_panel(feats_lev, marks, n), width = 0.3))
   if (is.null(assembly$hr) && is.null(assembly$hc))
-    p <- .scroll_apply_aspect(p, state$aspect %||% 1, state$theme)
+    p <- .scroll_apply_aspect(p, state$aspect %||% 1)      # aspect only when no tree
   .scroll_hclust_trees(p, assembly$hr, assembly$hc)
 }
 
@@ -1095,8 +1112,9 @@ view_violin <- function(cells, params, values = NULL, state = list()) {
     psize  <- .scroll_opt(params, state, "point_size", 0.2)
     palpha <- .scroll_opt(params, state, "point_alpha", 0.3)
     pfrac  <- .scroll_opt(params, state, "point_frac", 1)        # subsample for a cleaner view
-    dfp <- if (pfrac < 1 && nrow(df) > 1)
-             df[sample.int(nrow(df), max(1L, round(nrow(df) * pfrac))), , drop = FALSE] else df
+    dfp <- if (pfrac < 1 && nrow(df) > 1)                        # fixed seed => stable across redraws/export
+             .scroll_with_seed(1L, df[sample.int(nrow(df), max(1L, round(nrow(df) * pfrac))), , drop = FALSE])
+           else df
     p <- p + if (has_split)
       ggplot2::geom_point(data = dfp, position = ggplot2::position_jitterdodge(
         jitter.width = 0.15, dodge.width = 0.9), size = psize, alpha = palpha, show.legend = FALSE)
@@ -1328,7 +1346,7 @@ view_biaxial <- function(cells, params, state = list(), df = NULL) {
 view_proportions <- function(cells, params, state = list()) {
   x <- params$group_by
   fill <- params$fill_by
-  for (col in c(x, fill)) if (is.null(col) || !col %in% names(cells))
+  if (!length(x) || !length(fill) || !all(c(x, fill) %in% names(cells)))
     stop("proportions needs `group_by` and `fill_by` metadata columns.",
          call. = FALSE)
   # multi-fill layout: "combine" (one interaction plot, default) vs facet the

@@ -30,8 +30,8 @@ test_that("scroll_preview_panel never strands the warm-up overlay", {
   # it would hang until the 60s JS failsafe. Copy the fixture so we don't mutate it.
   dir <- file.path(tempdir(), "scroll-preview-warm")
   if (dir.exists(dir)) unlink(dir, recursive = TRUE)
-  file.copy(subset_test_project(), tempdir(), recursive = TRUE)
-  file.rename(file.path(tempdir(), basename(subset_test_project())), dir)
+  dir.create(dir)                                 # copy the fixture's CONTENTS (never move it)
+  file.copy(list.files(subset_test_project(), full.names = TRUE), dir, recursive = TRUE)
   cfg <- yaml::read_yaml(file.path(dir, "config.yaml"))
   cfg$prewarm_views <- 3L                       # would gate the overlay on in scroll_app
   yaml::write_yaml(cfg, file.path(dir, "config.yaml"))

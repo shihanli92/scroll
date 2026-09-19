@@ -15,6 +15,19 @@
   now recomputes only on a **Compute** button (auto-rendering once on first view); gene/scale/
   order tweaks stage without recomputing, while palette/clip/legend/label/aspect stay live.
 
+## Robustness (code review)
+
+* Per-gene z-scoring (`.scroll_row_zscore`) is vectorised and shape-preserving — a single-level
+  group column (e.g. a one-cluster filter) no longer collapses the matrix and breaks the tiles.
+* The single-cell heatmap builds its genes x cells matrix in one O(nnz) scatter (was one full
+  expr scan per gene), errors clearly on an empty cell selection, and never mis-shapes on 1 cell.
+* The Heatmap **Legend** switch now works, and global right-rail **theme** overrides apply even
+  when a dendrogram or gene-mark panel is attached (previously silently dropped).
+* `view_dotplot` / `view_proportions` give a clear error (instead of an R length-coercion error)
+  when `group_by`/`fill_by` is missing or multi-column.
+* One shared `.scroll_cell_key()` for the v1/v2 join; violin jitter subsampling is now seeded
+  (stable across redraws and export).
+
 # scroll 0.2.13
 
 ## New: Heatmap panel

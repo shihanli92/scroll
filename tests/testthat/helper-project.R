@@ -34,18 +34,15 @@ make_test_object <- function(n = 120, seed = 1) {
 }
 
 test_project <- local({
-  cached <- NULL
+  # Rebuild whenever the build is missing (a manifest gone), not just on the first
+  # call -- another test can move/delete a shared fixture between calls.
   function() {
-    if (is.null(cached)) {
-      dir <- file.path(tempdir(), "scroll-test-proj")
-      if (!dir.exists(file.path(dir, "expr"))) {
-        suppressMessages(scroll_build(make_test_object(), dir,
-                                      assays = c("RNA", "ADT"), counts = TRUE,
-                                      overwrite = TRUE))
-      }
-      cached <<- dir
-    }
-    cached
+    dir <- file.path(tempdir(), "scroll-test-proj")
+    if (!file.exists(file.path(dir, "manifest.yaml")))
+      suppressMessages(scroll_build(make_test_object(), dir,
+                                    assays = c("RNA", "ADT"), counts = TRUE,
+                                    overwrite = TRUE))
+    dir
   }
 })
 
@@ -67,17 +64,13 @@ make_subset_object <- function(n = 120, seed = 1) {
 }
 
 subset_test_project <- local({
-  cached <- NULL
-  function() {
-    if (is.null(cached)) {
-      dir <- file.path(tempdir(), "scroll-subset-proj")
-      if (!dir.exists(file.path(dir, "expr")))
-        suppressMessages(scroll_build(make_subset_object(), dir, assays = "RNA",
-                                      meta_cols = c("condition", "celltype", "tsub", "tscore"),
-                                      overwrite = TRUE))
-      cached <<- dir
-    }
-    cached
+  function() {                                   # rebuild if missing (see test_project)
+    dir <- file.path(tempdir(), "scroll-subset-proj")
+    if (!file.exists(file.path(dir, "manifest.yaml")))
+      suppressMessages(scroll_build(make_subset_object(), dir, assays = "RNA",
+                                    meta_cols = c("condition", "celltype", "tsub", "tscore"),
+                                    overwrite = TRUE))
+    dir
   }
 })
 
