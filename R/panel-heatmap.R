@@ -68,43 +68,17 @@ heatmap_server <- function(id, data, cells_r = reactive(data$cells),
                            view_r = reactive(NULL), theme_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
-    # multi-select group-by, view-aware (like the Violin / Composition panels)
-    observeEvent(view_r(), {
-      cats_v <- .scroll_cat_cols(m, view_r())
-      sel <- intersect(input$group, cats_v)              # group-by is optional; keep it empty if cleared
-      updateSelectizeInput(session, "group",
-                           choices = stats::setNames(cats_v, cats_v), selected = sel)
-    }, ignoreNULL = FALSE)
+    # multi-select, view-aware group-by; optional (may stay empty for one block)
+    .scroll_bind_view_cats(input, session, view_r, m, "group",
+                           multiple = TRUE, allow_empty = TRUE)
     assay <- reactive(input$assay %||% m$default_assay)
     # default gene set: a project's `heatmap_markers:` (e.g. top variable genes)
     # when set, else the curated `markers:` shared with DotPlot.
     defaults <- intersect(unlist(data$config$heatmap_markers %||% data$config$markers),
                           .scroll_features_of(m, m$default_assay))
-    observeEvent(assay(), {
-      feats <- .scroll_features_of(m, assay())
-      cur <- isolate(input$markers) %||% defaults
-      updateSelectizeInput(session, "markers", choices = feats, server = TRUE,
-                           selected = intersect(cur, feats))
-    })
-    observeEvent(input$marker_paste, {                 # pasted delimited gene list
-      feats <- .scroll_features_of(m, assay())
-      parsed <- .scroll_parse_gene_list(input$marker_paste, feats)
-      req(length(parsed$ok) > 0 || length(parsed$missing) > 0)
-      sel <- unique(c(isolate(input$markers), parsed$ok))
-      updateSelectizeInput(session, "markers", choices = feats, server = TRUE, selected = sel)
-      if (length(parsed$missing))
-        showNotification(paste("Not in this assay:", paste(parsed$missing, collapse = ", ")),
-                         type = "warning", duration = 6)
-    })
-    observeEvent(input$markers, {
-      if (length(input$markers) > 150L)                  # heatmaps read many rows fine
-        showNotification(sprintf(
-          "%d genes selected - the heatmap may be slow to compute.",
-          length(input$markers)), type = "warning", duration = 5)
-      # the "Label genes" choices are the genes currently in the heatmap
-      updateSelectizeInput(session, "mark", choices = input$markers,
-                           selected = intersect(isolate(input$mark), input$markers))
-    }, ignoreNULL = FALSE)
+    .scroll_bind_gene_box(input, session, m, assay, "markers", paste_id = "marker_paste",
+                          defaults = defaults, warn_n = 150L, mark_id = "mark",
+                          warn_msg = "%d genes selected - the heatmap may be slow to compute.")
     # DATA reactive: query + subsample + assemble. scale/cluster/cap/order change the
     # matrix or ordering, so they are DATA inputs; palette/clip/legend are cosmetic.
     # Recompute trigger: bumped by Compute, and once automatically after the gene

@@ -130,36 +130,86 @@
 # `cols_fn(view)` to list the columns valid in that view (so scoped columns appear
 # only in their view). Preserves the current pick when still valid.
 .scroll_bind_view_cols <- function(input, session, view_r, cols_fn, ids,
-                                   prepend = NULL, default = NULL) {
+                                   prepend = NULL, default = NULL,
+                                   multiple = FALSE, allow_empty = FALSE) {
   observeEvent(view_r(), {
     cols <- cols_fn(view_r())
     for (id in ids) {
       cur <- input[[id]]
-      sel <- if (!is.null(cur) && cur %in% cols) cur
-             else if (!is.null(default) && default %in% cols) default
-             else if (!is.null(prepend)) unname(prepend)[[1]]
-             else if (length(cols)) cols[[1]] else NULL
-      updateSelectInput(session, id,
-                        choices = c(prepend, stats::setNames(cols, cols)),
-                        selected = sel)
+      if (multiple) {                                  # selectize interaction picker
+        sel <- intersect(cur, cols)
+        if (!length(sel) && !allow_empty && length(cols)) sel <- cols[[1]]
+        updateSelectizeInput(session, id,
+                             choices = stats::setNames(cols, cols), selected = sel)
+      } else {                                         # single selectInput (may prepend "None")
+        sel <- if (length(cur) == 1 && cur %in% cols) cur
+               else if (!is.null(default) && default %in% cols) default
+               else if (!is.null(prepend)) unname(prepend)[[1]]
+               else if (length(cols)) cols[[1]] else NULL
+        updateSelectInput(session, id,
+                          choices = c(prepend, stats::setNames(cols, cols)), selected = sel)
+      }
     }
   }, ignoreNULL = FALSE)
 }
 
 # Categorical / numeric view-aware selector binders (scoped columns surface only
-# in their own view).
+# in their own view). `multiple = TRUE` drives a selectize interaction picker
+# (keeping the still-valid subset of the pick); `allow_empty` lets it stay empty
+# rather than falling back to the first column.
 .scroll_bind_view_cats <- function(input, session, view_r, m, ids,
-                                   prepend = NULL, default = NULL)
+                                   prepend = NULL, default = NULL, ...)
   .scroll_bind_view_cols(input, session, view_r,
-                         function(v) .scroll_cat_cols(m, v), ids, prepend, default)
+                         function(v) .scroll_cat_cols(m, v), ids, prepend, default, ...)
 
 .scroll_bind_view_nums <- function(input, session, view_r, m, ids,
-                                   prepend = NULL, default = NULL)
+                                   prepend = NULL, default = NULL, ...)
   .scroll_bind_view_cols(input, session, view_r,
-                         function(v) .scroll_num_cols(m, v), ids, prepend, default)
+                         function(v) .scroll_num_cols(m, v), ids, prepend, default, ...)
 
 .scroll_default <- function(data, key, fallback) {
   data$config[[key]] %||% data$manifest[[key]] %||% fallback
+}
+
+# Wire a server-side, assay-aware gene selectize with the behaviours every gene box
+# shares, so the panels don't each hand-roll them:
+#  - repopulate for the active assay, keeping the still-valid current pick (or
+#    `defaults` when nothing is selected yet);
+#  - accept a pasted, delimited gene list when `paste_id` is given (case-insensitive
+#    match, unknown tokens reported);
+#  - when `warn_n`/`mark_id` are given, warn past `warn_n` genes (via the `warn_msg`
+#    sprintf template) and mirror the current pick into a `mark_id` "Label genes"
+#    selectize.
+# `assay_r` is the active-assay reactive; `m` the manifest.
+.scroll_bind_gene_box <- function(input, session, m, assay_r, id,
+                                  paste_id = NULL, defaults = NULL,
+                                  warn_n = NULL, warn_msg = NULL, mark_id = NULL) {
+  observeEvent(assay_r(), {
+    feats <- .scroll_features_of(m, assay_r())
+    cur <- isolate(input[[id]]) %||% defaults
+    updateSelectizeInput(session, id, choices = feats, server = TRUE,
+                         selected = intersect(cur, feats))
+  })
+  if (!is.null(paste_id))
+    observeEvent(input[[paste_id]], {
+      feats <- .scroll_features_of(m, assay_r())
+      parsed <- .scroll_parse_gene_list(input[[paste_id]], feats)
+      req(length(parsed$ok) > 0 || length(parsed$missing) > 0)
+      sel <- unique(c(isolate(input[[id]]), parsed$ok))
+      updateSelectizeInput(session, id, choices = feats, server = TRUE, selected = sel)
+      if (length(parsed$missing))
+        showNotification(paste("Not in this assay:", paste(parsed$missing, collapse = ", ")),
+                         type = "warning", duration = 6)
+    })
+  if (!is.null(warn_n) || !is.null(mark_id))
+    observeEvent(input[[id]], {
+      if (!is.null(warn_n) && length(input[[id]]) > warn_n)
+        showNotification(sprintf(warn_msg %||% "%d genes selected - this may be slow to compute.",
+                                 length(input[[id]])), type = "warning", duration = 5)
+      if (!is.null(mark_id))                            # mirror the pick into "Label genes"
+        updateSelectizeInput(session, mark_id, choices = input[[id]],
+                             selected = intersect(isolate(input[[mark_id]]), input[[id]]))
+    }, ignoreNULL = FALSE)
 }
 
 # Per-level colour pickers for the "Manual" palette, shared by the categorical

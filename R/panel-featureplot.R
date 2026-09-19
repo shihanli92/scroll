@@ -68,14 +68,7 @@ featureplot_server <- function(id, data, cells_r = reactive(data$cells),
     }, ignoreNULL = FALSE, priority = 100)
     observeEvent(input$reduction, red_rv(input$reduction), ignoreInit = TRUE)
     .scroll_bind_view_cats(input, session, view_r, m, "split", prepend = c("None" = ""))
-    # repopulate the gene list for the active assay; drop a selection that does
-    # not exist in the newly chosen assay (else it silently queries empty)
-    observeEvent(assay(), {
-      feats <- .scroll_features_of(m, assay())
-      cur <- isolate(input$feature)                 # keep selections valid in the new assay
-      updateSelectizeInput(session, "feature", choices = feats, server = TRUE,
-                           selected = intersect(cur, feats))
-    })
+    .scroll_bind_gene_box(input, session, m, assay, "feature")   # assay-aware gene list
     # DATA reactive: cells + the (cached) expression query. Cosmetic drags do not
     # invalidate it, so they never re-hit the store.
     data_r <- reactive({

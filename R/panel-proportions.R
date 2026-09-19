@@ -54,15 +54,8 @@ proportions_server <- function(id, data, cells_r = reactive(data$cells),
                                view_r = reactive(NULL), theme_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
-    .scroll_bind_view_cats(input, session, view_r, m, "group")   # single-select x
-    # Fill by is multi-select (interaction), so bind it like DimPlot's colour-by:
-    # keep the in-view categorical columns, defaulting to the first if none survive.
-    observeEvent(view_r(), {
-      cats_v <- .scroll_cat_cols(m, view_r())
-      sel <- intersect(input$fill, cats_v); if (!length(sel) && length(cats_v)) sel <- cats_v[[1]]
-      updateSelectizeInput(session, "fill",
-                           choices = stats::setNames(cats_v, cats_v), selected = sel)
-    }, ignoreNULL = FALSE)
+    .scroll_bind_view_cats(input, session, view_r, m, "group")                  # single-select x
+    .scroll_bind_view_cats(input, session, view_r, m, "fill", multiple = TRUE)  # multi-select interaction
     # per-fill color pickers when the palette is "Manual": levels of the (possibly
     # composite) Fill-by, computed on the active cells for >1 column.
     lvl_r <- reactive({ req(input$fill)

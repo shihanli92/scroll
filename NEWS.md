@@ -27,6 +27,12 @@
   when `group_by`/`fill_by` is missing or multi-column.
 * One shared `.scroll_cell_key()` for the v1/v2 join; violin jitter subsampling is now seeded
   (stable across redraws and export).
+* Stacked violins now join expression through the global cell index, so they stay correct under
+  an app-bar subset/filter (previously the v2 join could misalign).
+* Internal: the gene-box observers (assay repopulate + paste-list + long-list warning) and the
+  view-aware multi-select binders are factored into `.scroll_bind_gene_box()` /
+  `.scroll_bind_view_cats(multiple=)`, and the two violin views share `.scroll_violin_base()` /
+  `.scroll_violin_fill()` — ~50 fewer lines across the panels, one place per behaviour.
 
 # scroll 0.2.13
 

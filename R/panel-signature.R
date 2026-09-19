@@ -67,24 +67,8 @@ signature_server <- function(id, data, cells_r = reactive(data$cells),
     }, ignoreNULL = FALSE, priority = 100)
     observeEvent(input$reduction, red_rv(input$reduction), ignoreInit = TRUE)
     .scroll_bind_view_cats(input, session, view_r, m, "group")
-    # keep the gene list valid for the active assay
-    observeEvent(assay(), {
-      feats <- .scroll_features_of(m, assay())
-      updateSelectizeInput(session, "sig", choices = feats, server = TRUE,
-                           selected = intersect(isolate(input$sig), feats))
-    })
-    # a delimited list pasted into the gene box (see .scroll_paste_handler) is parsed,
-    # case-insensitively matched, added to the selection, and unknown tokens reported.
-    observeEvent(input$sig_paste, {
-      feats <- .scroll_features_of(m, assay())
-      parsed <- .scroll_parse_gene_list(input$sig_paste, feats)
-      req(length(parsed$ok) > 0 || length(parsed$missing) > 0)
-      sel <- unique(c(isolate(input$sig), parsed$ok))
-      updateSelectizeInput(session, "sig", choices = feats, server = TRUE, selected = sel)
-      if (length(parsed$missing))
-        showNotification(paste("Not in this assay:", paste(parsed$missing, collapse = ", ")),
-                         type = "warning", duration = 6)
-    })
+    # assay-aware gene list + pasted delimited gene list
+    .scroll_bind_gene_box(input, session, m, assay, "sig", paste_id = "sig_paste")
     # Query the signature genes and build the per-cell score only when Calculate is
     # clicked (the score -- especially AddModuleScore's full-store scan -- shouldn't
     # recompute on every keystroke). The view / embedding / group / palette are applied

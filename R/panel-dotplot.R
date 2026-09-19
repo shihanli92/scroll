@@ -83,37 +83,11 @@ dotplot_server <- function(id, data, cells_r = reactive(data$cells),
     .scroll_bind_view_cats(input, session, view_r, m, "group")
     assay <- reactive(input$assay %||% m$default_assay)
     defaults <- intersect(unlist(data$config$markers), .scroll_features_of(m, m$default_assay))
-    # repopulate markers for the active assay, keeping only those present in it
-    observeEvent(assay(), {
-      feats <- .scroll_features_of(m, assay())
-      cur <- isolate(input$markers) %||% defaults
-      updateSelectizeInput(session, "markers", choices = feats, server = TRUE,
-                           selected = intersect(cur, feats))
-    })
-    # a delimited list pasted into the marker box (see .scroll_paste_handler) is
-    # parsed and added to the current selection, in pasted order. Unknown symbols
-    # are matched case-insensitively, then reported.
-    observeEvent(input$marker_paste, {
-      feats <- .scroll_features_of(m, assay())
-      parsed <- .scroll_parse_gene_list(input$marker_paste, feats)
-      req(length(parsed$ok) > 0 || length(parsed$missing) > 0)
-      sel <- unique(c(isolate(input$markers), parsed$ok))
-      updateSelectizeInput(session, "markers", choices = feats, server = TRUE, selected = sel)
-      if (length(parsed$missing))
-        showNotification(paste("Not in this assay:", paste(parsed$missing, collapse = ", ")),
-                         type = "warning", duration = 6)
-    })
-    # a very long gene list still renders, but warn that it will be slow / cramped
-    observeEvent(input$markers, {
-      n <- length(input$markers)
-      if (n > .SCROLL_DOTPLOT_WARN)
-        showNotification(sprintf(
-          "%d genes selected - the dot plot may be slow to compute and hard to read.", n),
-          type = "warning", duration = 5)
-      # "Label genes" (heatmap-tiles marks) choices track the displayed genes
-      updateSelectizeInput(session, "mark", choices = input$markers,
-                           selected = intersect(isolate(input$mark), input$markers))
-    }, ignoreNULL = FALSE)
+    # assay-repopulate + pasted gene list + long-list warning, and mirror the pick
+    # into the "Label genes" (heatmap-tiles marks) selectize.
+    .scroll_bind_gene_box(input, session, m, assay, "markers", paste_id = "marker_paste",
+                          defaults = defaults, warn_n = .SCROLL_DOTPLOT_WARN, mark_id = "mark",
+                          warn_msg = "%d genes selected - the dot plot may be slow to compute and hard to read.")
     # DATA reactive: query + aggregation + hclust. `scale` and `cluster` change
     # the aggregation/clustering, so they are DATA inputs (not cosmetic); palette
     # and dot size are cosmetic. No rasterization (dots = features x groups).

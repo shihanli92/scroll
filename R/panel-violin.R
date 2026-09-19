@@ -58,38 +58,14 @@ violin_server <- function(id, data, cells_r = reactive(data$cells),
                           view_r = reactive(NULL), theme_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
-    # Group by is multi-select (interaction) -> bind it like DimPlot colour-by;
-    # Split by is single-select and view-aware via the shared binder.
-    observeEvent(view_r(), {
-      cats_v <- .scroll_cat_cols(m, view_r())
-      sel <- intersect(input$group, cats_v); if (!length(sel) && length(cats_v)) sel <- cats_v[[1]]
-      updateSelectizeInput(session, "group",
-                           choices = stats::setNames(cats_v, cats_v), selected = sel)
-    }, ignoreNULL = FALSE)
+    # Group by is multi-select (interaction); Split by is single-select. Both view-aware.
+    .scroll_bind_view_cats(input, session, view_r, m, "group", multiple = TRUE)
     .scroll_bind_view_cats(input, session, view_r, m, "split", prepend = c("None" = ""))
     # numeric-column picker (Metadata mode) is view-aware too, so scoped numeric
     # columns (e.g. module scores) surface only in the view where they're defined
     if (length(.scroll_num_cols(m))) .scroll_bind_view_nums(input, session, view_r, m, "metacol")
     assay <- reactive(input$assay %||% m$default_assay)
-    # repopulate the gene list for the active assay; drop a selection that does
-    # not exist in the newly chosen assay (else it silently queries empty)
-    observeEvent(assay(), {
-      feats <- .scroll_features_of(m, assay())
-      cur <- isolate(input$feature)
-      updateSelectizeInput(session, "feature", choices = feats, server = TRUE,
-                           selected = intersect(cur, feats))
-    })
-    # a delimited gene list pasted into the gene box (see .scroll_paste_handler)
-    observeEvent(input$feature_paste, {
-      feats <- .scroll_features_of(m, assay())
-      parsed <- .scroll_parse_gene_list(input$feature_paste, feats)
-      req(length(parsed$ok) > 0 || length(parsed$missing) > 0)
-      sel <- unique(c(isolate(input$feature), parsed$ok))
-      updateSelectizeInput(session, "feature", choices = feats, server = TRUE, selected = sel)
-      if (length(parsed$missing))
-        showNotification(paste("Not in this assay:", paste(parsed$missing, collapse = ", ")),
-                         type = "warning", duration = 6)
-    })
+    .scroll_bind_gene_box(input, session, m, assay, "feature", paste_id = "feature_paste")
     # per-group color pickers when the palette is "Manual": levels of the fill
     # variable -- the split column when splitting, else the (possibly composite) group.
     lvl_r <- reactive({ req(input$group)
