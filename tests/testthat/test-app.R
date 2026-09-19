@@ -89,13 +89,25 @@ test_that("violin_server and proportions_server render from controls", {
                       normalize = TRUE, legend = TRUE)
     expect_false(is.null(output$plot))
   })
+  # Heatmap panel is single-cell (genes x subsampled cells) only; assembly is
+  # gated on Compute (auto-fires once), so data-input changes need a Compute click.
   shiny::testServer(scroll:::heatmap_server, args = list(data = data), {
-    session$setInputs(markers = c("CD3D", "CD8A"), group = "celltype", mode = "groups",
-                      stat = "mean", scale = TRUE, clip = 2.5, cluster = "off",
-                      palette = "RdBu", legend = TRUE, aspect = 1)
+    session$setInputs(markers = c("CD3D", "CD8A"), group = "celltype", scale = TRUE,
+                      clip = 2.5, cluster = "off", cellcap = 40, cellorder = "group",
+                      palette = "RdBu", legend = TRUE, aspect = 1, compute = 1)
     expect_true(inherits(plot_r(), c("ggplot", "aplot")))
     expect_s3_class(csv_r(), "data.frame")
-    session$setInputs(mode = "cells", cellcap = 40)     # single-cell mode
+    session$setInputs(cellorder = "pc1", compute = 2)    # recompute with PC1 ordering
+    expect_true(inherits(plot_r(), c("ggplot", "aplot")))
+    session$setInputs(group = character(0), compute = 3) # ungrouped (one block)
+    expect_true(inherits(plot_r(), c("ggplot", "aplot")))
+  })
+  # DotPlot's Heatmap-tiles display renders the aggregated genes x groups heatmap
+  shiny::testServer(scroll:::dotplot_server, args = list(data = data), {
+    session$setInputs(markers = c("CD3D", "CD8A"), group = "celltype", display = "tiles",
+                      scale = TRUE, clip = 2.5, cluster = "off", palette = "RdBu", aspect = 1)
+    expect_true(inherits(plot_r(), c("ggplot", "aplot")))
+    session$setInputs(display = "dots", dotrange = c(1, 6))
     expect_true(inherits(plot_r(), c("ggplot", "aplot")))
   })
 })

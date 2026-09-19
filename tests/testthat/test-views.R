@@ -237,6 +237,18 @@ test_that("heatmap aggregator matches the old aggregate path; view renders", {
   expect_setequal(names(src), c("feature", "group", "avg_expr", "pct_expressing", "n_cells"))
 })
 
+test_that("heatmap marks a gene subset with a right-side leader panel", {
+  skip_if_not_installed("aplot")
+  data <- scroll:::.scroll_load(test_project()); on.exit(scroll_disconnect(data$con))
+  feats <- c("CD3D", "CD8A", "MS4A1", "NKG7", "GNLY", "CD14"); vl <- data$queryN("RNA", feats)
+  p <- view_heatmap(data$cells, list(features = feats, group_by = "celltype"), vl,
+                    state = list(scale = "zscore", mark_genes = c("CD3D", "GNLY")))
+  expect_s3_class(p, "aplot")                       # main heatmap + right mark panel
+  # the marks panel: unknown genes dropped, a ggplot returned
+  mk <- scroll:::.scroll_heatmap_marks_panel(rev(feats), c("GNLY", "CD3D", "NOPE"), length(feats))
+  expect_s3_class(mk, "ggplot")
+})
+
 test_that("heatmap cells mode subsamples to the cap and rasters", {
   data <- scroll:::.scroll_load(test_project()); on.exit(scroll_disconnect(data$con))
   feats <- c("CD3D", "CD8A")
@@ -249,6 +261,24 @@ test_that("heatmap cells mode subsamples to the cap and rasters", {
                     state = list(), assembly = a)
   expect_s3_class(p, "ggplot")
   expect_true("GeomRaster" %in% vapply(p$layers, function(l) class(l$geom)[1], character(1)))
+})
+
+test_that("heatmap cells mode is ungroupable and orders by a column", {
+  data <- scroll:::.scroll_load(test_project()); on.exit(scroll_disconnect(data$con))
+  feats <- c("CD3D", "CD8A"); vl <- data$queryN("RNA", feats)
+  # no group -> one block over ALL cells, group_by NULL, and no facet in the plot
+  a <- scroll:::.scroll_heatmap_cells_assemble(data$cells, feats, NULL, vl, cap = 1e6)
+  expect_null(a$group_by)
+  expect_equal(a$n_total, nrow(data$cells))
+  p <- view_heatmap(data$cells, list(features = feats), NULL, state = list(), assembly = a)
+  expect_s3_class(p, "ggplot")
+  expect_false(inherits(p$facet, "FacetGrid"))                 # ungrouped -> not faceted
+  # ordering by a metadata column runs and yields a valid genes x cells assembly
+  ac <- scroll:::.scroll_heatmap_cells_assemble(data$cells, feats, NULL, vl, cap = 1e6,
+          cell_order = "column", order_col = "celltype")
+  expect_equal(ncol(ac$M), nrow(data$cells))
+  expect_s3_class(view_heatmap(data$cells, list(features = feats), NULL,
+                               state = list(), assembly = ac), "ggplot")
 })
 
 test_that("de_table returns a data.frame (and a message when absent)", {

@@ -699,7 +699,9 @@ view_feature_blend <- function(cells, params, values1, values2, state = list()) 
 # are 0 (the sparse-store convention). Returns raw `sum`/`npos` and derived
 # `mean`/`frac` matrices (features x groups) plus per-group sizes `n` and `groups`.
 .scroll_group_expr_matrix <- function(cells, features, group_by, expr_long) {
-  gvec <- .scroll_combo_levels(cells, group_by)         # per-cell group label (NA-aware)
+  gvec <- if (length(group_by)) .scroll_combo_levels(cells, group_by)  # per-cell group (NA-aware)
+          else rep("all", nrow(cells))                 # ungrouped: one block
+
   ng <- table(gvec)                                     # cells per group (drops NA)
   groups <- names(ng); nf <- length(features); nk <- length(groups)
   sumM  <- matrix(0, nf, nk, dimnames = list(features, groups))
@@ -855,8 +857,10 @@ view_dotplot <- function(cells, params, expr_long, state = list(), assembly = NU
 # is materialised.
 .scroll_heatmap_cells_assemble <- function(cells, features, group_by, expr_long,
                                            scale = "zscore", cluster = "off",
-                                           cap = 5000, seed = 1, cell_order = "group") {
-  gvec <- .scroll_combo_levels(cells, group_by)
+                                           cap = 5000, seed = 1, cell_order = "group",
+                                           order_col = NULL) {
+  grouped <- length(group_by) > 0                        # group-by is optional (one block)
+  gvec <- if (grouped) .scroll_combo_levels(cells, group_by) else rep("all", nrow(cells))
   ii <- which(!is.na(gvec)); ntot <- length(ii)
   idx <- .scroll_with_seed(seed, {
     if (ntot > cap) {                                   # proportional per-group sample
@@ -875,19 +879,61 @@ view_dotplot <- function(cells, params, expr_long, state = list(), assembly = NU
   M <- t(Mt); rownames(M) <- features
   scaled <- identical(scale, "zscore")
   if (scaled) M <- .scroll_row_zscore(M)
-  # order columns: group blocks, and (optionally) by PC1 of the expression matrix
-  # WITHIN each group so like cells sit together -- a cheap 1-D order, no tree.
+  # order columns: group blocks, and WITHIN each block by PC1 of the expression
+  # matrix, or by a chosen metadata column -- a cheap 1-D order, no tree.
   ord <- if (identical(cell_order, "pc1") && nrow(M) >= 2 && ncol(M) >= 3) {
     pc <- tryCatch(stats::prcomp(t(M))$x[, 1], error = function(e) numeric(ncol(M)))
     order(subg, pc)
+  } else if (identical(cell_order, "column") && length(order_col) == 1 &&
+             order_col %in% names(sub)) {
+    order(subg, sub[[order_col]])                        # numeric sorts numerically
   } else order(subg)
   M <- M[, ord, drop = FALSE]; subg <- subg[ord]
   hr <- if (cluster %in% c("rows", "both") && nrow(M) > 2) stats::hclust(stats::dist(M))
   feature_order <- if (!is.null(hr)) rownames(M)[hr$order] else rownames(M)
   cm <- data.frame(column = seq_len(ncol(M)), group = subg, n = 1L, stringsAsFactors = FALSE)
   list(M = M, agg = NULL, hr = hr, hc = NULL, feature_order = feature_order,
-       col_meta = cm, group_by = group_by, scaled = scaled, stat = "mean",
-       mode = "cells", n_cells = length(idx), n_total = ntot)
+       col_meta = cm, group_by = if (grouped) group_by else NULL, scaled = scaled,
+       stat = "mean", mode = "cells", n_cells = length(idx), n_total = ntot)
+}
+
+# Right-side "mark" panel (ComplexHeatmap anno_mark style): label a chosen subset
+# of gene rows with evenly-spaced labels connected to their true row by an elbow
+# leader (out -> diagonal -> in). Continuous y in [0.5, n+0.5] so it aligns to a
+# continuous-y heatmap via aplot::insert_right. `feats_lev` is bottom->top order.
+.scroll_heatmap_marks_panel <- function(feats_lev, marks, n) {
+  yt <- match(marks, feats_lev); keep <- !is.na(yt)
+  marks <- marks[keep]; yt <- yt[keep]
+  if (!length(marks)) return(NULL)
+  o <- order(yt); marks <- marks[o]; yt <- yt[o]
+  # Each label sits at its true gene row, nudged apart only enough to keep ~1.2x
+  # a text line between neighbours (min-gap placement, like ComplexHeatmap's
+  # anno_mark) — so the leader elbows stay short and near-horizontal instead of
+  # fanning across the whole panel. `sep` is that gap in row units, scaled to n
+  # because a fixed-point font spans more rows on a taller (more-gene) heatmap.
+  sep <- max(0.9, 0.02 * n)
+  ytar <- yt; k <- length(ytar)
+  if (k > 1) {
+    for (i in 2:k) ytar[i] <- max(ytar[i], ytar[i - 1] + sep)   # push up to hold the gap
+    excess <- ytar[k] - n
+    if (excess > 0) {                                           # ran off the top: relax downward
+      ytar <- ytar - excess
+      for (i in (k - 1):1) ytar[i] <- min(ytar[i], ytar[i + 1] - sep)
+    }
+  }
+  seg <- do.call(rbind, lapply(seq_len(k), function(i) data.frame(
+    x = c(0, 0.2, 0.6), xend = c(0.2, 0.6, 0.8),
+    y = c(yt[i], yt[i], ytar[i]), yend = c(yt[i], ytar[i], ytar[i]))))
+  ggplot2::ggplot() +
+    ggplot2::geom_segment(data = seg, ggplot2::aes(x = .data$x, y = .data$y,
+                          xend = .data$xend, yend = .data$yend),
+                          linewidth = 0.3, color = "grey45") +
+    ggplot2::geom_text(data = data.frame(y = ytar, l = marks),
+                       ggplot2::aes(x = 0.9, y = .data$y, label = .data$l),
+                       hjust = 0, size = 3) +
+    ggplot2::scale_x_continuous(limits = c(0, 3), expand = c(0, 0)) +
+    ggplot2::scale_y_continuous(limits = c(0.5, n + 0.5), expand = c(0, 0)) +
+    ggplot2::theme_void()
 }
 
 #' Expression heatmap across groups (or subsampled cells)
@@ -909,16 +955,20 @@ view_dotplot <- function(cells, params, expr_long, state = list(), assembly = NU
 view_heatmap <- function(cells, params, expr_long, state = list(), assembly = NULL) {
   if (is.null(assembly)) {
     group_by <- .scroll_group_col(params, state)
-    if (is.null(group_by) || !all(group_by %in% names(cells)))
-      stop("heatmap needs a valid `group_by` metadata column.", call. = FALSE)
     feats <- unlist(params$features)
     mode <- .scroll_opt(params, state, "mode", "groups")
+    # groups mode needs a group column; cells mode may draw one ungrouped block
+    if (length(group_by) && !all(group_by %in% names(cells)))
+      stop("heatmap `group_by` names a column not in the data.", call. = FALSE)
+    if (!identical(mode, "cells") && !length(group_by))
+      stop("heatmap needs a valid `group_by` metadata column.", call. = FALSE)
     assembly <- if (identical(mode, "cells"))
       .scroll_heatmap_cells_assemble(cells, feats, group_by, expr_long,
         scale = .scroll_opt(params, state, "scale", "zscore"),
         cluster = .scroll_opt(params, state, "cluster", "off"),
         cap = .scroll_opt(params, state, "cell_cap", 5000),
-        cell_order = .scroll_opt(params, state, "cell_order", "group"))
+        cell_order = .scroll_opt(params, state, "cell_order", "group"),
+        order_col = .scroll_opt(params, state, "order_col", NULL))
     else .scroll_heatmap_assemble(cells, feats, group_by, expr_long,
         stat = .scroll_opt(params, state, "stat", "mean"),
         scale = .scroll_opt(params, state, "scale", "zscore"),
@@ -930,38 +980,55 @@ view_heatmap <- function(cells, params, expr_long, state = list(), assembly = NU
   pal <- .scroll_opt(params, state, "palette", if (scaled) "RdBu" else "magma")
   legname <- if (scaled) "z-score" else if (identical(assembly$stat, "frac")) "% expr." else "mean expr."
   lims <- if (scaled) c(-clip, clip) else NULL
+  feats_lev <- rev(assembly$feature_order); n <- nrow(M)   # y = i corresponds to feats_lev[i]
+  # "mark" a chosen subset of genes with side labels + elbow leaders; needs aplot,
+  # a continuous gene axis (to align), and no dendrogram.
+  marks <- intersect(.scroll_opt(params, state, "mark_genes", character(0)), feats_lev)
+  use_marks <- length(marks) > 0 && requireNamespace("aplot", quietly = TRUE)
+  show_ylab <- n <= 60 && !use_marks                        # dense/marked -> hide row labels
   long <- data.frame(feature = rownames(M)[as.vector(row(M))], col = as.vector(col(M)),
                      value = as.numeric(M), stringsAsFactors = FALSE)
-  long$feature <- factor(long$feature, levels = rev(assembly$feature_order))
+  long$yn <- match(long$feature, feats_lev)                 # numeric row position
+  long$feature <- factor(long$feature, levels = feats_lev)
+  ycol <- if (use_marks) "yn" else "feature"
+  yscale <- if (use_marks) ggplot2::scale_y_continuous(limits = c(0.5, n + 0.5), expand = c(0, 0))
+            else ggplot2::scale_y_discrete(expand = c(0, 0))
+  hide_y <- if (!show_ylab) ggplot2::theme(axis.text.y = ggplot2::element_blank(),
+                                           axis.ticks.y = ggplot2::element_blank())
   fillscale <- .scroll_continuous_scale(pal, legname, lims, aesthetic = "fill")
 
   if (identical(assembly$mode, "cells")) {
+    grouped <- length(assembly$group_by) > 0             # group-by is optional
     long$group <- factor(cm$group[long$col], levels = unique(cm$group))
-    p <- ggplot2::ggplot(long, ggplot2::aes(x = .data$col, y = .data$feature, fill = .data$value)) +
-      ggplot2::geom_raster() +
-      ggplot2::facet_grid(cols = ggplot2::vars(.data$group), scales = "free_x",
-                          space = "free_x", switch = "x") +
-      fillscale + ggplot2::scale_x_continuous(expand = c(0, 0)) +
-      ggplot2::labs(x = sprintf("%s  (%s of %s cells shown)", glab,
+    xlab <- sprintf("%s%s of %s cells shown)", if (grouped) paste0(glab, "  (") else "(",
                     format(assembly$n_cells, big.mark = ","),
-                    format(assembly$n_total, big.mark = ",")), y = NULL) +
+                    format(assembly$n_total, big.mark = ","))
+    p <- ggplot2::ggplot(long, ggplot2::aes(x = .data$col, y = .data[[ycol]], fill = .data$value)) +
+      ggplot2::geom_raster() +
+      fillscale + ggplot2::scale_x_continuous(expand = c(0, 0)) + yscale +
+      ggplot2::labs(x = xlab, y = NULL) +
       .scroll_base_theme(axis_text = TRUE) +
       ggplot2::theme(axis.text.x = ggplot2::element_blank(),
                      axis.ticks.x = ggplot2::element_blank(),
                      panel.spacing.x = ggplot2::unit(1, "pt"),
-                     strip.placement = "outside")
-    p <- p + .scroll_ggtheme(state$theme)
-    # row (gene) dendrogram only -- cells are never clustered (O(n^2) at scale)
-    return(.scroll_hclust_trees(p, assembly$hr, NULL))
+                     strip.placement = "outside") + hide_y + .scroll_ggtheme(state$theme)
+    if (grouped)
+      p <- p + ggplot2::facet_grid(cols = ggplot2::vars(.data$group), scales = "free_x",
+                                   space = "free_x", switch = "x")
+    if (use_marks)
+      return(aplot::insert_right(p, .scroll_heatmap_marks_panel(feats_lev, marks, n), width = 0.3))
+    return(.scroll_hclust_trees(p, assembly$hr, NULL))     # gene dendrogram only
   }
-  # aggregated: discrete group x-axis, optional dendrograms
+  # aggregated: discrete group x-axis, optional dendrograms (or mark panel)
   long$x <- factor(cm$column[long$col], levels = cm$column)
-  p <- ggplot2::ggplot(long, ggplot2::aes(x = .data$x, y = .data$feature, fill = .data$value)) +
+  p <- ggplot2::ggplot(long, ggplot2::aes(x = .data$x, y = .data[[ycol]], fill = .data$value)) +
     ggplot2::geom_tile(color = "white", linewidth = 0.2) +
-    fillscale + ggplot2::scale_x_discrete(expand = c(0, 0)) +
+    fillscale + ggplot2::scale_x_discrete(expand = c(0, 0)) + yscale +
     ggplot2::labs(x = glab, y = NULL) +
     .scroll_base_theme(axis_text = TRUE, x_angle = 45) +
-    ggplot2::theme(panel.grid = ggplot2::element_blank())
+    ggplot2::theme(panel.grid = ggplot2::element_blank()) + hide_y
+  if (use_marks)
+    return(aplot::insert_right(p, .scroll_heatmap_marks_panel(feats_lev, marks, n), width = 0.3))
   if (is.null(assembly$hr) && is.null(assembly$hc))
     p <- .scroll_apply_aspect(p, state$aspect %||% 1, state$theme)
   .scroll_hclust_trees(p, assembly$hr, assembly$hc)

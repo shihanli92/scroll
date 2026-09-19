@@ -1,3 +1,20 @@
+# scroll 0.2.14
+
+## Heatmap & DotPlot
+
+* **Grouped/aggregated heatmap is now a DotPlot display.** The DotPlot panel's **Display** toggle
+  draws the same genes x groups data as dots or as heatmap **tiles**; the standalone **Heatmap**
+  panel is single-cell (genes x a subsample of individual cells) only.
+* **Mark a subset of genes with leader lines.** On dense heatmaps (row labels auto-hide past ~60
+  genes), a **Label genes** control draws ComplexHeatmap `anno_mark`-style elbow leaders on the
+  right of both the DotPlot-tiles and single-cell heatmaps. Labels sit at their true gene row and
+  are nudged apart only enough to avoid overlap, so the leaders stay short.
+* **Group-by is optional** on the single-cell heatmap — leave it empty for one ungrouped block.
+* **Cell ordering by a metadata column**, in addition to grouped and PC1 orderings.
+* **Compute-gated assembly.** The single-cell heatmap's expensive step (query + subsample + PC1)
+  now recomputes only on a **Compute** button (auto-rendering once on first view); gene/scale/
+  order tweaks stage without recomputing, while palette/clip/legend/label/aspect stay live.
+
 # scroll 0.2.13
 
 ## New: Heatmap panel
