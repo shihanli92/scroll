@@ -53,7 +53,7 @@ de_ui <- function(id, data) {
                 .scroll_size_slider(ns),
                 .scroll_dl_button(ns("png"), "PNG"),
                 .scroll_dl_button(ns("pdf"), "PDF")),
-            .scroll_spin(plotOutput(ns("plot"), height = "520px")))))
+            .scroll_spin(plotOutput(ns("plot"), height = .SCROLL_PLOT_H)))))
   )
 }
 

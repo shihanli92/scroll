@@ -269,7 +269,12 @@
                                 "this.nextElementSibling.textContent=this.value+'\u00d7';")),
     tags$span(class = "scroll-size-val", "1\u00d7"))
 
-.scroll_plot_area <- function(ns, height = "460px", csv = FALSE)
+# Default plot height: viewport-relative so plots fill the card and re-render on
+# window resize (offset ~= app bar + card header + plot bar). The control column
+# is capped to scroll (styles.R), so it never out-heights the plot.
+.SCROLL_PLOT_H <- "calc(100vh - 190px)"
+
+.scroll_plot_area <- function(ns, height = .SCROLL_PLOT_H, csv = FALSE)
   div(class = "scroll-plot",
       div(class = "scroll-plot-bar",
           .scroll_size_slider(ns),

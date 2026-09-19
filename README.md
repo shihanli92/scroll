@@ -9,7 +9,7 @@
 
 `scroll` turns a processed Seurat object into a polished, interactive web
 explorer — a scrolling page of analysis panels (DimPlot, FeaturePlot, Signature,
-Biaxial, DotPlot, Violin, Proportions, DE, Pseudobulk DE), each with its own fine-grained
+Biaxial, DotPlot, Heatmap, Violin, Proportions, DE, Pseudobulk DE), each with its own fine-grained
 controls. A heavy offline **build phase** extracts lightweight on-disk artifacts;
 the **runtime** (a bslib Shiny app) reads only those, querying expression one
 feature at a time via arrow — so runtime memory stays flat regardless of dataset

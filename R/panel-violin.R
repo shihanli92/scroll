@@ -50,7 +50,7 @@ violin_ui <- function(id, data) {
           sliderInput(ns("pfrac"), "Subsample points (%)", 1, 100, 100, 1))),
       .scroll_group("Layout", .scroll_aspect_input(ns))
     ),
-    .scroll_plot_area(ns, "560px", csv = TRUE)
+    .scroll_plot_area(ns, csv = TRUE)
   )
 }
 

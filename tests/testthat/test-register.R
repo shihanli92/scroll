@@ -21,11 +21,11 @@ test_that("default assembly is the built-ins, numbered by position", {
   scroll_reset_panels()
   p <- scroll:::.scroll_assemble_panels()
   ids <- vapply(p, `[[`, "", "id")
-  # the 9 always-on RNA panels lead, in order; the modality panels (VDJ) follow
+  # the 10 always-on RNA panels lead, in order; the modality panels (VDJ) follow
   # and are only *gated out* when a manifest is supplied (see gating test below).
-  expect_equal(ids[1:9],
-               c("dimplot", "featureplot", "signature", "biaxial", "dotplot", "violin",
-                 "proportions", "de", "pseudobulk"))
+  expect_equal(ids[1:10],
+               c("dimplot", "featureplot", "signature", "biaxial", "dotplot", "heatmap",
+                 "violin", "proportions", "de", "pseudobulk"))
   expect_true(all(c("clone_overview", "gene_usage", "cdr3_length", "diversity") %in% ids))
   expect_equal(vapply(p, `[[`, "", "num"), sprintf("%02d", seq_along(p)))
 })
@@ -35,8 +35,8 @@ test_that("modality panels are gated out for a manifest without their block", {
   rna_man <- scroll_manifest(test_project())          # no vdj block
   ids <- vapply(scroll:::.scroll_assemble_panels(rna_man), `[[`, "", "id")
   expect_equal(ids,
-               c("dimplot", "featureplot", "signature", "biaxial", "dotplot", "violin",
-                 "proportions", "de", "pseudobulk"))
+               c("dimplot", "featureplot", "signature", "biaxial", "dotplot", "heatmap",
+                 "violin", "proportions", "de", "pseudobulk"))
 })
 
 test_that("built-in panels drop out when the data can't support them", {

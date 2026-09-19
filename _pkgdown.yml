@@ -80,6 +80,7 @@ reference:
   - view_feature_plot
   - view_biaxial
   - view_dotplot
+  - view_heatmap
   - view_violin
   - view_violin_stacked
   - view_proportions

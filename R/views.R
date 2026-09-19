@@ -692,35 +692,54 @@ view_feature_blend <- function(cells, params, values1, values2, state = list()) 
 # clustering — depends only on data inputs (features, group, scale, cluster), not
 # cosmetics. Factored out so the Shiny server computes it once in a data reactive
 # rather than on every palette/dot-size change.
+# Aggregate expression to a feature x group matrix, shared by DotPlot and Heatmap.
+# Sums and nonzero-counts per (feature, group) via rowsum (O(nnz), no full-scan
+# aggregate), then divides by per-group cell counts. `group_by` may name >1 column
+# -> its "a | b" interaction (like the other panels). Absent (feature, group) pairs
+# are 0 (the sparse-store convention). Returns raw `sum`/`npos` and derived
+# `mean`/`frac` matrices (features x groups) plus per-group sizes `n` and `groups`.
+.scroll_group_expr_matrix <- function(cells, features, group_by, expr_long) {
+  gvec <- .scroll_combo_levels(cells, group_by)         # per-cell group label (NA-aware)
+  ng <- table(gvec)                                     # cells per group (drops NA)
+  groups <- names(ng); nf <- length(features); nk <- length(groups)
+  sumM  <- matrix(0, nf, nk, dimnames = list(features, groups))
+  nposM <- sumM
+  if (!is.null(expr_long) && nrow(expr_long) > 0 && nk > 0) {
+    e <- expr_long
+    key <- if (is.character(e$cell)) cells$cell         # v2 int .gidx / v1 barcode
+           else if (!is.null(cells$.gidx)) cells$.gidx else seq_len(nrow(cells))
+    gi <- match(gvec[match(e$cell, key)], groups)        # group index per expr row
+    fi <- match(e$feature, features)                     # feature index per expr row
+    ok <- !is.na(gi) & !is.na(fi)
+    if (any(ok)) {
+      idx <- (gi[ok] - 1L) * nf + fi[ok]                 # column-major linear index
+      ss <- rowsum(e$value[ok], idx)
+      sp <- rowsum(as.numeric(e$value[ok] > 0), idx)
+      sumM[as.integer(rownames(ss))]  <- as.numeric(ss)
+      nposM[as.integer(rownames(sp))] <- as.numeric(sp)
+    }
+  }
+  nvec <- as.numeric(ng)
+  list(sum = sumM, npos = nposM,
+       mean = sweep(sumM, 2, nvec, "/"), frac = sweep(nposM, 2, nvec, "/"),
+       n = ng, groups = groups)
+}
+
+# Per-gene (row) z-score across columns; constant rows -> 0 (matches DotPlot).
+.scroll_row_zscore <- function(M) {
+  t(apply(M, 1, function(x) { s <- stats::sd(x)
+    if (is.na(s) || s == 0) x * 0 else (x - mean(x)) / s }))
+}
+
 .scroll_dotplot_assemble <- function(cells, features, group_by, expr_long,
                                      scale = FALSE, cluster = "off") {
-  ng <- table(as.character(cells[[group_by]]))          # cells per group
-  groups <- names(ng)
-
-  # complete (feature x group) grid so absent combinations render as empty dots
-  grid <- expand.grid(feature = features, group = groups,
-                      KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE)
-  if (!is.null(expr_long) && nrow(expr_long) > 0) {
-    e <- expr_long
-    # map each expr row to its cell's group via the store's cell key (v2 int .gidx
-    # / v1 barcode), matched against the active cells.
-    key <- if (is.character(e$cell)) cells$cell
-           else if (!is.null(cells$.gidx)) cells$.gidx else seq_len(nrow(cells))
-    e$group <- as.character(cells[[group_by]])[match(e$cell, key)]
-    e <- e[!is.na(e$group), , drop = FALSE]
-    s_sum <- stats::aggregate(value ~ feature + group, e, sum)
-    s_pos <- stats::aggregate(value ~ feature + group, e,
-                              function(x) sum(x > 0))
-    names(s_sum)[3] <- "sum"; names(s_pos)[3] <- "npos"
-    agg <- merge(merge(grid, s_sum, all.x = TRUE), s_pos, all.x = TRUE)
-  } else {
-    agg <- grid; agg$sum <- 0; agg$npos <- 0
-  }
-  agg$sum[is.na(agg$sum)] <- 0
-  agg$npos[is.na(agg$npos)] <- 0
-  agg$mean <- agg$sum / as.numeric(ng[agg$group])
-  agg$frac <- agg$npos / as.numeric(ng[agg$group])
-
+  gm <- .scroll_group_expr_matrix(cells, features, group_by, expr_long)
+  groups <- gm$groups
+  ij <- function(M) M[cbind(match(agg$feature, features), match(agg$group, groups))]
+  agg <- expand.grid(feature = features, group = groups,
+                     KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE)
+  agg$sum  <- ij(gm$sum); agg$npos <- ij(gm$npos)
+  agg$mean <- ij(gm$mean); agg$frac <- ij(gm$frac)
   if (isTRUE(scale)) {
     agg$mean <- stats::ave(agg$mean, agg$feature, FUN = function(x) {
       s <- stats::sd(x); if (is.na(s) || s == 0) x * 0 else (x - mean(x)) / s
@@ -805,6 +824,160 @@ view_dotplot <- function(cells, params, expr_long, state = list(), assembly = NU
                                 ggtree::layout_dendrogram(), height = 0.16)
   })
   pp
+}
+
+# Renderer-agnostic alias (DotPlot + Heatmap both attach row/column dendrograms).
+.scroll_hclust_trees <- .scroll_dotplot_trees
+
+# Aggregated heatmap assembly: a features x groups matrix of the plotted statistic
+# (mean or % expressing), optionally per-gene z-scored, with row/column hclust.
+# Columns collapse the cell dimension, so nothing here scales with cell count.
+.scroll_heatmap_assemble <- function(cells, features, group_by, expr_long,
+                                     stat = "mean", scale = "zscore", cluster = "off") {
+  gm <- .scroll_group_expr_matrix(cells, features, group_by, expr_long)
+  M0 <- if (identical(stat, "frac")) gm$frac else gm$mean
+  scaled <- identical(scale, "zscore")
+  M <- if (scaled) .scroll_row_zscore(M0) else M0
+  hr <- if (cluster %in% c("rows", "both") && nrow(M) > 2) stats::hclust(stats::dist(M))
+  hc <- if (cluster %in% c("columns", "both") && ncol(M) > 2) stats::hclust(stats::dist(t(M)))
+  feature_order <- if (!is.null(hr)) rownames(M)[hr$order] else rownames(M)
+  group_order   <- if (!is.null(hc)) colnames(M)[hc$order] else colnames(M)
+  M <- M[, group_order, drop = FALSE]
+  cm <- data.frame(column = group_order, group = group_order,
+                   n = as.numeric(gm$n[group_order]), stringsAsFactors = FALSE)
+  list(M = M, agg = gm, hr = hr, hc = hc, feature_order = feature_order,
+       col_meta = cm, group_by = group_by, scaled = scaled, stat = stat, mode = "groups")
+}
+
+# Single-cell heatmap assembly: a features x CELLS matrix. Cells are randomly
+# subsampled to a safe cap (proportional per group, deterministic) so the render
+# stays bounded; columns are ordered by group. Nothing but the (capped) sub-matrix
+# is materialised.
+.scroll_heatmap_cells_assemble <- function(cells, features, group_by, expr_long,
+                                           scale = "zscore", cluster = "off",
+                                           cap = 5000, seed = 1, cell_order = "group") {
+  gvec <- .scroll_combo_levels(cells, group_by)
+  ii <- which(!is.na(gvec)); ntot <- length(ii)
+  idx <- .scroll_with_seed(seed, {
+    if (ntot > cap) {                                   # proportional per-group sample
+      frac <- cap / ntot
+      unlist(lapply(split(ii, gvec[ii]), function(g)
+        if (length(g) * frac < 1) g
+        else sample(g, max(1L, round(length(g) * frac)))), use.names = FALSE)
+    } else ii
+  })
+  sub <- cells[idx, , drop = FALSE]; subg <- gvec[idx]   # sampled order
+  Mt <- vapply(features, function(f) {
+    v <- if (!is.null(expr_long) && nrow(expr_long))
+           expr_long[expr_long$feature == f, c("cell", "value"), drop = FALSE] else NULL
+    .scroll_expr_vector(sub, v)                          # dense, zero-filled, .gidx-joined
+  }, numeric(nrow(sub)))
+  M <- t(Mt); rownames(M) <- features
+  scaled <- identical(scale, "zscore")
+  if (scaled) M <- .scroll_row_zscore(M)
+  # order columns: group blocks, and (optionally) by PC1 of the expression matrix
+  # WITHIN each group so like cells sit together -- a cheap 1-D order, no tree.
+  ord <- if (identical(cell_order, "pc1") && nrow(M) >= 2 && ncol(M) >= 3) {
+    pc <- tryCatch(stats::prcomp(t(M))$x[, 1], error = function(e) numeric(ncol(M)))
+    order(subg, pc)
+  } else order(subg)
+  M <- M[, ord, drop = FALSE]; subg <- subg[ord]
+  hr <- if (cluster %in% c("rows", "both") && nrow(M) > 2) stats::hclust(stats::dist(M))
+  feature_order <- if (!is.null(hr)) rownames(M)[hr$order] else rownames(M)
+  cm <- data.frame(column = seq_len(ncol(M)), group = subg, n = 1L, stringsAsFactors = FALSE)
+  list(M = M, agg = NULL, hr = hr, hc = NULL, feature_order = feature_order,
+       col_meta = cm, group_by = group_by, scaled = scaled, stat = "mean",
+       mode = "cells", n_cells = length(idx), n_total = ntot)
+}
+
+#' Expression heatmap across groups (or subsampled cells)
+#'
+#' A tile heatmap of mean (or % expressing) expression per gene per group, with
+#' optional per-gene z-scoring, row/column clustering + dendrograms, and a
+#' diverging palette. A `cells` mode instead draws genes x a random subsample of
+#' cells (capped, grouped) via `geom_raster`. `group_by` may name >1 column (its
+#' `a | b` interaction).
+#'
+#' @param cells The cells data.frame (its group sizes are the denominators).
+#' @param params List with `features`, `group_by`, and optionally `assay`.
+#' @param expr_long A data.frame(feature, cell, value) in normalized units.
+#' @param state Optional toggle state (`mode`, `stat`, `scale`, `clip`, `cluster`,
+#'   `palette`, `cell_cap`, `aspect`, `theme`).
+#' @param assembly Optional precomputed assembly (as the Shiny app supplies).
+#' @return A ggplot, or an aplot composite when dendrograms are attached.
+#' @export
+view_heatmap <- function(cells, params, expr_long, state = list(), assembly = NULL) {
+  if (is.null(assembly)) {
+    group_by <- .scroll_group_col(params, state)
+    if (is.null(group_by) || !all(group_by %in% names(cells)))
+      stop("heatmap needs a valid `group_by` metadata column.", call. = FALSE)
+    feats <- unlist(params$features)
+    mode <- .scroll_opt(params, state, "mode", "groups")
+    assembly <- if (identical(mode, "cells"))
+      .scroll_heatmap_cells_assemble(cells, feats, group_by, expr_long,
+        scale = .scroll_opt(params, state, "scale", "zscore"),
+        cluster = .scroll_opt(params, state, "cluster", "off"),
+        cap = .scroll_opt(params, state, "cell_cap", 5000),
+        cell_order = .scroll_opt(params, state, "cell_order", "group"))
+    else .scroll_heatmap_assemble(cells, feats, group_by, expr_long,
+        stat = .scroll_opt(params, state, "stat", "mean"),
+        scale = .scroll_opt(params, state, "scale", "zscore"),
+        cluster = .scroll_opt(params, state, "cluster", "off"))
+  }
+  M <- assembly$M; cm <- assembly$col_meta; scaled <- assembly$scaled
+  glab <- paste(assembly$group_by, collapse = " | ")
+  clip <- .scroll_opt(params, state, "clip", 2.5)
+  pal <- .scroll_opt(params, state, "palette", if (scaled) "RdBu" else "magma")
+  legname <- if (scaled) "z-score" else if (identical(assembly$stat, "frac")) "% expr." else "mean expr."
+  lims <- if (scaled) c(-clip, clip) else NULL
+  long <- data.frame(feature = rownames(M)[as.vector(row(M))], col = as.vector(col(M)),
+                     value = as.numeric(M), stringsAsFactors = FALSE)
+  long$feature <- factor(long$feature, levels = rev(assembly$feature_order))
+  fillscale <- .scroll_continuous_scale(pal, legname, lims, aesthetic = "fill")
+
+  if (identical(assembly$mode, "cells")) {
+    long$group <- factor(cm$group[long$col], levels = unique(cm$group))
+    p <- ggplot2::ggplot(long, ggplot2::aes(x = .data$col, y = .data$feature, fill = .data$value)) +
+      ggplot2::geom_raster() +
+      ggplot2::facet_grid(cols = ggplot2::vars(.data$group), scales = "free_x",
+                          space = "free_x", switch = "x") +
+      fillscale + ggplot2::scale_x_continuous(expand = c(0, 0)) +
+      ggplot2::labs(x = sprintf("%s  (%s of %s cells shown)", glab,
+                    format(assembly$n_cells, big.mark = ","),
+                    format(assembly$n_total, big.mark = ",")), y = NULL) +
+      .scroll_base_theme(axis_text = TRUE) +
+      ggplot2::theme(axis.text.x = ggplot2::element_blank(),
+                     axis.ticks.x = ggplot2::element_blank(),
+                     panel.spacing.x = ggplot2::unit(1, "pt"),
+                     strip.placement = "outside")
+    p <- p + .scroll_ggtheme(state$theme)
+    # row (gene) dendrogram only -- cells are never clustered (O(n^2) at scale)
+    return(.scroll_hclust_trees(p, assembly$hr, NULL))
+  }
+  # aggregated: discrete group x-axis, optional dendrograms
+  long$x <- factor(cm$column[long$col], levels = cm$column)
+  p <- ggplot2::ggplot(long, ggplot2::aes(x = .data$x, y = .data$feature, fill = .data$value)) +
+    ggplot2::geom_tile(color = "white", linewidth = 0.2) +
+    fillscale + ggplot2::scale_x_discrete(expand = c(0, 0)) +
+    ggplot2::labs(x = glab, y = NULL) +
+    .scroll_base_theme(axis_text = TRUE, x_angle = 45) +
+    ggplot2::theme(panel.grid = ggplot2::element_blank())
+  if (is.null(assembly$hr) && is.null(assembly$hc))
+    p <- .scroll_apply_aspect(p, state$aspect %||% 1, state$theme)
+  .scroll_hclust_trees(p, assembly$hr, assembly$hc)
+}
+
+# CSV source: per-group means / fractions (always the aggregated view, whatever
+# the display mode).
+.scroll_heatmap_source <- function(cells, features, group_by, expr_long) {
+  gm <- .scroll_group_expr_matrix(cells, features, group_by, expr_long)
+  grid <- expand.grid(feature = features, group = gm$groups,
+                      KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE)
+  fi <- match(grid$feature, features); gi <- match(grid$group, gm$groups)
+  data.frame(feature = grid$feature, group = grid$group,
+             avg_expr = gm$mean[cbind(fi, gi)],
+             pct_expressing = gm$frac[cbind(fi, gi)],
+             n_cells = as.numeric(gm$n[grid$group]), stringsAsFactors = FALSE)
 }
 
 # Shared theme for the bar/violin/biaxial panels: black box, no gridlines, rotated
@@ -1341,6 +1514,7 @@ render_view <- function(view_type, ctx) {
       else view_umap_colorby(cells, params, state),
     feature_plot = view_feature_plot(cells, params, ctx$feature_values, state),
     dotplot      = view_dotplot(cells, params, ctx$expr_long, state),
+    heatmap      = view_heatmap(cells, params, ctx$expr_long, state),
     violin       = view_violin(cells, params, ctx$feature_values, state),
     proportions  = view_proportions(cells, params, state),
     de_table     = view_de_table(ctx$de_data, params),

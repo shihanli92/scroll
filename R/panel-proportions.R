@@ -46,7 +46,7 @@ proportions_ui <- function(id, data) {
         bslib::input_switch(ns("horizontal"), "Horizontal bars", FALSE)),
       .scroll_group("Layout", .scroll_aspect_input(ns))
     ),
-    .scroll_plot_area(ns, "460px", csv = TRUE)
+    .scroll_plot_area(ns, csv = TRUE)
   )
 }
 

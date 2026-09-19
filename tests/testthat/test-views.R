@@ -223,6 +223,34 @@ test_that("view_volcano plots the requested fold-change column", {
   expect_setequal(as.character(sig), c("up", "down", "ns"))
 })
 
+test_that("heatmap aggregator matches the old aggregate path; view renders", {
+  data <- scroll:::.scroll_load(test_project()); on.exit(scroll_disconnect(data$con))
+  feats <- c("CD3D", "CD8A", "MS4A1")
+  vl <- data$queryN("RNA", feats)
+  # aggregated: ggplot without clustering; the CSV source has the documented columns
+  p <- view_heatmap(data$cells, list(features = feats, group_by = "celltype"), vl,
+                    state = list(scale = "zscore", cluster = "off"))
+  expect_s3_class(p, "ggplot")
+  b <- ggplot2::ggplot_build(p)
+  expect_equal(nrow(b$data[[1]]), length(feats) * 3)          # genes x celltypes tiles
+  src <- scroll:::.scroll_heatmap_source(data$cells, feats, "celltype", vl)
+  expect_setequal(names(src), c("feature", "group", "avg_expr", "pct_expressing", "n_cells"))
+})
+
+test_that("heatmap cells mode subsamples to the cap and rasters", {
+  data <- scroll:::.scroll_load(test_project()); on.exit(scroll_disconnect(data$con))
+  feats <- c("CD3D", "CD8A")
+  a <- scroll:::.scroll_heatmap_cells_assemble(data$cells, feats, "celltype",
+         data$queryN("RNA", feats), cap = 40)
+  expect_lte(a$n_cells, 40)                                    # capped
+  expect_equal(nrow(a$M), length(feats))                      # genes x cells
+  expect_equal(ncol(a$M), a$n_cells)
+  p <- view_heatmap(data$cells, list(features = feats, group_by = "celltype"), NULL,
+                    state = list(), assembly = a)
+  expect_s3_class(p, "ggplot")
+  expect_true("GeomRaster" %in% vapply(p$layers, function(l) class(l$geom)[1], character(1)))
+})
+
 test_that("de_table returns a data.frame (and a message when absent)", {
   df <- data.frame(gene = c("A", "B"), avg_log2FC = c(1.2, -0.5))
   expect_s3_class(view_de_table(df, list(top = 1)), "data.frame")

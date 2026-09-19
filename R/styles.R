@@ -103,6 +103,12 @@ body.scroll-warming{overflow:hidden;}
 .scroll-ctl-toggle.is-collapsed::before{content:'\\00AB';}    /* < : show the rail */
 .scroll-layout.controls-collapsed{grid-template-columns:200px minmax(0,1fr);}
 .scroll-layout.controls-collapsed>.scroll-filters{display:none;}
+/* a multi-select with many chips (e.g. 100 default genes) scrolls instead of
+   growing the control column to thousands of px (which left the plot stranded). */
+.scroll-controls .selectize-input{max-height:170px; overflow-y:auto;}
+/* a tall control stack scrolls within the viewport instead of forcing the card
+   (and its plot column) taller than the plot -- keeps the plot filling the space. */
+.scroll-controls{max-height:calc(100vh - 150px); overflow-y:auto; padding-right:6px;}
 /* pseudobulk design matrix (compact, monospace; scrolls if wide) */
 .scroll-designmat-wrap{overflow-x:auto; max-width:100%;}
 .scroll-designmat{border-collapse:collapse; font-family:ui-monospace,SFMono-Regular,Menlo,monospace;

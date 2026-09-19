@@ -43,8 +43,8 @@ test_that("grouping panels degrade gracefully with no categorical metadata", {
     assays = list(RNA = list(features = list("A", "B"), max = 1, n_features = 2)),
     embeddings = list(umap = list(dims = 2)),
     default_assay = "RNA", default_embedding = "umap"))
-  for (ui in list(scroll:::dotplot_ui, scroll:::violin_ui, scroll:::proportions_ui,
-                  scroll:::de_ui)) {
+  for (ui in list(scroll:::dotplot_ui, scroll:::heatmap_ui, scroll:::violin_ui,
+                  scroll:::proportions_ui, scroll:::de_ui)) {
     tag <- ui("p", fake)
     expect_s3_class(tag, "shiny.tag")
     expect_true(grepl("categorical metadata", as.character(tag)))
@@ -88,6 +88,15 @@ test_that("violin_server and proportions_server render from controls", {
     session$setInputs(group = "condition", fill = "celltype", palette = "Tableau 10",
                       normalize = TRUE, legend = TRUE)
     expect_false(is.null(output$plot))
+  })
+  shiny::testServer(scroll:::heatmap_server, args = list(data = data), {
+    session$setInputs(markers = c("CD3D", "CD8A"), group = "celltype", mode = "groups",
+                      stat = "mean", scale = TRUE, clip = 2.5, cluster = "off",
+                      palette = "RdBu", legend = TRUE, aspect = 1)
+    expect_true(inherits(plot_r(), c("ggplot", "aplot")))
+    expect_s3_class(csv_r(), "data.frame")
+    session$setInputs(mode = "cells", cellcap = 40)     # single-cell mode
+    expect_true(inherits(plot_r(), c("ggplot", "aplot")))
   })
 })
 

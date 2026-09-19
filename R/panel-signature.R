@@ -48,7 +48,7 @@ signature_ui <- function(id, data) {
           else helpText("No categorical column available for a violin."))),
       .scroll_group("Layout", .scroll_aspect_input(ns))
     ),
-    .scroll_plot_area(ns, "560px", csv = TRUE)
+    .scroll_plot_area(ns, csv = TRUE)
   )
 }
 

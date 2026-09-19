@@ -63,7 +63,7 @@ dotplot_ui <- function(id, data) {
                     c("Off" = "off", "Rows" = "rows", "Columns" = "columns", "Both" = "both")),
         .scroll_aspect_input(ns))
     ),
-    .scroll_plot_area(ns, "520px", csv = TRUE)
+    .scroll_plot_area(ns, csv = TRUE)
   )
 }
 

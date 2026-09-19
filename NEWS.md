@@ -1,3 +1,28 @@
+# scroll 0.2.13
+
+## New: Heatmap panel
+
+* A built-in **Heatmap** panel (`view_heatmap`). Two modes:
+  * **Groups (aggregated):** genes x groups tiles of mean or % expressing, optional per-gene
+    z-scoring + clip, row/column clustering with dendrograms, diverging palette. Aggregation
+    collapses the cell dimension, so it is flat-RAM at any cell count.
+  * **Cells (subsampled):** genes x a random, per-group-proportional subsample of cells (capped
+    for safety), rasterized and faceted by group; a **gene dendrogram** and a cheap **PC1 cell
+    ordering** ("similar cells together", no O(n^2) tree) are available.
+* Multi-column group-by, paste-a-gene-list, assay selector, and CSV export (per-group means).
+* Projects can set a `heatmap_markers:` config key (e.g. top variable genes) as the panel's
+  default gene set, independent of DotPlot's `markers:`.
+* The group-aggregation used by DotPlot and Heatmap is now a shared `rowsum` helper
+  (`.scroll_group_expr_matrix`), ~3x faster than the old `aggregate()` path.
+
+## Layout
+
+* **Plots fill the viewport.** All panels now use a viewport-relative plot height
+  (`calc(100vh - 190px)`) by default -- including custom panels built with
+  `register_plot_panel()` -- so they use the available space and re-render on window resize.
+* **Control columns scroll** within the viewport instead of stretching the card, and a
+  multi-select with many chips (e.g. a 100-gene default) scrolls instead of growing unbounded.
+
 # scroll 0.2.12
 
 ## Composition aesthetics

@@ -48,7 +48,7 @@ biaxial_ui <- function(id, data) {
         numericInput(ns("ncol"), "Facet columns (blank = auto)", value = NA, min = 1, step = 1),
         numericInput(ns("nrow"), "Facet rows (blank = auto)", value = NA, min = 1, step = 1))
     ),
-    .scroll_plot_area(ns, "460px", csv = TRUE)
+    .scroll_plot_area(ns, csv = TRUE)
   )
 }
 

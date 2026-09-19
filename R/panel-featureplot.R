@@ -39,7 +39,7 @@ featureplot_ui <- function(id, data) {
         selectInput(ns("split"), "Split by", c("None" = "", stats::setNames(cats, cats))),
         .scroll_aspect_input(ns))
     ),
-    .scroll_plot_area(ns, "560px", csv = TRUE)
+    .scroll_plot_area(ns, csv = TRUE)
   )
 }
 

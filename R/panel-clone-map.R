@@ -111,7 +111,7 @@ clone_map_ui <- function(id, data) {
         div(class = "scroll-plot-bar", .scroll_size_slider(ns),
             .scroll_dl_button(ns("png"), "PNG"), .scroll_dl_button(ns("pdf"), "PDF"),
             .scroll_dl_button(ns("csv"), "CSV")),
-        .scroll_spin(plotOutput(ns("plot"), height = "480px"))))
+        .scroll_spin(plotOutput(ns("plot"), height = .SCROLL_PLOT_H))))
 }
 
 clone_map_server <- function(id, data, cells_r = shiny::reactive(data$cells),
