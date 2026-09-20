@@ -93,28 +93,28 @@ heatmap_server <- function(id, data, cells_r = reactive(data$cells),
     observeEvent(input$markers,
                  if (isolate(kick()) == 0L && length(input$markers)) kick(1L),
                  ignoreNULL = FALSE)
-    # Expensive assembly (query + subsample + PC1), gated on that trigger and on a
-    # fresh cells_r() (an app-bar filter/view change is a legitimate re-trigger).
-    # Every data input is read with isolate(), so only Compute re-runs it; cosmetics
-    # never enter here.
+    # The WHOLE render is gated on Compute (and on a fresh cells_r() -- an app-bar
+    # filter/view change is a legitimate re-trigger). eventReactive isolates its
+    # body, so every control -- data inputs AND cosmetics (palette/clip/legend/
+    # label/aspect/theme) -- is snapshotted here; nothing redraws the (expensive)
+    # heatmap until Compute is pressed.
     data_r <- eventReactive(list(kick(), cells_r()), {
-      feats <- isolate(input$markers)                    # group-by is optional (one block if empty)
+      feats <- input$markers                             # group-by is optional (one block if empty)
       validate(need(length(feats) > 0, "Add one or more genes, then click Compute heatmap."))
-      cells <- cells_r(); el <- data$queryN(isolate(assay()), feats)
-      assembly <- .scroll_heatmap_cells_assemble(cells, feats, isolate(input$group), el,
-        scale = if (isTRUE(isolate(input$scale))) "zscore" else "none",
-        cluster = isolate(input$cluster) %||% "off", cap = isolate(input$cellcap) %||% 5000,
-        cell_order = isolate(input$cellorder) %||% "group", order_col = isolate(input$ordercol))
-      list(cells = cells, group_by = isolate(input$group), features = feats,
-           expr_long = el, assembly = assembly)
+      cells <- cells_r(); el <- data$queryN(assay(), feats)
+      assembly <- .scroll_heatmap_cells_assemble(cells, feats, input$group, el,
+        scale = if (isTRUE(input$scale)) "zscore" else "none",
+        cluster = input$cluster %||% "off", cap = input$cellcap %||% 5000,
+        cell_order = input$cellorder %||% "group", order_col = input$ordercol)
+      cosmetic <- list(theme = theme_r(), palette = input$palette, clip = input$clip %||% 2.5,
+                       mark_genes = input$mark, legend = isTRUE(input$legend), aspect = input$aspect)
+      list(cells = cells, group_by = input$group, features = feats,
+           expr_long = el, assembly = assembly, cosmetic = cosmetic)
     }, ignoreNULL = FALSE)
-    cosmetic_r <- .scroll_cosmetic(reactive(
-      list(theme = theme_r(), palette = input$palette, clip = input$clip %||% 2.5,
-           mark_genes = input$mark, legend = isTRUE(input$legend), aspect = input$aspect)))
     plot_r <- .scroll_lazy_plot(input, function() {
       d <- data_r()
       view_heatmap(d$cells, list(group_by = d$group_by, features = d$features),
-                   NULL, cosmetic_r(), assembly = d$assembly)
+                   NULL, d$cosmetic, assembly = d$assembly)
     })
     output$plot <- renderPlot(plot_r())
     csv_r <- reactive({ d <- data_r()

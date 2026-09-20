@@ -11,9 +11,11 @@
   are nudged apart only enough to avoid overlap, so the leaders stay short.
 * **Group-by is optional** on the single-cell heatmap — leave it empty for one ungrouped block.
 * **Cell ordering by a metadata column**, in addition to grouped and PC1 orderings.
-* **Compute-gated assembly.** The single-cell heatmap's expensive step (query + subsample + PC1)
-  now recomputes only on a **Compute** button (auto-rendering once on first view); gene/scale/
-  order tweaks stage without recomputing, while palette/clip/legend/label/aspect stay live.
+* **Compute-gated rendering.** The single-cell heatmap redraws only on a **Compute** button
+  (auto-rendering once on first view). Every control — gene set, scale/cluster/cap/order, and the
+  cosmetics (palette/clip/legend/label/aspect) — is snapshotted at Compute, so nothing re-runs the
+  expensive query + subsample + PC1 or even redraws the raster until you ask for it. An app-bar
+  filter/View change still refreshes it (the shown cells genuinely changed).
 
 ## Robustness (code review)
 
