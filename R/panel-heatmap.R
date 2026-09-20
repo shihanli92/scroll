@@ -93,11 +93,10 @@ heatmap_server <- function(id, data, cells_r = reactive(data$cells),
     observeEvent(input$markers,
                  if (isolate(kick()) == 0L && length(input$markers)) kick(1L),
                  ignoreNULL = FALSE)
-    # The WHOLE render is gated on Compute (and on a fresh cells_r() -- an app-bar
-    # filter/view change is a legitimate re-trigger). eventReactive isolates its
-    # body, so every control -- data inputs AND cosmetics (palette/clip/legend/
-    # label/aspect/theme) -- is snapshotted here; nothing redraws the (expensive)
-    # heatmap until Compute is pressed.
+    # Only the EXPENSIVE assembly (query + subsample + PC1) is gated on Compute (and
+    # on a fresh cells_r() -- an app-bar filter/view change is a legitimate
+    # re-trigger). eventReactive isolates its body, so the data controls (gene set,
+    # scale/cluster/cap/order) are snapshotted here and re-run only on Compute.
     data_r <- eventReactive(list(kick(), cells_r()), {
       feats <- input$markers                             # group-by is optional (one block if empty)
       validate(need(length(feats) > 0, "Add one or more genes, then click Compute heatmap."))
@@ -106,15 +105,18 @@ heatmap_server <- function(id, data, cells_r = reactive(data$cells),
         scale = if (isTRUE(input$scale)) "zscore" else "none",
         cluster = input$cluster %||% "off", cap = input$cellcap %||% 5000,
         cell_order = input$cellorder %||% "group", order_col = input$ordercol)
-      cosmetic <- list(theme = theme_r(), palette = input$palette, clip = input$clip %||% 2.5,
-                       mark_genes = input$mark, legend = isTRUE(input$legend), aspect = input$aspect)
       list(cells = cells, group_by = input$group, features = feats,
-           expr_long = el, assembly = assembly, cosmetic = cosmetic)
+           expr_long = el, assembly = assembly)
     }, ignoreNULL = FALSE)
+    # Cheap cosmetics stay live: they only re-skin the memoized assembly (no
+    # re-query, no subsample/PC1), so palette/clip/legend/label/aspect redraw at once.
+    cosmetic_r <- .scroll_cosmetic(reactive(
+      list(theme = theme_r(), palette = input$palette, clip = input$clip %||% 2.5,
+           mark_genes = input$mark, legend = isTRUE(input$legend), aspect = input$aspect)))
     plot_r <- .scroll_lazy_plot(input, function() {
       d <- data_r()
       view_heatmap(d$cells, list(group_by = d$group_by, features = d$features),
-                   NULL, d$cosmetic, assembly = d$assembly)
+                   NULL, cosmetic_r(), assembly = d$assembly)
     })
     output$plot <- renderPlot(plot_r())
     csv_r <- reactive({ d <- data_r()
