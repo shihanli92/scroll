@@ -148,6 +148,15 @@ test_that("base CSS suppresses scrollbar-toggle resize loops (both axes)", {
   expect_match(css, "\\.scroll-rail\\{position:sticky")
 })
 
+test_that("the control column width is a resolution-responsive clamp, not a fixed 25%", {
+  css <- scroll:::.scroll_css()
+  # a clamped width knob (usable min on laptops, capped on big monitors) ...
+  expect_match(css, "--sc-ctl-w:clamp\\(")
+  # ... driving a 2-track [controls | plot] grid at >= the sm breakpoint
+  expect_match(css, "min-width:576px")
+  expect_match(css, "grid-template-columns:var\\(--sc-ctl-w\\) minmax\\(0,1fr\\)")
+})
+
 test_that("plot toolbars carry a download-scale slider wired to the dl_scale input", {
   html <- as.character(scroll:::.scroll_plot_area(identity))
   expect_match(html, "scroll-size")                     # the slider is in the toolbar

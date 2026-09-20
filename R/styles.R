@@ -197,6 +197,17 @@ body.scroll-warming{overflow:hidden;}
 
 /* controls */
 .scroll-panel{padding:20px 22px;}
+/* Control column width scales with the screen instead of a fixed 25%. bslib lays
+   layout_columns(c(3,9)) out as a 12-track grid with g-col-sm-* spans; at >=sm we
+   replace that with a 2-track [controls | plot] grid whose control track is clamped
+   -- so it stays usable on a laptop and never grows absurdly wide on a large monitor
+   (the plot takes the extra room). Below sm, bslib's own full-width stacking stands.
+   --sc-ctl-w is the knob (a later per-app UI setting can override it). */
+:root{--sc-ctl-w:clamp(260px, 24%, 360px);}
+@media (min-width:576px){
+  .scroll-panel.bslib-grid{grid-template-columns:var(--sc-ctl-w) minmax(0,1fr) !important;}
+  .scroll-panel.bslib-grid>.bslib-grid-item{grid-column:auto !important;}
+}
 .scroll-controls{display:flex; flex-direction:column; gap:18px;}
 .scroll-cgroup-h{text-transform:uppercase; letter-spacing:.08em; font-size:11px; font-weight:700;
   color:var(--sc-faint); padding-bottom:8px; margin-bottom:10px; border-bottom:1px solid var(--sc-line-2);}

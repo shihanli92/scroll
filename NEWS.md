@@ -1,5 +1,12 @@
 # scroll 0.2.14
 
+## UI
+
+* **Responsive control column.** Every panel's control column now scales with the screen
+  (`clamp(260px, 24%, 360px)`) instead of a fixed 25%: a usable minimum on laptops, and capped on
+  large monitors so the plot takes the extra width rather than an over-wide control column. The
+  width is a CSS variable (`--sc-ctl-w`) so it can become a per-app setting later.
+
 ## Heatmap & DotPlot
 
 * **Grouped/aggregated heatmap is now a DotPlot display.** The DotPlot panel's **Display** toggle
