@@ -16,8 +16,10 @@
   section rail** (901–1199px) frees width for the plot, with hover labels.
 * **Filters/theme rail becomes an off-canvas drawer** below 1400px (the app-bar toggle slides it in;
   Escape or a click outside closes it), so the plot keeps the full width and the controls stay
-  reachable. Sticky offsets (rail, drawer, scroll-to-panel) now track the app bar's measured height
-  (`--sc-appbar-h`), so they stay correct when it wraps or under a multi-app tab strip.
+  reachable. The drawer has an explicit height so a long filter/theme list **scrolls** within it,
+  is narrower (300px), and lays its theme controls out one per row. Sticky offsets (rail, drawer,
+  scroll-to-panel) now track the app bar's measured height (`--sc-appbar-h`), so they stay correct
+  when it wraps or under a multi-app tab strip.
 * **Per-panel Controls toggle.** When a panel is stacked (narrow), a small **Controls** button in the
   card header collapses that panel's controls so the plot alone is visible; it is hidden when the
   panel is side-by-side. Defaults open, so inputs always initialise while visible.

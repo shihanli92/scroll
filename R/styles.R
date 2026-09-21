@@ -303,12 +303,18 @@ table.scroll-clone-dt thead th{padding-top:2px; padding-bottom:2px;}
 @media (max-width:1399.98px){
   .scroll-layout.has-filters>.scroll-filters,
   .scroll-layout.controls-collapsed>.scroll-filters{
-    position:fixed; top:var(--sc-appbar-h,70px); right:0; bottom:0; z-index:1050;
-    display:flex; width:min(340px,92vw); max-height:none; padding:16px 16px 24px;
+    position:fixed; top:var(--sc-appbar-h,70px); right:0; z-index:1050;
+    display:flex; width:min(300px,90vw);
+    /* explicit height (not top+bottom stretch) so overflow-y actually scrolls the
+       content -- a tall filters list was overflowing off-screen and unreachable. */
+    height:calc(100dvh - var(--sc-appbar-h,70px)); max-height:none; padding:16px 16px 24px;
     background:var(--sc-card); border-left:1px solid var(--sc-line);
-    box-shadow:-14px 0 34px -18px rgba(17,24,38,.4); overflow-y:auto;
+    box-shadow:-14px 0 34px -18px rgba(17,24,38,.4);
+    overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;
     transform:translateX(105%); transition:transform .18s ease;}
   .scroll-layout.filters-open>.scroll-filters{transform:none;}
+  /* thinner drawer -> theme sub-controls stack one per row (2-up is too wide here) */
+  .scroll-filters .scroll-ctl-body .scroll-ctl-body{grid-template-columns:1fr;}
   .scroll-ctl-toggle::before{content:'\\2261';}          /* ≡ : open filters */
   .scroll-ctl-toggle.is-open::before{content:'\\00D7';}  /* × : close */
 }
