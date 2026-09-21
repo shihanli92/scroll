@@ -1,4 +1,4 @@
-# scroll 0.2.14
+# scroll 0.2.15
 
 ## UI
 
@@ -23,6 +23,8 @@
 * **Per-panel Controls toggle.** When a panel is stacked (narrow), a small **Controls** button in the
   card header collapses that panel's controls so the plot alone is visible; it is hidden when the
   panel is side-by-side. Defaults open, so inputs always initialise while visible.
+
+# scroll 0.2.14
 
 ## Heatmap & DotPlot
 
