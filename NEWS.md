@@ -13,7 +13,11 @@
 * **Bounded plot height.** The default plot height is now `clamp(320px, min(100vh−190px, 90cqw),
   1100px)` — a tall/portrait monitor no longer stretches a plot to ~1700px; landscape is unchanged.
 * **App bar wraps** and ellipsizes a long dataset title instead of overflowing; a **compact numeric
-  section rail** (901–1199px, non-filters layouts) frees width for the plot, with hover labels.
+  section rail** (901–1199px) frees width for the plot, with hover labels.
+* **Filters/theme rail becomes an off-canvas drawer** below 1400px (the app-bar toggle slides it in;
+  Escape or a click outside closes it), so the plot keeps the full width and the controls stay
+  reachable. Sticky offsets (rail, drawer, scroll-to-panel) now track the app bar's measured height
+  (`--sc-appbar-h`), so they stay correct when it wraps or under a multi-app tab strip.
 
 ## Heatmap & DotPlot
 

@@ -92,10 +92,13 @@ body.scroll-warming{overflow:hidden;}
 .scroll-layout{display:grid; grid-template-columns:200px minmax(0,1fr); gap:32px;
   max-width:1320px; margin:0 auto; padding:28px;}
 .scroll-layout.has-filters{grid-template-columns:200px minmax(0,1fr) 300px; max-width:1620px;}
-/* right-hand global control rail: filters that narrow every panel */
-.scroll-filters{position:sticky; top:80px; align-self:start; display:flex; flex-direction:column;
-  gap:12px; max-height:calc(100vh - 100px); overflow-y:auto; padding-right:2px;}
-.scroll-multi .scroll-filters{top:123px;}
+/* right-hand global control rail: filters that narrow every panel. Sticky offset is
+   driven by --sc-appbar-h (the app bar's measured bottom, set in JS), so it stays
+   correct when the app bar wraps to two rows on a narrow screen; 70 is the fallback
+   before the script runs, and it resolves to the old 123px in a multi-app tab strip. */
+.scroll-filters{position:sticky; top:calc(var(--sc-appbar-h,70px) + 10px); align-self:start;
+  display:flex; flex-direction:column;
+  gap:12px; max-height:calc(100vh - var(--sc-appbar-h,70px) - 30px); overflow-y:auto; padding-right:2px;}
 /* collapse toggle: hide the whole control rail to give the plots full width */
 .scroll-ctl-toggle{flex:none; width:32px; height:32px; padding:0; cursor:pointer; line-height:1;
   border:1px solid var(--sc-line); background:#fff; color:var(--sc-muted); border-radius:8px;
@@ -165,7 +168,7 @@ body.scroll-warming{overflow:hidden;}
 .scroll-filter .irs--shiny{top:0; height:26px;}
 .scroll-filter .irs-with-grid{height:34px;}
 .scroll-filters-empty{font-size:11px; color:var(--sc-faint);}
-.scroll-rail{position:sticky; top:80px; align-self:start; display:flex; flex-direction:column; gap:4px;}
+.scroll-rail{position:sticky; top:calc(var(--sc-appbar-h,70px) + 10px); align-self:start; display:flex; flex-direction:column; gap:4px;}
 .scroll-rail-item{display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:9px;
   color:var(--sc-muted); text-decoration:none; font-weight:600; font-size:14px;
   border-left:2px solid transparent;}
@@ -183,7 +186,8 @@ body.scroll-warming{overflow:hidden;}
   padding:6px 20px 0; background:rgba(251,252,253,.92);
   backdrop-filter:saturate(1.4) blur(8px); border-bottom:1px solid var(--sc-line);}
 .scroll-multi .scroll-appbar{top:43px;}
-.scroll-multi .scroll-rail{top:123px;}
+/* rail/filters/scroll-margin offsets now come from --sc-appbar-h (the JS measures
+   the app bar's bottom, which in multi-app already includes the 43px tab strip). */
 
 /* panels */
 /* container-type lets each panel size its control/plot split from the width the
@@ -191,7 +195,7 @@ body.scroll-warming{overflow:hidden;}
    content can never widen the column, strengthening the HiDPI no-reflow invariant. */
 .scroll-content{display:flex; flex-direction:column; gap:28px;
   container-type:inline-size; container-name:sc-content;}
-.scroll-panel-card{scroll-margin-top:84px; border:1px solid var(--sc-line); border-radius:12px;
+.scroll-panel-card{scroll-margin-top:calc(var(--sc-appbar-h,70px) + 14px); border:1px solid var(--sc-line); border-radius:12px;
   background:var(--sc-card); box-shadow:0 6px 20px -12px rgba(17,24,38,.18); overflow:hidden;}
 .scroll-panel-card>.card-header{background:var(--sc-card); border-bottom:1px solid var(--sc-line-2); padding:18px 22px;}
 .scroll-eyebrow{display:flex; align-items:center; gap:10px;}
@@ -280,16 +284,35 @@ table.scroll-clone-dt thead th{padding-top:2px; padding-bottom:2px;}
 /* tighter app bar on smaller screens; drop the version chip on phones */
 @media (max-width:1199.98px){.scroll-appbar{padding:10px 16px; column-gap:14px;} .scroll-stat{padding:0 12px;}}
 @media (max-width:576px){.scroll-brand{font-size:16px;} .scroll-version{display:none;}}
+/* Below 1400 the right control rail becomes an off-canvas DRAWER (positioning only;
+   grid tracks are set per-range below, so they never fight on specificity). Toggled
+   by .filters-open (the app-bar button). Including .controls-collapsed keeps a
+   wide-mode hidden state from killing the drawer after a resize. */
+@media (max-width:1399.98px){
+  .scroll-layout.has-filters>.scroll-filters,
+  .scroll-layout.controls-collapsed>.scroll-filters{
+    position:fixed; top:var(--sc-appbar-h,70px); right:0; bottom:0; z-index:1050;
+    display:flex; width:min(340px,92vw); max-height:none; padding:16px 16px 24px;
+    background:var(--sc-card); border-left:1px solid var(--sc-line);
+    box-shadow:-14px 0 34px -18px rgba(17,24,38,.4); overflow-y:auto;
+    transform:translateX(105%); transition:transform .18s ease;}
+  .scroll-layout.filters-open>.scroll-filters{transform:none;}
+  .scroll-ctl-toggle::before{content:'\\2261';}          /* ≡ : open filters */
+  .scroll-ctl-toggle.is-open::before{content:'\\00D7';}  /* × : close */
+}
+/* laptop band: drop the 300px filters track (it is a drawer now) */
+@media (min-width:1200px) and (max-width:1399.98px){
+  .scroll-layout.has-filters{grid-template-columns:200px minmax(0,1fr); max-width:none;}
+}
 /* mid widths (portrait monitor / small landscape): a compact numeric rail frees
-   ~136px for the plot; item labels collapse to just the number (hover shows the
-   full label via the title attr). Scoped to :not(.has-filters) -- a filters layout
-   keeps its 3-track grid (the panel container query still stacks when its content
-   gets narrow), and Phase 2 turns the filters column into a drawer. */
+   ~136px for the plot; labels collapse to the number (hover shows the full label via
+   the title attr). Applies to every layout -- filters are a drawer at this width. */
 @media (min-width:900.02px) and (max-width:1199.98px){
-  .scroll-layout:not(.has-filters){grid-template-columns:64px minmax(0,1fr); gap:20px; padding:20px; max-width:none;}
-  .scroll-layout:not(.has-filters) .scroll-rail-item{justify-content:center; padding:8px 0; gap:0;}
-  .scroll-layout:not(.has-filters) .scroll-rail-item>span:last-child{display:none;}   /* keep .scroll-rail-num */
-  .scroll-layout:not(.has-filters) .scroll-rail-foot{display:none;}
+  .scroll-layout,.scroll-layout.has-filters,.scroll-layout.controls-collapsed{
+    grid-template-columns:64px minmax(0,1fr); gap:20px; padding:20px; max-width:none;}
+  .scroll-rail-item{justify-content:center; padding:8px 0; gap:0;}
+  .scroll-rail-item>span:last-child{display:none;}   /* keep .scroll-rail-num */
+  .scroll-rail-foot{display:none;}
 }
 @media (max-width:900px){
   .scroll-layout,.scroll-layout.has-filters,.scroll-layout.controls-collapsed{
@@ -297,19 +320,49 @@ table.scroll-clone-dt thead th{padding-top:2px; padding-bottom:2px;}
   .scroll-rail{position:static; flex-direction:row; overflow-x:auto; top:auto;}
   .scroll-rail-foot{display:none;}
   .scroll-stats{display:none;}
-  .scroll-filters{position:static; top:auto; max-height:none;}
 }
 "
 
 .scroll_spy_js <- function() "
+function scrollCloseDrawers(){
+  document.querySelectorAll('.scroll-layout.filters-open').forEach(function(l){
+    l.classList.remove('filters-open');
+    var t=l.parentElement&&l.parentElement.querySelector('.scroll-ctl-toggle');
+    if(t){t.classList.remove('is-open'); t.setAttribute('aria-expanded','false');}
+  });
+}
 window.scrollToggleControls=function(btn){
   var body=btn.closest('.scroll-appbar').parentElement;
   var lay=body?body.querySelector('.scroll-layout'):document.querySelector('.scroll-layout');
   if(!lay) return;
-  var collapsed=lay.classList.toggle('controls-collapsed');
+  if(window.matchMedia('(max-width:1399.98px)').matches){   // filters live in a drawer here
+    var open=lay.classList.toggle('filters-open');
+    btn.classList.toggle('is-open', open);
+    btn.setAttribute('aria-expanded', String(open));
+    return;
+  }
+  var collapsed=lay.classList.toggle('controls-collapsed');  // wide: hide/show the in-grid rail
   btn.classList.toggle('is-collapsed', collapsed);
   btn.setAttribute('aria-expanded', String(!collapsed));
 };
+document.addEventListener('keydown',function(e){ if(e.key==='Escape') scrollCloseDrawers(); });
+document.addEventListener('click',function(e){   // click outside the drawer (or its toggle) closes it
+  if(e.target.closest('.scroll-filters')||e.target.closest('.scroll-ctl-toggle')) return;
+  scrollCloseDrawers();
+});
+/* Keep --sc-appbar-h in sync with the app bar's measured bottom, so sticky offsets
+   (rail, filters, scroll-margin) and the drawer top stay correct when it wraps. The
+   bottom already includes a multi-app sticky tab strip. Observes size only -> never
+   changes a width, so it cannot feed the plot ResizeObserver loop. */
+(function(){
+  function setH(){ var bar=document.querySelector('.scroll-appbar'); if(!bar) return;
+    document.documentElement.style.setProperty('--sc-appbar-h',
+      Math.round(bar.getBoundingClientRect().bottom)+'px'); }
+  function wire(){ var bar=document.querySelector('.scroll-appbar'); if(!bar) return;
+    if(window.ResizeObserver) new ResizeObserver(setH).observe(bar); setH(); }
+  window.addEventListener('resize', setH);
+  if(document.readyState!=='loading') wire(); else document.addEventListener('DOMContentLoaded', wire);
+})();
 (function(){
   function spy(){
     var items=document.querySelectorAll('.scroll-rail-item');

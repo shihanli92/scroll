@@ -160,6 +160,22 @@ test_that("the panel layout is a container query: clamp side-by-side, stack when
   expect_match(css, "@container sc-content \\(max-width:719\\.98px\\)")
 })
 
+test_that("below 1400 the filters column is an off-canvas drawer with a live app-bar offset", {
+  css <- scroll:::.scroll_css()
+  js  <- scroll:::.scroll_spy_js()
+  # the right rail becomes a fixed, transform-hidden drawer, revealed by .filters-open
+  expect_match(css, "@media \\(max-width:1399\\.98px\\)")
+  expect_match(css, "\\.scroll-layout\\.filters-open>\\.scroll-filters\\{transform:none")
+  # sticky offsets are driven by the measured app-bar bottom (survives wrapping)
+  expect_match(css, "var\\(--sc-appbar-h,70px\\)")
+  # the toggle opens the drawer on narrow viewports (matchMedia branch) and the JS
+  # keeps --sc-appbar-h in sync + closes the drawer on Escape / outside click
+  expect_match(js, "matchMedia\\('\\(max-width:1399\\.98px\\)'\\)")
+  expect_match(js, "filters-open")
+  expect_match(js, "--sc-appbar-h")
+  expect_match(js, "scrollCloseDrawers")
+})
+
 test_that("plot toolbars carry a download-scale slider wired to the dl_scale input", {
   html <- as.character(scroll:::.scroll_plot_area(identity))
   expect_match(html, "scroll-size")                     # the slider is in the toolbar
