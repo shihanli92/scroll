@@ -2,6 +2,13 @@
 
 ## UI
 
+* **Full-bleed wide screens.** The layout no longer caps at a fixed centered width leaving big edge
+  margins: the section rail (and filters column) hug the screen edges while the content fills the
+  middle up to `--sc-content-max` (1600px), so a wide monitor gives the plot much more room (e.g.
+  ~660px → ~1140px on a 2560px screen) — capped so a scatter/UMAP never grows to an unusable width.
+* **Tighter chrome.** A narrower section rail (`--sc-rail-w` 160px, long labels ellipsize with a
+  hover tooltip) and a capped text measure on panel titles/descriptions, so text no longer floats
+  across a very wide card.
 * **Responsive panel layout.** Each panel now adapts to the width its card actually has (a
   container query on the panel area), so a minimized window or a portrait/sideways monitor no
   longer squeezes the plot to a sliver:

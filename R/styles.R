@@ -89,9 +89,17 @@ body.scroll-warming{overflow:hidden;}
   max-width:74px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:center;}
 
 /* layout */
-.scroll-layout{display:grid; grid-template-columns:200px minmax(0,1fr); gap:32px;
-  max-width:1320px; margin:0 auto; padding:28px;}
-.scroll-layout.has-filters{grid-template-columns:200px minmax(0,1fr) 300px; max-width:1620px;}
+/* Full-bleed shell: the rail (and, when present, the filters column) hug the screen
+   edges while the content fills the middle up to --sc-content-max, so a wide monitor
+   gives the plot more room instead of dead margins -- but the content stays capped so
+   a scatter/UMAP never grows to an unusable width. The grid grows the capped content
+   track into free space up to its limit, then justify-content spreads the leftover to
+   the edges. Below the cap it behaves exactly like the old 1fr. */
+:root{--sc-rail-w:160px; --sc-content-max:1600px;}
+.scroll-layout{display:grid; gap:24px; padding:28px; justify-content:start;
+  grid-template-columns:var(--sc-rail-w) minmax(0,var(--sc-content-max));}
+.scroll-layout.has-filters{justify-content:space-between;
+  grid-template-columns:var(--sc-rail-w) minmax(0,var(--sc-content-max)) 300px;}
 /* right-hand global control rail: filters that narrow every panel. Sticky offset is
    driven by --sc-appbar-h (the app bar's measured bottom, set in JS), so it stays
    correct when the app bar wraps to two rows on a narrow screen; 70 is the fallback
@@ -106,7 +114,8 @@ body.scroll-warming{overflow:hidden;}
 .scroll-ctl-toggle:hover{color:var(--sc-ink); border-color:var(--sc-accent);}
 .scroll-ctl-toggle::before{content:'\\00BB';}                 /* > : hide the rail */
 .scroll-ctl-toggle.is-collapsed::before{content:'\\00AB';}    /* < : show the rail */
-.scroll-layout.controls-collapsed{grid-template-columns:200px minmax(0,1fr);}
+.scroll-layout.controls-collapsed{justify-content:start;
+  grid-template-columns:var(--sc-rail-w) minmax(0,var(--sc-content-max));}
 .scroll-layout.controls-collapsed>.scroll-filters{display:none;}
 /* a multi-select with many chips (e.g. 100 default genes) scrolls instead of
    growing the control column to thousands of px (which left the plot stranded). */
@@ -168,10 +177,13 @@ body.scroll-warming{overflow:hidden;}
 .scroll-filter .irs--shiny{top:0; height:26px;}
 .scroll-filter .irs-with-grid{height:34px;}
 .scroll-filters-empty{font-size:11px; color:var(--sc-faint);}
-.scroll-rail{position:sticky; top:calc(var(--sc-appbar-h,70px) + 10px); align-self:start; display:flex; flex-direction:column; gap:4px;}
-.scroll-rail-item{display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:9px;
-  color:var(--sc-muted); text-decoration:none; font-weight:600; font-size:14px;
+.scroll-rail{position:sticky; top:calc(var(--sc-appbar-h,70px) + 10px); align-self:start; display:flex; flex-direction:column; gap:2px;}
+.scroll-rail-item{display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:8px;
+  color:var(--sc-muted); text-decoration:none; font-weight:600; font-size:13px;
   border-left:2px solid transparent;}
+/* long/custom labels ellipsize instead of forcing the (now 160px) rail wider; the
+   title attr keeps the full label on hover */
+.scroll-rail-item>span:last-child{min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 .scroll-rail-item:hover{background:var(--sc-line-2); color:var(--sc-ink);}
 .scroll-rail-item.active{background:var(--sc-wash); color:var(--sc-accent-deep); border-left-color:var(--sc-accent);}
 .scroll-rail-num{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; color:var(--sc-faint);}
@@ -202,13 +214,14 @@ body.scroll-warming{overflow:hidden;}
 .scroll-num{font-family:ui-monospace,monospace; font-size:12px; font-weight:600; color:var(--sc-accent);
   background:var(--sc-wash); padding:2px 7px; border-radius:6px;}
 .scroll-kicker{text-transform:uppercase; letter-spacing:.1em; font-size:12px; font-weight:700; color:var(--sc-muted);}
-.scroll-title{margin:8px 0 2px; font-size:22px; font-weight:800; letter-spacing:-.02em;}
-.scroll-desc{margin:0; color:var(--sc-muted); font-size:14px;}
+/* cap the text measure so title/description don't stretch across a full-bleed card */
+.scroll-title{margin:8px 0 2px; font-size:22px; font-weight:800; letter-spacing:-.02em; max-width:48ch;}
+.scroll-desc{margin:0; color:var(--sc-muted); font-size:14px; max-width:74ch;}
 
 /* controls */
 .scroll-panel{padding:20px 22px;}
 :root{--sc-ctl-w:clamp(240px, 24%, 360px);}   /* control-column width knob */
-.scroll-controls{display:flex; flex-direction:column; gap:18px;}
+.scroll-controls{display:flex; flex-direction:column; gap:14px;}
 .scroll-cgroup-h{text-transform:uppercase; letter-spacing:.08em; font-size:11px; font-weight:700;
   color:var(--sc-faint); padding-bottom:8px; margin-bottom:10px; border-bottom:1px solid var(--sc-line-2);}
 .scroll-controls .form-label{font-size:13px; font-weight:600; margin-bottom:3px;}
@@ -320,7 +333,7 @@ table.scroll-clone-dt thead th{padding-top:2px; padding-bottom:2px;}
 }
 /* laptop band: drop the 300px filters track (it is a drawer now) */
 @media (min-width:1200px) and (max-width:1399.98px){
-  .scroll-layout.has-filters{grid-template-columns:200px minmax(0,1fr); max-width:none;}
+  .scroll-layout.has-filters{grid-template-columns:var(--sc-rail-w) minmax(0,1fr); max-width:none;}
 }
 /* mid widths (portrait monitor / small landscape): a compact numeric rail frees
    ~136px for the plot; labels collapse to the number (hover shows the full label via

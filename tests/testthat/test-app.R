@@ -160,6 +160,18 @@ test_that("the panel layout is a container query: clamp side-by-side, stack when
   expect_match(css, "@container sc-content \\(max-width:719\\.98px\\)")
 })
 
+test_that("wide screens go full-bleed with a capped content width (no fixed max-width)", {
+  css <- scroll:::.scroll_css()
+  expect_match(css, "--sc-content-max:1600px")
+  expect_match(css, "--sc-rail-w:160px")
+  # content track is capped (not a fixed centered max-width block) and edges are hugged
+  expect_match(css, "grid-template-columns:var\\(--sc-rail-w\\) minmax\\(0,var\\(--sc-content-max\\)\\)")
+  expect_match(css, "justify-content:space-between")
+  # the old fixed centered cap is gone
+  expect_no_match(css, "max-width:1320px")
+  expect_no_match(css, "max-width:1620px")
+})
+
 test_that("below 1400 the filters column is an off-canvas drawer with a live app-bar offset", {
   css <- scroll:::.scroll_css()
   js  <- scroll:::.scroll_spy_js()
