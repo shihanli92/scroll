@@ -175,6 +175,18 @@ test_that("two-up mode packs two panel cards per row (auto-fit, container-scoped
   expect_match(bar, "scrollToggleTwoUp")
 })
 
+test_that("rail items are draggable to reorder panels, persisted and resettable", {
+  js  <- scroll:::.scroll_spy_js()
+  expect_match(js, "dragstart"); expect_match(js, "scrollResetOrder")
+  expect_match(js, "scroll-order:")            # localStorage key by panel-id set
+  rail <- as.character(scroll:::.scroll_rail(
+    list(list(id = "dimplot", num = "01", label = "DimPlot"),
+         list(id = "featureplot", num = "02", label = "FeaturePlot"))))
+  expect_match(rail, "draggable=\"true\"")
+  expect_match(rail, "scroll-rail-reset")
+  expect_match(rail, "scrollResetOrder")
+})
+
 test_that("wide screens go full-bleed with a capped content width (no fixed max-width)", {
   css <- scroll:::.scroll_css()
   expect_match(css, "--sc-content-max:1600px")

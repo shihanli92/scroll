@@ -13,6 +13,9 @@
   enough) packs two panel cards side by side; it self-degrades to one column when there isn't room,
   remembers the choice across reloads, and raises the content cap so two panels fit. Each card is
   now its own layout container, so a half-width card still lays its controls out sensibly.
+* **Drag to reorder panels.** Drag a section in the left rail to reorder it; the panel cards follow,
+  everything renumbers, and the order persists across reloads (a "Reset order" link restores the
+  default). Reordering never re-renders or rebinds a panel. (Disabled on the narrow horizontal rail.)
 * **Responsive panel layout.** Each panel now adapts to the width its card actually has (a
   container query on the panel area), so a minimized window or a portrait/sideways monitor no
   longer squeezes the plot to a sliver:

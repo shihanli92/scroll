@@ -492,8 +492,11 @@ scroll_reset_panels <- function() {
     class = "scroll-rail",
     lapply(panels, function(s) tags$a(
       class = "scroll-rail-item", href = paste0("#", ns(s$id)), title = s$label,
+      draggable = "true",                              # drag to reorder (see .scroll_spy_js)
       span(class = "scroll-rail-num", s$num), span(s$label))),
-    div(class = "scroll-rail-foot", "auto-generated from manifest.yaml")
+    div(class = "scroll-rail-foot", "auto-generated from manifest.yaml",
+        tags$button(class = "scroll-rail-reset", type = "button",
+                    onclick = "scrollResetOrder(this)", "Reset order"))
   )
 }
 

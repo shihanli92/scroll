@@ -192,6 +192,13 @@ body.scroll-warming{overflow:hidden;}
 /* long/custom labels ellipsize instead of forcing the (now 160px) rail wider; the
    title attr keeps the full label on hover */
 .scroll-rail-item>span:last-child{min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+/* drag-to-reorder affordance + drop indicator (see .scroll_spy_js) */
+.scroll-rail-item{cursor:grab;}
+.scroll-rail-item.is-dragging{opacity:.45; cursor:grabbing;}
+.scroll-rail-item.drop-before{box-shadow:inset 0 2px 0 var(--sc-accent);}
+.scroll-rail-item.drop-after{box-shadow:inset 0 -2px 0 var(--sc-accent);}
+.scroll-rail-reset{display:block; margin-top:6px; background:none; border:none; padding:0;
+  color:var(--sc-accent); font:inherit; font-size:11px; cursor:pointer; text-decoration:underline;}
 .scroll-rail-item:hover{background:var(--sc-line-2); color:var(--sc-ink);}
 .scroll-rail-item.active{background:var(--sc-wash); color:var(--sc-accent-deep); border-left-color:var(--sc-accent);}
 .scroll-rail-num{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; color:var(--sc-faint);}
@@ -453,6 +460,72 @@ window.scrollToggleTwoUp=function(btn){
     secs.forEach(function(s){io.observe(s);});
   }
   if(document.readyState!=='loading') spy(); else document.addEventListener('DOMContentLoaded',spy);
+})();
+// Drag-to-reorder panels via the section rail: drag a rail item, the panel cards
+// mirror the new order, both are renumbered, and the order persists (keyed by the
+// panel-id set, so it survives reloads and self-invalidates if the panels change).
+// Moving the (Shiny-bound) card DOM does not re-render or rebind anything.
+(function(){
+  function idsOf(rail){ return [].slice.call(rail.querySelectorAll('.scroll-rail-item'))
+    .map(function(a){ return a.getAttribute('href').slice(1); }); }
+  function keyOf(rail){ return 'scroll-order:' + idsOf(rail).slice().sort().join(','); }
+  function contentOf(rail){ var lay=rail.closest('.scroll-layout'); return lay&&lay.querySelector('.scroll-content'); }
+  function renumber(rail){
+    rail.querySelectorAll('.scroll-rail-item').forEach(function(a,i){
+      var n=String(i+1).padStart(2,'0');
+      var rn=a.querySelector('.scroll-rail-num'); if(rn) rn.textContent=n;
+      var card=document.getElementById(a.getAttribute('href').slice(1));
+      var cn=card&&card.querySelector('.scroll-num'); if(cn) cn.textContent=n;
+    });
+  }
+  function mirror(rail){ var c=contentOf(rail); if(!c) return;
+    idsOf(rail).forEach(function(id){ var card=document.getElementById(id); if(card) c.appendChild(card); });
+    renumber(rail); }
+  function persist(rail){ try{ localStorage.setItem(keyOf(rail), idsOf(rail).join(',')); }catch(e){} }
+  function applyStored(){
+    document.querySelectorAll('.scroll-rail').forEach(function(rail){
+      var s; try{ s=localStorage.getItem(keyOf(rail)); }catch(e){ return; } if(!s) return;
+      s.split(',').forEach(function(id){
+        var a=rail.querySelector('.scroll-rail-item[href=\"#'+id+'\"]'); if(a) rail.appendChild(a); });
+      mirror(rail);
+    });
+  }
+  var dragEl=null, dragged=false;
+  function clearMarks(){ document.querySelectorAll('.scroll-rail-item.is-dragging,.scroll-rail-item.drop-before,.scroll-rail-item.drop-after')
+    .forEach(function(x){ x.classList.remove('is-dragging','drop-before','drop-after'); }); }
+  document.addEventListener('dragstart', function(e){
+    var it=e.target.closest('.scroll-rail-item'); if(!it) return;
+    if(window.matchMedia('(max-width:900px)').matches){ e.preventDefault(); return; }  // horizontal strip
+    dragEl=it; dragged=true; it.classList.add('is-dragging');
+    e.dataTransfer.effectAllowed='move';
+    try{ e.dataTransfer.setData('text/plain', it.getAttribute('href')); e.dataTransfer.setDragImage(it,10,10); }catch(_){}
+  });
+  document.addEventListener('dragover', function(e){
+    if(!dragEl) return; var it=e.target.closest('.scroll-rail-item');
+    if(!it || it.closest('.scroll-rail')!==dragEl.closest('.scroll-rail')) return;
+    e.preventDefault(); e.dataTransfer.dropEffect='move';
+    clearMarks(); dragEl.classList.add('is-dragging');
+    if(it!==dragEl){ var r=it.getBoundingClientRect();
+      it.classList.add(e.clientY > r.top + r.height/2 ? 'drop-after' : 'drop-before'); }
+  });
+  document.addEventListener('drop', function(e){
+    if(!dragEl) return; e.preventDefault();
+    var it=e.target.closest('.scroll-rail-item'); var rail=dragEl.closest('.scroll-rail');
+    if(it && it!==dragEl && it.closest('.scroll-rail')===rail){
+      var r=it.getBoundingClientRect();
+      rail.insertBefore(dragEl, e.clientY > r.top + r.height/2 ? it.nextSibling : it);
+      mirror(rail); persist(rail);
+    }
+    clearMarks(); dragEl=null; setTimeout(function(){ dragged=false; }, 60);
+  });
+  document.addEventListener('dragend', function(){ clearMarks(); dragEl=null; setTimeout(function(){ dragged=false; }, 60); });
+  document.addEventListener('click', function(e){   // a click that ended a drag must not navigate
+    if(dragged && e.target.closest('.scroll-rail-item')) e.preventDefault(); }, true);
+  window.scrollResetOrder=function(el){
+    var rail=el&&el.closest('.scroll-rail'); if(rail){ try{ localStorage.removeItem(keyOf(rail)); }catch(e){} }
+    location.reload();
+  };
+  if(document.readyState!=='loading') applyStored(); else document.addEventListener('DOMContentLoaded', applyStored);
 })();
 "
 
