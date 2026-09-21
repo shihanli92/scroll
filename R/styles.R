@@ -441,7 +441,16 @@ window.scrollToggleTwoUp=function(btn){
   var on=c.classList.toggle('two-up');
   btn.classList.toggle('is-on', on); btn.setAttribute('aria-pressed', String(on));
   try{ localStorage.setItem('scroll:two-up', on?'1':'0'); }catch(e){}
+  scrollAdjustTables();                                 // cards changed width -> re-fit any DataTables
 };
+// A card's width flips (full <-> half) when two-up toggles, but a DataTable only
+// lays out its column widths once; nudge every visible DataTable to recompute.
+function scrollAdjustTables(){
+  requestAnimationFrame(function(){
+    if(!(window.jQuery && jQuery.fn && jQuery.fn.dataTable)) return;
+    try{ jQuery.fn.dataTable.tables({visible:true, api:true}).columns.adjust(); }catch(e){}
+  });
+}
 (function(){
   function apply(){ var on=false; try{ on=localStorage.getItem('scroll:two-up')==='1'; }catch(e){}
     if(!on) return;
