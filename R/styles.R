@@ -459,10 +459,14 @@ window.scrollToggleTwoUp=function(btn){
     var visible={};                                     // set of intersecting card ids
     var io=new IntersectionObserver(function(es){
       es.forEach(function(e){ if(e.isIntersecting) visible[e.target.id]=1; else delete visible[e.target.id]; });
-      var firstId=null;                                 // two-up: activate the first in DOM order
-      secs.forEach(function(s){ if(firstId===null && visible[s.id]) firstId=s.id; });
-      if(firstId!==null) items.forEach(function(it){
-        it.classList.toggle('active', it.getAttribute('href')==='#'+firstId); });
+      // highlight EVERY in-view panel -- so in two-up both side-by-side row-mates
+      // light up, not just the first. Fall back to keeping the last active if the
+      // centre band momentarily sees none (e.g. between cards).
+      var any=false;
+      items.forEach(function(it){ var on=!!visible[it.getAttribute('href').slice(1)];
+        if(on) any=true; });
+      if(any) items.forEach(function(it){
+        it.classList.toggle('active', !!visible[it.getAttribute('href').slice(1)]); });
     },{rootMargin:'-45% 0px -45% 0px'});
     secs.forEach(function(s){io.observe(s);});
   }
