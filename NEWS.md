@@ -13,9 +13,11 @@
   enough) packs two panel cards side by side; it self-degrades to one column when there isn't room,
   remembers the choice across reloads, and raises the content cap so two panels fit. Each card is
   now its own layout container, so a half-width card still lays its controls out sensibly.
-* **Drag to reorder panels.** Drag a section in the left rail to reorder it; the panel cards follow,
-  everything renumbers, and the order persists across reloads (a "Reset order" link restores the
-  default). Reordering never re-renders or rebinds a panel. (Disabled on the narrow horizontal rail.)
+* **Drag to reorder panels.** Each rail item shows a grip of raised dots to signal it's movable;
+  drag one and the list reflows live (siblings slide as the item is pulled out and re-inserted).
+  The panel cards follow, everything renumbers, and the order persists across reloads (a "Reset
+  order" link restores the default). Reordering never re-renders or rebinds a panel. (Disabled on
+  the narrow horizontal rail.)
 
 # scroll 0.2.15
 

@@ -192,11 +192,15 @@ body.scroll-warming{overflow:hidden;}
 /* long/custom labels ellipsize instead of forcing the (now 160px) rail wider; the
    title attr keeps the full label on hover */
 .scroll-rail-item>span:last-child{min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-/* drag-to-reorder affordance + drop indicator (see .scroll_spy_js) */
+/* drag-to-reorder affordance (see .scroll_spy_js): a grip of raised dots on the left
+   signals the item is movable; the item dims while dragging and siblings slide (FLIP)
+   as it is pulled out and re-inserted. */
 .scroll-rail-item{cursor:grab;}
-.scroll-rail-item.is-dragging{opacity:.45; cursor:grabbing;}
-.scroll-rail-item.drop-before{box-shadow:inset 0 2px 0 var(--sc-accent);}
-.scroll-rail-item.drop-after{box-shadow:inset 0 -2px 0 var(--sc-accent);}
+.scroll-rail-item::before{content:''; flex:none; align-self:center; width:8px; height:14px;
+  opacity:.28; color:var(--sc-faint); background-repeat:repeat;
+  background-image:radial-gradient(currentColor 42%, transparent 46%); background-size:4px 4px;}
+.scroll-rail-item:hover::before{opacity:.55;}
+.scroll-rail-item.is-dragging{opacity:.4; cursor:grabbing;}
 .scroll-rail-reset{display:block; margin-top:6px; background:none; border:none; padding:0;
   color:var(--sc-accent); font:inherit; font-size:11px; cursor:pointer; text-decoration:underline;}
 .scroll-rail-item:hover{background:var(--sc-line-2); color:var(--sc-ink);}
@@ -366,13 +370,15 @@ table.scroll-clone-dt thead th{padding-top:2px; padding-bottom:2px;}
   .scroll-layout,.scroll-layout.has-filters,.scroll-layout.controls-collapsed{
     grid-template-columns:64px minmax(0,1fr); gap:20px; padding:20px; max-width:none;}
   .scroll-rail-item{justify-content:center; padding:8px 0; gap:0;}
-  .scroll-rail-item>span:last-child{display:none;}   /* keep .scroll-rail-num */
+  .scroll-rail-item>span:last-child,.scroll-rail-item::before{display:none;}   /* keep .scroll-rail-num */
   .scroll-rail-foot{display:none;}
 }
 @media (max-width:900px){
   .scroll-layout,.scroll-layout.has-filters,.scroll-layout.controls-collapsed{
     grid-template-columns:1fr; gap:16px; padding:16px;}
   .scroll-rail{position:static; flex-direction:row; overflow-x:auto; top:auto;}
+  .scroll-rail-item{cursor:default;}
+  .scroll-rail-item::before{display:none;}     /* no drag on the horizontal strip */
   .scroll-rail-foot{display:none;}
   .scroll-stats{display:none;}
 }
@@ -491,34 +497,46 @@ window.scrollToggleTwoUp=function(btn){
     });
   }
   var dragEl=null, dragged=false;
-  function clearMarks(){ document.querySelectorAll('.scroll-rail-item.is-dragging,.scroll-rail-item.drop-before,.scroll-rail-item.drop-after')
-    .forEach(function(x){ x.classList.remove('is-dragging','drop-before','drop-after'); }); }
+  // FLIP: run `mutate` (a DOM reorder) and slide every rail item from its old
+  // position to its new one, so the list visibly reflows as the dragged item is
+  // pulled out and re-inserted (rather than a static before/after highlight line).
+  function flip(rail, mutate){
+    var items=[].slice.call(rail.querySelectorAll('.scroll-rail-item'));
+    var y0={}; items.forEach(function(it){ y0[it.getAttribute('href')]=it.getBoundingClientRect().top; });
+    mutate();
+    items.forEach(function(it){
+      var dy=y0[it.getAttribute('href')]-it.getBoundingClientRect().top; if(!dy) return;
+      it.style.transition='none'; it.style.transform='translateY('+dy+'px)';
+      requestAnimationFrame(function(){ it.style.transition='transform .16s ease'; it.style.transform=''; });
+    });
+  }
+  function cleanup(){
+    document.querySelectorAll('.scroll-rail-item').forEach(function(x){
+      x.classList.remove('is-dragging'); x.style.transition=''; x.style.transform=''; });
+    dragEl=null; setTimeout(function(){ dragged=false; }, 60);
+  }
   document.addEventListener('dragstart', function(e){
     var it=e.target.closest('.scroll-rail-item'); if(!it) return;
     if(window.matchMedia('(max-width:900px)').matches){ e.preventDefault(); return; }  // horizontal strip
-    dragEl=it; dragged=true; it.classList.add('is-dragging');
+    dragEl=it; dragged=true;
     e.dataTransfer.effectAllowed='move';
     try{ e.dataTransfer.setData('text/plain', it.getAttribute('href')); e.dataTransfer.setDragImage(it,10,10); }catch(_){}
+    requestAnimationFrame(function(){ if(dragEl) dragEl.classList.add('is-dragging'); });  // dim after the ghost is captured
   });
   document.addEventListener('dragover', function(e){
     if(!dragEl) return; var it=e.target.closest('.scroll-rail-item');
-    if(!it || it.closest('.scroll-rail')!==dragEl.closest('.scroll-rail')) return;
+    if(!it || it===dragEl || it.closest('.scroll-rail')!==dragEl.closest('.scroll-rail')) return;
     e.preventDefault(); e.dataTransfer.dropEffect='move';
-    clearMarks(); dragEl.classList.add('is-dragging');
-    if(it!==dragEl){ var r=it.getBoundingClientRect();
-      it.classList.add(e.clientY > r.top + r.height/2 ? 'drop-after' : 'drop-before'); }
+    var rail=dragEl.closest('.scroll-rail'); var r=it.getBoundingClientRect();
+    var ref=e.clientY > r.top + r.height/2 ? it.nextSibling : it;   // slot to drop into
+    if(ref===dragEl || dragEl.nextSibling===ref) return;            // already there -> no-op (avoids FLIP thrash)
+    flip(rail, function(){ rail.insertBefore(dragEl, ref); });      // live take-out & re-insert
   });
-  document.addEventListener('drop', function(e){
+  document.addEventListener('drop', function(e){                    // dragEl is already in place -> mirror the cards
     if(!dragEl) return; e.preventDefault();
-    var it=e.target.closest('.scroll-rail-item'); var rail=dragEl.closest('.scroll-rail');
-    if(it && it!==dragEl && it.closest('.scroll-rail')===rail){
-      var r=it.getBoundingClientRect();
-      rail.insertBefore(dragEl, e.clientY > r.top + r.height/2 ? it.nextSibling : it);
-      mirror(rail); persist(rail);
-    }
-    clearMarks(); dragEl=null; setTimeout(function(){ dragged=false; }, 60);
+    var rail=dragEl.closest('.scroll-rail'); mirror(rail); persist(rail); cleanup();
   });
-  document.addEventListener('dragend', function(){ clearMarks(); dragEl=null; setTimeout(function(){ dragged=false; }, 60); });
+  document.addEventListener('dragend', cleanup);
   document.addEventListener('click', function(e){   // a click that ended a drag must not navigate
     if(dragged && e.target.closest('.scroll-rail-item')) e.preventDefault(); }, true);
   window.scrollResetOrder=function(el){
