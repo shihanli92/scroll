@@ -248,7 +248,7 @@ body.scroll-warming{overflow:hidden;}
 
 /* controls */
 .scroll-panel{padding:20px 22px;}
-:root{--sc-ctl-w:clamp(240px, 24%, 360px);}   /* control-column width knob */
+:root{--sc-ctl-w:clamp(232px, 22%, 320px);}   /* control-column width knob (narrower = tighter inputs + more plot) */
 .scroll-controls{display:flex; flex-direction:column; gap:12px;}
 .scroll-cgroup-h{text-transform:uppercase; letter-spacing:.08em; font-size:11px; font-weight:700;
   color:var(--sc-faint); padding-bottom:6px; margin-bottom:8px; border-bottom:1px solid var(--sc-line-2);}

@@ -8,8 +8,9 @@
   ~660px → ~1140px on a 2560px screen) — capped so a scatter/UMAP never grows to an unusable width.
 * **Tighter chrome.** A narrower section rail (`--sc-rail-w` 160px, long labels ellipsize with a
   hover tooltip), a capped text measure on panel titles/descriptions so text no longer floats across
-  a very wide card, and tighter control-column spacing (smaller group/field gaps) to reduce dead
-  space beside the plot.
+  a very wide card, and a tighter, slightly narrower control column (`--sc-ctl-w` now
+  `clamp(232px, 22%, 320px)` with smaller group/field gaps) so the inputs don't sprawl and the plot
+  gets more room — without introducing any horizontal scroll in the controls.
 * **Two panels per row (wide screens).** A toggle in the app bar (shown when the screen is wide
   enough) packs two panel cards side by side; it self-degrades to one column when there isn't room,
   remembers the choice across reloads, and raises the content cap so two panels fit. Each card is
