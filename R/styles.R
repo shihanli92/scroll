@@ -114,6 +114,14 @@ body.scroll-warming{overflow:hidden;}
 .scroll-ctl-toggle:hover{color:var(--sc-ink); border-color:var(--sc-accent);}
 .scroll-ctl-toggle::before{content:'\\00BB';}                 /* > : hide the rail */
 .scroll-ctl-toggle.is-collapsed::before{content:'\\00AB';}    /* < : show the rail */
+/* two-panels-per-row toggle: same pill as the rail toggle; only shown where two
+   columns can actually fit (a narrower screen can't, and auto-fit stays one column). */
+.scroll-two-toggle{flex:none; width:32px; height:32px; padding:0; cursor:pointer; line-height:1;
+  border:1px solid var(--sc-line); background:#fff; color:var(--sc-muted); border-radius:8px; font-size:14px;}
+.scroll-two-toggle:hover{color:var(--sc-ink); border-color:var(--sc-accent);}
+.scroll-two-toggle::before{content:'\\25EB';}                 /* ◫ : two columns */
+.scroll-two-toggle.is-on{color:var(--sc-accent-deep); border-color:var(--sc-accent); background:var(--sc-wash);}
+@media (max-width:1499.98px){.scroll-two-toggle{display:none;}}
 .scroll-layout.controls-collapsed{justify-content:start;
   grid-template-columns:var(--sc-rail-w) minmax(0,var(--sc-content-max));}
 .scroll-layout.controls-collapsed>.scroll-filters{display:none;}
@@ -205,9 +213,18 @@ body.scroll-warming{overflow:hidden;}
 /* container-type lets each panel size its control/plot split from the width the
    card actually has (see the @container rules below). inline-size also means panel
    content can never widen the column, strengthening the HiDPI no-reflow invariant. */
-.scroll-content{display:flex; flex-direction:column; gap:28px;
+/* one card per row by default; .two-up packs two per row on a wide screen (auto-fit
+   self-degrades to one column when there isn't room). align-items:start keeps
+   ragged-height row-mates from stretching. */
+.scroll-content{display:grid; grid-template-columns:minmax(0,1fr); gap:28px; align-items:start;
   container-type:inline-size; container-name:sc-content;}
+.scroll-content.two-up{grid-template-columns:repeat(auto-fit, minmax(min(800px,100%),1fr));}
+/* Each CARD is the query container for its control/plot split, so a half-width card
+   in two-up mode stacks its own controls independently (see the @container sc-card
+   rules below). --sc-content-max is bumped when two-up is on so two 800px cards fit. */
+.scroll-layout:has(.two-up){--sc-content-max:2000px;}
 .scroll-panel-card{scroll-margin-top:calc(var(--sc-appbar-h,70px) + 14px); border:1px solid var(--sc-line); border-radius:12px;
+  container-type:inline-size; container-name:sc-card; min-width:0;
   background:var(--sc-card); box-shadow:0 6px 20px -12px rgba(17,24,38,.18); overflow:hidden;}
 .scroll-panel-card>.card-header{background:var(--sc-card); border-bottom:1px solid var(--sc-line-2); padding:18px 22px;}
 .scroll-eyebrow{display:flex; align-items:center; gap:10px;}
@@ -233,11 +250,11 @@ body.scroll-warming{overflow:hidden;}
    plot, so the plot is never squeezed to an unusable sliver. One rule adapts to
    filters on/off, collapsed rail, or multi-app tabs. bslib lays c(3,9) out as a
    12-track grid with g-col-sm-* spans; both branches override that. */
-@container sc-content (min-width:720px){
+@container sc-card (min-width:720px){
   .scroll-panel.bslib-grid{grid-template-columns:var(--sc-ctl-w) minmax(0,1fr) !important;}
   .scroll-panel.bslib-grid>.bslib-grid-item{grid-column:auto !important;}
 }
-@container sc-content (max-width:719.98px){
+@container sc-card (max-width:719.98px){
   .scroll-panel.bslib-grid{grid-template-columns:minmax(0,1fr) !important; gap:14px;}
   .scroll-panel.bslib-grid>.bslib-grid-item{grid-column:auto !important;}
   .scroll-controls{max-height:min(42vh,420px);
@@ -245,7 +262,7 @@ body.scroll-warming{overflow:hidden;}
   .scroll-controls>.btn,.scroll-controls>button,.scroll-controls>.bslib-input-task-button{grid-column:1/-1;}
   .scroll-controls .selectize-input{max-height:120px;}
 }
-@container sc-content (max-width:479.98px){   /* phones: reclaim card chrome */
+@container sc-card (max-width:479.98px){   /* phones: reclaim card chrome */
   .scroll-panel{padding:12px 10px;}
   .scroll-panel-card>.card-body{padding:8px;}
   .scroll-panel-card>.card-header{padding:14px 16px;}
@@ -258,7 +275,7 @@ body.scroll-warming{overflow:hidden;}
 .scroll-ctl-btn:hover{color:var(--sc-accent-deep); border-color:var(--sc-accent);}
 .scroll-ctl-btn::after{content:' \\25BE'; opacity:.7;}                 /* ▾ open */
 .scroll-ctl-btn[aria-expanded='false']::after{content:' \\25B8';}     /* ▸ collapsed */
-@container sc-content (max-width:719.98px){
+@container sc-card (max-width:719.98px){
   .scroll-panel-card:has(.scroll-panel.bslib-grid) .scroll-ctl-btn{display:inline-flex;}
   .scroll-panel-card.scroll-ctl-hidden .scroll-panel.bslib-grid>.bslib-grid-item:first-child{display:none;}
 }
@@ -401,15 +418,37 @@ document.addEventListener('click',function(e){   // click outside the drawer (or
   window.addEventListener('resize', setH);
   if(document.readyState!=='loading') wire(); else document.addEventListener('DOMContentLoaded', wire);
 })();
+// Two panels per row: toggle .two-up on the (nearest) .scroll-content, remembered
+// across reloads. auto-fit self-degrades to one column when there isn't room.
+window.scrollToggleTwoUp=function(btn){
+  var body=btn.closest('.scroll-appbar').parentElement;
+  var c=body?body.querySelector('.scroll-content'):document.querySelector('.scroll-content');
+  if(!c) return;
+  var on=c.classList.toggle('two-up');
+  btn.classList.toggle('is-on', on); btn.setAttribute('aria-pressed', String(on));
+  try{ localStorage.setItem('scroll:two-up', on?'1':'0'); }catch(e){}
+};
+(function(){
+  function apply(){ var on=false; try{ on=localStorage.getItem('scroll:two-up')==='1'; }catch(e){}
+    if(!on) return;
+    document.querySelectorAll('.scroll-content').forEach(function(c){c.classList.add('two-up');});
+    document.querySelectorAll('.scroll-two-toggle').forEach(function(b){
+      b.classList.add('is-on'); b.setAttribute('aria-pressed','true'); });
+  }
+  if(document.readyState!=='loading') apply(); else document.addEventListener('DOMContentLoaded',apply);
+})();
 (function(){
   function spy(){
     var items=document.querySelectorAll('.scroll-rail-item');
     var secs=document.querySelectorAll('.scroll-panel-card');
     if(!secs.length) return;
+    var visible={};                                     // set of intersecting card ids
     var io=new IntersectionObserver(function(es){
-      es.forEach(function(e){ if(e.isIntersecting){
-        items.forEach(function(it){ it.classList.toggle('active', it.getAttribute('href')==='#'+e.target.id); });
-      }});
+      es.forEach(function(e){ if(e.isIntersecting) visible[e.target.id]=1; else delete visible[e.target.id]; });
+      var firstId=null;                                 // two-up: activate the first in DOM order
+      secs.forEach(function(s){ if(firstId===null && visible[s.id]) firstId=s.id; });
+      if(firstId!==null) items.forEach(function(it){
+        it.classList.toggle('active', it.getAttribute('href')==='#'+firstId); });
     },{rootMargin:'-45% 0px -45% 0px'});
     secs.forEach(function(s){io.observe(s);});
   }

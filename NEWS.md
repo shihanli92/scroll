@@ -9,6 +9,10 @@
 * **Tighter chrome.** A narrower section rail (`--sc-rail-w` 160px, long labels ellipsize with a
   hover tooltip) and a capped text measure on panel titles/descriptions, so text no longer floats
   across a very wide card.
+* **Two panels per row (wide screens).** A toggle in the app bar (shown when the screen is wide
+  enough) packs two panel cards side by side; it self-degrades to one column when there isn't room,
+  remembers the choice across reloads, and raises the content cap so two panels fit. Each card is
+  now its own layout container, so a half-width card still lays its controls out sensibly.
 * **Responsive panel layout.** Each panel now adapts to the width its card actually has (a
   container query on the panel area), so a minimized window or a portrait/sideways monitor no
   longer squeezes the plot to a sliver:

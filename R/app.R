@@ -468,6 +468,10 @@ scroll_reset_panels <- function() {
     tags$button(class = "scroll-ctl-toggle", type = "button",
                 onclick = "scrollToggleControls(this)", title = "Show/hide controls",
                 `aria-label` = "Show or hide the control rail")
+  # two-panels-per-row toggle (CSS-hidden on screens too narrow to fit two)
+  two_toggle <- tags$button(class = "scroll-two-toggle", type = "button",
+                onclick = "scrollToggleTwoUp(this)", title = "Two panels per row",
+                `aria-pressed` = "false", `aria-label` = "Show two panels per row")
   div(
     class = "scroll-appbar",
     div(class = "scroll-brand", brand),
@@ -478,6 +482,7 @@ scroll_reset_panels <- function() {
         .scroll_stat(format(m$assays[[assay]]$n_features, big.mark = ","), "genes"),
         .scroll_stat(paste(.scroll_assays_of(m), collapse = ", "), "assays"),
         .scroll_stat(paste(.scroll_reductions(m), collapse = ", "), "reductions")),
+    two_toggle,
     toggle
   )
 }

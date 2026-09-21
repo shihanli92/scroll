@@ -152,12 +152,27 @@ test_that("the panel layout is a container query: clamp side-by-side, stack when
   css <- scroll:::.scroll_css()
   # a clamped width knob (usable min on laptops, capped on big monitors) ...
   expect_match(css, "--sc-ctl-w:clamp\\(")
-  # ... driving a container query on .scroll-content (each card adapts to its width)
+  # ... driving a container query on each CARD (so a half-width two-up card adapts)
   expect_match(css, "container-type:inline-size")
-  expect_match(css, "@container sc-content \\(min-width:720px\\)")
+  expect_match(css, "@container sc-card \\(min-width:720px\\)")
   expect_match(css, "grid-template-columns:var\\(--sc-ctl-w\\) minmax\\(0,1fr\\)")
   # narrow cards stack controls above a full-width plot
-  expect_match(css, "@container sc-content \\(max-width:719\\.98px\\)")
+  expect_match(css, "@container sc-card \\(max-width:719\\.98px\\)")
+})
+
+test_that("two-up mode packs two panel cards per row (auto-fit, container-scoped)", {
+  css <- scroll:::.scroll_css()
+  js  <- scroll:::.scroll_spy_js()
+  expect_match(css, "\\.scroll-content\\.two-up\\{grid-template-columns:repeat\\(auto-fit")
+  expect_match(css, "\\.scroll-layout:has\\(\\.two-up\\)\\{--sc-content-max:2000px")
+  expect_match(css, "container-name:sc-card")
+  expect_match(js, "scrollToggleTwoUp")
+  expect_match(js, "scroll:two-up")            # persisted in localStorage
+  # the toggle button is emitted into the app bar
+  data <- scroll:::.scroll_load(test_project()); on.exit(scroll_disconnect(data$con))
+  bar <- as.character(scroll:::.scroll_appbar(data, "t"))
+  expect_match(bar, "scroll-two-toggle")
+  expect_match(bar, "scrollToggleTwoUp")
 })
 
 test_that("wide screens go full-bleed with a capped content width (no fixed max-width)", {
