@@ -125,7 +125,7 @@ body.scroll-warming{overflow:hidden;}
 .scroll-two-toggle.is-on,.scroll-ctl-toggle.is-collapsed,.scroll-ctl-toggle.is-open{
   color:var(--sc-accent-deep); border-color:var(--sc-accent); background:var(--sc-wash);}
 /* two-up only shown where two columns can actually fit */
-@media (max-width:1499.98px){.scroll-two-toggle{display:none;}}
+@media (max-width:1549.98px){.scroll-two-toggle{display:none;}}   /* only where two columns can actually fit (with filters drawered) */
 .scroll-layout.controls-collapsed{justify-content:start;
   grid-template-columns:var(--sc-rail-w) minmax(0,var(--sc-content-max));}
 .scroll-layout.controls-collapsed>.scroll-filters{display:none;}
@@ -234,11 +234,25 @@ body.scroll-warming{overflow:hidden;}
    ragged-height row-mates from stretching. */
 .scroll-content{display:grid; grid-template-columns:minmax(0,1fr); gap:28px; align-items:start;
   container-type:inline-size; container-name:sc-content;}
-.scroll-content.two-up{grid-template-columns:repeat(auto-fit, minmax(min(800px,100%),1fr));}
+.scroll-content.two-up{grid-template-columns:repeat(auto-fit, minmax(min(640px,100%),1fr));}
 /* Each CARD is the query container for its control/plot split, so a half-width card
    in two-up mode stacks its own controls independently (see the @container sc-card
-   rules below). --sc-content-max is bumped when two-up is on so two 800px cards fit. */
-.scroll-layout:has(.two-up){--sc-content-max:2000px;}
+   rules below). --sc-content-max is bumped when two-up is on so two cards fit. */
+.scroll-layout:has(.two-up){--sc-content-max:2200px;}
+/* Two-up needs the whole width: when it's on, the filters column becomes an off-canvas
+   drawer even on a wide screen (otherwise its 300px track leaves no room for a second
+   card, so two-up looked like it did nothing). The app-bar controls button opens it. */
+.scroll-layout.has-filters:has(.two-up){justify-content:start;
+  grid-template-columns:var(--sc-rail-w) minmax(0,var(--sc-content-max));}
+.scroll-layout.has-filters:has(.two-up)>.scroll-filters,
+.scroll-layout.controls-collapsed:has(.two-up)>.scroll-filters{
+  position:fixed; top:var(--sc-appbar-h,70px); right:0; z-index:1050; display:flex;
+  width:min(300px,90vw); height:calc(100dvh - var(--sc-appbar-h,70px)); max-height:none;
+  padding:16px 16px 24px; background:var(--sc-card); border-left:1px solid var(--sc-line);
+  box-shadow:-14px 0 34px -18px rgba(17,24,38,.4); overflow-y:auto; overscroll-behavior:contain;
+  transform:translateX(105%); transition:transform .18s ease;}
+.scroll-layout.filters-open:has(.two-up)>.scroll-filters{transform:none;}
+.scroll-layout:has(.two-up) .scroll-filters .scroll-ctl-body .scroll-ctl-body{grid-template-columns:1fr;}
 .scroll-panel-card{scroll-margin-top:calc(var(--sc-appbar-h,70px) + 14px); border:1px solid var(--sc-line); border-radius:12px;
   container-type:inline-size; container-name:sc-card; min-width:0;
   background:var(--sc-card); box-shadow:0 6px 20px -12px rgba(17,24,38,.18); overflow:hidden;}
@@ -400,7 +414,8 @@ window.scrollToggleControls=function(btn){
   var body=btn.closest('.scroll-appbar').parentElement;
   var lay=body?body.querySelector('.scroll-layout'):document.querySelector('.scroll-layout');
   if(!lay) return;
-  if(window.matchMedia('(max-width:1399.98px)').matches){   // filters live in a drawer here
+  // filters live in a drawer below 1400, and also whenever two-up is on (any width)
+  if(window.matchMedia('(max-width:1399.98px)').matches || lay.querySelector('.scroll-content.two-up')){
     var open=lay.classList.toggle('filters-open');
     btn.classList.toggle('is-open', open);
     btn.setAttribute('aria-expanded', String(open));
@@ -446,6 +461,7 @@ window.scrollToggleTwoUp=function(btn){
   var on=c.classList.toggle('two-up');
   btn.classList.toggle('is-on', on); btn.setAttribute('aria-pressed', String(on));
   btn.title = on ? 'One panel per row' : 'Two panels per row';
+  scrollCloseDrawers();                                 // filters drawer mode may change -> start closed
   try{ localStorage.setItem('scroll:two-up', on?'1':'0'); }catch(e){}
   scrollAdjustTables();                                 // cards changed width -> re-fit any DataTables
 };

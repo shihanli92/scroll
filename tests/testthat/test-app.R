@@ -164,7 +164,7 @@ test_that("two-up mode packs two panel cards per row (auto-fit, container-scoped
   css <- scroll:::.scroll_css()
   js  <- scroll:::.scroll_spy_js()
   expect_match(css, "\\.scroll-content\\.two-up\\{grid-template-columns:repeat\\(auto-fit")
-  expect_match(css, "\\.scroll-layout:has\\(\\.two-up\\)\\{--sc-content-max:2000px")
+  expect_match(css, "\\.scroll-layout:has\\(\\.two-up\\)\\{--sc-content-max:2200px")
   expect_match(css, "container-name:sc-card")
   expect_match(js, "scrollToggleTwoUp")
   expect_match(js, "scroll:two-up")            # persisted in localStorage

@@ -40,7 +40,10 @@
 * **Two panels per row (wide screens).** A toggle in the app bar (shown when the screen is wide
   enough) packs two panel cards side by side; it self-degrades to one column when there isn't room,
   remembers the choice across reloads, and raises the content cap so two panels fit. Each card is
-  now its own layout container, so a half-width card still lays its controls out sensibly.
+  now its own layout container, so a half-width card still lays its controls out sensibly. When
+  two-up is on, the global filters/theme rail becomes an off-canvas drawer (reachable from the
+  controls button) so it doesn't steal the width the second panel needs — two-up now works even
+  with the filters column up.
 * **Drag to reorder panels.** Each rail item shows a grip of raised dots to signal it's movable;
   drag one and the list reflows live (siblings slide as the item is pulled out and re-inserted).
   The panel cards follow, everything renumbers, and the order persists across reloads (a "Reset
