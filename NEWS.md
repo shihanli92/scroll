@@ -1,6 +1,6 @@
-# scroll 0.2.15
+# scroll 0.2.16
 
-## UI
+## UI (wide screens)
 
 * **Full-bleed wide screens.** The layout no longer caps at a fixed centered width leaving big edge
   margins: the section rail (and filters column) hug the screen edges while the content fills the
@@ -16,6 +16,11 @@
 * **Drag to reorder panels.** Drag a section in the left rail to reorder it; the panel cards follow,
   everything renumbers, and the order persists across reloads (a "Reset order" link restores the
   default). Reordering never re-renders or rebinds a panel. (Disabled on the narrow horizontal rail.)
+
+# scroll 0.2.15
+
+## UI
+
 * **Responsive panel layout.** Each panel now adapts to the width its card actually has (a
   container query on the panel area), so a minimized window or a portrait/sideways monitor no
   longer squeezes the plot to a sliver:
