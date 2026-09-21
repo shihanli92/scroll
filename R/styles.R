@@ -249,11 +249,12 @@ body.scroll-warming{overflow:hidden;}
 /* controls */
 .scroll-panel{padding:20px 22px;}
 :root{--sc-ctl-w:clamp(240px, 24%, 360px);}   /* control-column width knob */
-.scroll-controls{display:flex; flex-direction:column; gap:14px;}
+.scroll-controls{display:flex; flex-direction:column; gap:12px;}
 .scroll-cgroup-h{text-transform:uppercase; letter-spacing:.08em; font-size:11px; font-weight:700;
-  color:var(--sc-faint); padding-bottom:8px; margin-bottom:10px; border-bottom:1px solid var(--sc-line-2);}
-.scroll-controls .form-label{font-size:13px; font-weight:600; margin-bottom:3px;}
-.scroll-controls .form-group,.scroll-controls .shiny-input-container{margin-bottom:12px;}
+  color:var(--sc-faint); padding-bottom:6px; margin-bottom:8px; border-bottom:1px solid var(--sc-line-2);}
+.scroll-controls .form-label{font-size:13px; font-weight:600; margin-bottom:2px;}
+.scroll-controls .form-group,.scroll-controls .shiny-input-container{margin-bottom:8px;}
+.scroll-controls .bslib-input-switch{margin-bottom:6px;}       /* switches are short -> less gap */
 /* Responsive panel split (container query on .scroll-content). Side-by-side only
    when the card is wide enough to keep the plot usable (>=720px = ~78 chrome + 240
    controls + 24 gap + 378 plot); narrower cards -- a minimized window, a portrait
