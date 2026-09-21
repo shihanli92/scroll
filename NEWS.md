@@ -2,10 +2,18 @@
 
 ## UI
 
-* **Responsive control column.** Every panel's control column now scales with the screen
-  (`clamp(260px, 24%, 360px)`) instead of a fixed 25%: a usable minimum on laptops, and capped on
-  large monitors so the plot takes the extra width rather than an over-wide control column. The
-  width is a CSS variable (`--sc-ctl-w`) so it can become a per-app setting later.
+* **Responsive panel layout.** Each panel now adapts to the width its card actually has (a
+  container query on the panel area), so a minimized window or a portrait/sideways monitor no
+  longer squeezes the plot to a sliver:
+  * Wide enough (card ≥720px): controls sit beside the plot in a width that scales with the screen
+    (`--sc-ctl-w = clamp(240px, 24%, 360px)`) — a usable minimum on laptops, capped on large
+    monitors so the plot takes the extra room instead of an over-wide control column.
+  * Narrower (card <720px): controls **stack above** the plot in a compact, capped multi-column
+    box, and the plot spans the full card width.
+* **Bounded plot height.** The default plot height is now `clamp(320px, min(100vh−190px, 90cqw),
+  1100px)` — a tall/portrait monitor no longer stretches a plot to ~1700px; landscape is unchanged.
+* **App bar wraps** and ellipsizes a long dataset title instead of overflowing; a **compact numeric
+  section rail** (901–1199px, non-filters layouts) frees width for the plot, with hover labels.
 
 ## Heatmap & DotPlot
 

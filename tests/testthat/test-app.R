@@ -148,13 +148,16 @@ test_that("base CSS suppresses scrollbar-toggle resize loops (both axes)", {
   expect_match(css, "\\.scroll-rail\\{position:sticky")
 })
 
-test_that("the control column width is a resolution-responsive clamp, not a fixed 25%", {
+test_that("the panel layout is a container query: clamp side-by-side, stack when narrow", {
   css <- scroll:::.scroll_css()
   # a clamped width knob (usable min on laptops, capped on big monitors) ...
   expect_match(css, "--sc-ctl-w:clamp\\(")
-  # ... driving a 2-track [controls | plot] grid at >= the sm breakpoint
-  expect_match(css, "min-width:576px")
+  # ... driving a container query on .scroll-content (each card adapts to its width)
+  expect_match(css, "container-type:inline-size")
+  expect_match(css, "@container sc-content \\(min-width:720px\\)")
   expect_match(css, "grid-template-columns:var\\(--sc-ctl-w\\) minmax\\(0,1fr\\)")
+  # narrow cards stack controls above a full-width plot
+  expect_match(css, "@container sc-content \\(max-width:719\\.98px\\)")
 })
 
 test_that("plot toolbars carry a download-scale slider wired to the dl_scale input", {

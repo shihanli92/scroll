@@ -27,13 +27,15 @@ body{background:var(--sc-ground); color:var(--sc-ink);
 
 /* app bar */
 .scroll-appbar{position:sticky; top:0; z-index:1000; display:flex; align-items:center;
-  justify-content:space-between; gap:24px; padding:14px 28px;
+  justify-content:space-between; gap:24px; padding:14px 28px; flex-wrap:wrap; row-gap:8px;
   background:rgba(251,252,253,.85); backdrop-filter:saturate(1.4) blur(8px);
   border-bottom:1px solid var(--sc-line);}
-.scroll-brand{display:flex; align-items:baseline; gap:8px; font-size:19px;}
+.scroll-brand{display:flex; align-items:baseline; gap:8px; font-size:19px; min-width:0; flex:1 1 auto;}
 .scroll-logo{font-weight:800; letter-spacing:-.02em;}
 .scroll-slash{color:var(--sc-faint);}
-.scroll-dataset{font-weight:600; color:var(--sc-muted);}
+/* ellipsize a long dataset title instead of letting it force the bar taller/wider */
+.scroll-dataset{font-weight:600; color:var(--sc-muted);
+  min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 .scroll-version{font-size:11px; font-weight:600; color:var(--sc-faint); font-variant-numeric:tabular-nums; padding:1px 6px; border:1px solid var(--sc-line-2); border-radius:6px; align-self:center;}
 .scroll-stats{display:flex; gap:0;}
 .scroll-stat{display:flex; flex-direction:column; padding:0 18px; border-left:1px solid var(--sc-line-2);}
@@ -184,7 +186,11 @@ body.scroll-warming{overflow:hidden;}
 .scroll-multi .scroll-rail{top:123px;}
 
 /* panels */
-.scroll-content{display:flex; flex-direction:column; gap:28px;}
+/* container-type lets each panel size its control/plot split from the width the
+   card actually has (see the @container rules below). inline-size also means panel
+   content can never widen the column, strengthening the HiDPI no-reflow invariant. */
+.scroll-content{display:flex; flex-direction:column; gap:28px;
+  container-type:inline-size; container-name:sc-content;}
 .scroll-panel-card{scroll-margin-top:84px; border:1px solid var(--sc-line); border-radius:12px;
   background:var(--sc-card); box-shadow:0 6px 20px -12px rgba(17,24,38,.18); overflow:hidden;}
 .scroll-panel-card>.card-header{background:var(--sc-card); border-bottom:1px solid var(--sc-line-2); padding:18px 22px;}
@@ -197,22 +203,36 @@ body.scroll-warming{overflow:hidden;}
 
 /* controls */
 .scroll-panel{padding:20px 22px;}
-/* Control column width scales with the screen instead of a fixed 25%. bslib lays
-   layout_columns(c(3,9)) out as a 12-track grid with g-col-sm-* spans; at >=sm we
-   replace that with a 2-track [controls | plot] grid whose control track is clamped
-   -- so it stays usable on a laptop and never grows absurdly wide on a large monitor
-   (the plot takes the extra room). Below sm, bslib's own full-width stacking stands.
-   --sc-ctl-w is the knob (a later per-app UI setting can override it). */
-:root{--sc-ctl-w:clamp(260px, 24%, 360px);}
-@media (min-width:576px){
-  .scroll-panel.bslib-grid{grid-template-columns:var(--sc-ctl-w) minmax(0,1fr) !important;}
-  .scroll-panel.bslib-grid>.bslib-grid-item{grid-column:auto !important;}
-}
+:root{--sc-ctl-w:clamp(240px, 24%, 360px);}   /* control-column width knob */
 .scroll-controls{display:flex; flex-direction:column; gap:18px;}
 .scroll-cgroup-h{text-transform:uppercase; letter-spacing:.08em; font-size:11px; font-weight:700;
   color:var(--sc-faint); padding-bottom:8px; margin-bottom:10px; border-bottom:1px solid var(--sc-line-2);}
 .scroll-controls .form-label{font-size:13px; font-weight:600; margin-bottom:3px;}
 .scroll-controls .form-group,.scroll-controls .shiny-input-container{margin-bottom:12px;}
+/* Responsive panel split (container query on .scroll-content). Side-by-side only
+   when the card is wide enough to keep the plot usable (>=720px = ~78 chrome + 240
+   controls + 24 gap + 378 plot); narrower cards -- a minimized window, a portrait
+   monitor -- STACK: controls become a capped multi-column box ABOVE a full-width
+   plot, so the plot is never squeezed to an unusable sliver. One rule adapts to
+   filters on/off, collapsed rail, or multi-app tabs. bslib lays c(3,9) out as a
+   12-track grid with g-col-sm-* spans; both branches override that. */
+@container sc-content (min-width:720px){
+  .scroll-panel.bslib-grid{grid-template-columns:var(--sc-ctl-w) minmax(0,1fr) !important;}
+  .scroll-panel.bslib-grid>.bslib-grid-item{grid-column:auto !important;}
+}
+@container sc-content (max-width:719.98px){
+  .scroll-panel.bslib-grid{grid-template-columns:minmax(0,1fr) !important; gap:14px;}
+  .scroll-panel.bslib-grid>.bslib-grid-item{grid-column:auto !important;}
+  .scroll-controls{max-height:min(42vh,420px);
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:0 18px; align-items:start;}
+  .scroll-controls>.btn,.scroll-controls>button,.scroll-controls>.bslib-input-task-button{grid-column:1/-1;}
+  .scroll-controls .selectize-input{max-height:120px;}
+}
+@container sc-content (max-width:479.98px){   /* phones: reclaim card chrome */
+  .scroll-panel{padding:12px 10px;}
+  .scroll-panel-card>.card-body{padding:8px;}
+  .scroll-panel-card>.card-header{padding:14px 16px;}
+}
 /* min-width:0 is essential: .scroll-plot is a flex item, so its default
    min-width:auto resolves to min-content = the rendered plot image's width. That
    makes the container size to the image, the image size to the container, and on a
@@ -257,9 +277,23 @@ table.scroll-clone-dt thead th{padding-top:2px; padding-bottom:2px;}
   background:var(--sc-wash);}
 .scroll-dl.btn .fa,.scroll-dl.btn svg{margin-right:5px; opacity:.7;}
 
+/* tighter app bar on smaller screens; drop the version chip on phones */
+@media (max-width:1199.98px){.scroll-appbar{padding:10px 16px; column-gap:14px;} .scroll-stat{padding:0 12px;}}
+@media (max-width:576px){.scroll-brand{font-size:16px;} .scroll-version{display:none;}}
+/* mid widths (portrait monitor / small landscape): a compact numeric rail frees
+   ~136px for the plot; item labels collapse to just the number (hover shows the
+   full label via the title attr). Scoped to :not(.has-filters) -- a filters layout
+   keeps its 3-track grid (the panel container query still stacks when its content
+   gets narrow), and Phase 2 turns the filters column into a drawer. */
+@media (min-width:900.02px) and (max-width:1199.98px){
+  .scroll-layout:not(.has-filters){grid-template-columns:64px minmax(0,1fr); gap:20px; padding:20px; max-width:none;}
+  .scroll-layout:not(.has-filters) .scroll-rail-item{justify-content:center; padding:8px 0; gap:0;}
+  .scroll-layout:not(.has-filters) .scroll-rail-item>span:last-child{display:none;}   /* keep .scroll-rail-num */
+  .scroll-layout:not(.has-filters) .scroll-rail-foot{display:none;}
+}
 @media (max-width:900px){
   .scroll-layout,.scroll-layout.has-filters,.scroll-layout.controls-collapsed{
-    grid-template-columns:1fr; gap:16px;}
+    grid-template-columns:1fr; gap:16px; padding:16px;}
   .scroll-rail{position:static; flex-direction:row; overflow-x:auto; top:auto;}
   .scroll-rail-foot{display:none;}
   .scroll-stats{display:none;}

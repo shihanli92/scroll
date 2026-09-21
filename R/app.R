@@ -486,7 +486,7 @@ scroll_reset_panels <- function() {
   tags$nav(
     class = "scroll-rail",
     lapply(panels, function(s) tags$a(
-      class = "scroll-rail-item", href = paste0("#", ns(s$id)),
+      class = "scroll-rail-item", href = paste0("#", ns(s$id)), title = s$label,
       span(class = "scroll-rail-num", s$num), span(s$label))),
     div(class = "scroll-rail-foot", "auto-generated from manifest.yaml")
   )

@@ -319,10 +319,13 @@
                                 "this.nextElementSibling.textContent=this.value+'\u00d7';")),
     tags$span(class = "scroll-size-val", "1\u00d7"))
 
-# Default plot height: viewport-relative so plots fill the card and re-render on
-# window resize (offset ~= app bar + card header + plot bar). The control column
-# is capped to scroll (styles.R), so it never out-heights the plot.
-.SCROLL_PLOT_H <- "calc(100vh - 190px)"
+# Default plot height: fills the card but bounded so a tall/portrait monitor does
+# not stretch a plot to ~1700px. min(viewport-height, 90% of the container width)
+# keeps it roughly landscape; clamped to [320, 1100]px and snapped to a whole CSS
+# pixel (mirrors the width snap) to avoid HiDPI sub-pixel re-render loops. `90cqw`
+# resolves against .scroll-content (container-type:inline-size), falling back to
+# viewport units where no container ancestor exists.
+.SCROLL_PLOT_H <- "calc(round(down, clamp(320px, min(100vh - 190px, 90cqw), 1100px), 1px))"
 
 .scroll_plot_area <- function(ns, height = .SCROLL_PLOT_H, csv = FALSE)
   div(class = "scroll-plot",
