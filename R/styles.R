@@ -511,7 +511,9 @@ window.scrollToggleTwoUp=function(btn){
       requestAnimationFrame(function(){ it.style.transition='transform .16s ease'; it.style.transform=''; });
     });
   }
-  function cleanup(){
+  function commit(){   // apply the (live-reordered) rail order to the cards + persist, then clean up
+    var rail=dragEl && dragEl.closest('.scroll-rail');
+    if(rail){ mirror(rail); persist(rail); }
     document.querySelectorAll('.scroll-rail-item').forEach(function(x){
       x.classList.remove('is-dragging'); x.style.transition=''; x.style.transform=''; });
     dragEl=null; setTimeout(function(){ dragged=false; }, 60);
@@ -525,19 +527,16 @@ window.scrollToggleTwoUp=function(btn){
     requestAnimationFrame(function(){ if(dragEl) dragEl.classList.add('is-dragging'); });  // dim after the ghost is captured
   });
   document.addEventListener('dragover', function(e){
-    if(!dragEl) return; var it=e.target.closest('.scroll-rail-item');
-    if(!it || it===dragEl || it.closest('.scroll-rail')!==dragEl.closest('.scroll-rail')) return;
-    e.preventDefault(); e.dataTransfer.dropEffect='move';
+    if(!dragEl || e.target.closest('.scroll-rail')!==dragEl.closest('.scroll-rail')) return;
+    e.preventDefault(); e.dataTransfer.dropEffect='move';   // ALWAYS allow a drop while over the rail
+    var it=e.target.closest('.scroll-rail-item'); if(!it || it===dragEl) return;
     var rail=dragEl.closest('.scroll-rail'); var r=it.getBoundingClientRect();
     var ref=e.clientY > r.top + r.height/2 ? it.nextSibling : it;   // slot to drop into
     if(ref===dragEl || dragEl.nextSibling===ref) return;            // already there -> no-op (avoids FLIP thrash)
     flip(rail, function(){ rail.insertBefore(dragEl, ref); });      // live take-out & re-insert
   });
-  document.addEventListener('drop', function(e){                    // dragEl is already in place -> mirror the cards
-    if(!dragEl) return; e.preventDefault();
-    var rail=dragEl.closest('.scroll-rail'); mirror(rail); persist(rail); cleanup();
-  });
-  document.addEventListener('dragend', cleanup);
+  document.addEventListener('drop', function(e){ if(dragEl){ e.preventDefault(); commit(); } });
+  document.addEventListener('dragend', commit);   // fallback if drop didn't fire (dropped off a valid target)
   document.addEventListener('click', function(e){   // a click that ended a drag must not navigate
     if(dragged && e.target.closest('.scroll-rail-item')) e.preventDefault(); }, true);
   window.scrollResetOrder=function(el){
