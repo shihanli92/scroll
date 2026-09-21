@@ -497,7 +497,12 @@ scroll_reset_panels <- function() {
     id = ns(sec$id), class = "scroll-panel-card", full_screen = FALSE,
     bslib::card_header(
       div(class = "scroll-eyebrow",
-          span(class = "scroll-num", sec$num), span(class = "scroll-kicker", sec$label)),
+          span(class = "scroll-num", sec$num), span(class = "scroll-kicker", sec$label),
+          # shown only when the card is stacked (narrow); collapses the controls so
+          # the plot alone is visible. Default open (aria-expanded=true) so sliders
+          # inside the controls always initialise while visible.
+          tags$button(class = "scroll-ctl-btn", type = "button", `aria-expanded` = "true",
+                      onclick = "scrollTogglePanelControls(this)", "Controls")),
       tags$h2(class = "scroll-title", sec$title),
       tags$p(class = "scroll-desc", sec$desc)),
     sec$ui(ns(sec$id), data)

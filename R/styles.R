@@ -237,6 +237,18 @@ body.scroll-warming{overflow:hidden;}
   .scroll-panel-card>.card-body{padding:8px;}
   .scroll-panel-card>.card-header{padding:14px 16px;}
 }
+/* per-card Controls toggle: hidden by default, revealed only when the card is
+   stacked (narrow) so a reader can collapse the controls to just the plot. */
+.scroll-ctl-btn{display:none; margin-left:auto; cursor:pointer; font:600 11px/1 inherit;
+  padding:5px 10px; border:1px solid var(--sc-line); border-radius:7px; background:#fff;
+  color:var(--sc-muted);}
+.scroll-ctl-btn:hover{color:var(--sc-accent-deep); border-color:var(--sc-accent);}
+.scroll-ctl-btn::after{content:' \\25BE'; opacity:.7;}                 /* ▾ open */
+.scroll-ctl-btn[aria-expanded='false']::after{content:' \\25B8';}     /* ▸ collapsed */
+@container sc-content (max-width:719.98px){
+  .scroll-panel-card:has(.scroll-panel.bslib-grid) .scroll-ctl-btn{display:inline-flex;}
+  .scroll-panel-card.scroll-ctl-hidden .scroll-panel.bslib-grid>.bslib-grid-item:first-child{display:none;}
+}
 /* min-width:0 is essential: .scroll-plot is a flex item, so its default
    min-width:auto resolves to min-content = the rendered plot image's width. That
    makes the container size to the image, the image size to the container, and on a
@@ -344,6 +356,13 @@ window.scrollToggleControls=function(btn){
   var collapsed=lay.classList.toggle('controls-collapsed');  // wide: hide/show the in-grid rail
   btn.classList.toggle('is-collapsed', collapsed);
   btn.setAttribute('aria-expanded', String(!collapsed));
+};
+window.scrollTogglePanelControls=function(btn){   // per-card controls collapse (narrow only)
+  var card=btn.closest('.scroll-panel-card'); if(!card) return;
+  var hidden=card.classList.toggle('scroll-ctl-hidden');
+  btn.setAttribute('aria-expanded', String(!hidden));
+  var ctl=card.querySelector('.scroll-panel.bslib-grid>.bslib-grid-item');
+  if(ctl && window.jQuery) jQuery(ctl).trigger(hidden?'hidden':'shown');  // suspend/resume any outputs inside
 };
 document.addEventListener('keydown',function(e){ if(e.key==='Escape') scrollCloseDrawers(); });
 document.addEventListener('click',function(e){   // click outside the drawer (or its toggle) closes it

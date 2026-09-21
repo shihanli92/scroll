@@ -176,6 +176,23 @@ test_that("below 1400 the filters column is an off-canvas drawer with a live app
   expect_match(js, "scrollCloseDrawers")
 })
 
+test_that("a per-card Controls toggle collapses the controls when a card is stacked", {
+  css <- scroll:::.scroll_css()
+  js  <- scroll:::.scroll_spy_js()
+  # button is display:none until the card is narrow enough to stack
+  expect_match(css, "\\.scroll-ctl-btn\\{display:none")
+  expect_match(css, "\\.scroll-panel-card:has\\(\\.scroll-panel\\.bslib-grid\\) \\.scroll-ctl-btn\\{display:inline-flex")
+  expect_match(css, "\\.scroll-ctl-hidden \\.scroll-panel\\.bslib-grid>\\.bslib-grid-item:first-child\\{display:none")
+  expect_match(js, "scrollTogglePanelControls")
+  # the button is emitted into every panel card header
+  data <- scroll:::.scroll_load(test_project()); on.exit(scroll_disconnect(data$con))
+  card <- as.character(scroll:::.scroll_panel_card(
+    list(id = "dimplot", num = "01", label = "DimPlot", title = "t", desc = "d",
+         ui = scroll:::dimplot_ui), data))
+  expect_match(card, "scrollTogglePanelControls")
+  expect_match(card, "scroll-ctl-btn")
+})
+
 test_that("plot toolbars carry a download-scale slider wired to the dl_scale input", {
   html <- as.character(scroll:::.scroll_plot_area(identity))
   expect_match(html, "scroll-size")                     # the slider is in the toolbar

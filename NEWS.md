@@ -18,6 +18,9 @@
   Escape or a click outside closes it), so the plot keeps the full width and the controls stay
   reachable. Sticky offsets (rail, drawer, scroll-to-panel) now track the app bar's measured height
   (`--sc-appbar-h`), so they stay correct when it wraps or under a multi-app tab strip.
+* **Per-panel Controls toggle.** When a panel is stacked (narrow), a small **Controls** button in the
+  card header collapses that panel's controls so the plot alone is visible; it is hidden when the
+  panel is side-by-side. Defaults open, so inputs always initialise while visible.
 
 ## Heatmap & DotPlot
 
