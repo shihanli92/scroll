@@ -425,24 +425,29 @@ scroll_reset_panels <- function() {
   })
 }
 
-.scroll_stat <- function(value, label)
-  div(class = "scroll-stat", span(class = "scroll-stat-v", value),
-      span(class = "scroll-stat-l", label))
 
 .scroll_appbar <- function(data, title, ns = identity) {
   m <- data$manifest
   assay <- m$default_assay
   cats <- .scroll_cat_cols(m)
-  # brand wordmark; `brand:` in config.yaml overrides the default "scroll"
+  # brand wordmark (small, muted) + the dataset title (the dominant element);
+  # `brand:` in config.yaml overrides the default "scroll".
   brand <- list(span(class = "scroll-logo", .scroll_nz(data$config$brand) %||% "scroll"))
   if (!is.null(title))
     brand <- c(brand, list(span(class = "scroll-slash", "/"),
                            span(class = "scroll-dataset", title)))
-  # scroll package version badge; shown by default, hide with `show_version: false`
-  ver <- tryCatch(as.character(utils::packageVersion("scroll")), error = function(e) NULL)
-  if (!isFALSE(data$config$show_version) && !is.null(ver))
-    brand <- c(brand, list(span(class = "scroll-version", title = "scroll version",
-                                paste0("v", ver))))
+  # Dataset details (genes/assays/reductions) live in a popover, not the bar itself,
+  # so the header shows only what you're looking at + your controls.
+  info_btn <- bslib::popover(
+    tags$button(class = "scroll-info-toggle", type = "button",
+                title = "Dataset details", `aria-label` = "Dataset details",
+                shiny::icon("circle-info")),
+    tags$dl(class = "scroll-info-dl",
+      tags$dt("Cells"),      tags$dd(format(m$n_cells, big.mark = ",")),
+      tags$dt("Genes"),      tags$dd(format(m$assays[[assay]]$n_features, big.mark = ",")),
+      tags$dt("Assays"),     tags$dd(paste(.scroll_assays_of(m), collapse = ", ")),
+      tags$dt("Reductions"), tags$dd(paste(.scroll_reductions(m), collapse = ", "))),
+    title = "Dataset", placement = "bottom")
   # Reprocessed subset views: pick a linked view (restricts every panel + swaps
   # to the subset's embedding). Shown only when the build declared `subsets`.
   subs <- .scroll_subset_names(m)
@@ -466,26 +471,24 @@ scroll_reset_panels <- function() {
   has_ctrl <- !isFALSE(data$config$theme_controls) || length(.scroll_filter_specs(data)) > 0
   toggle <- if (has_ctrl)
     tags$button(class = "scroll-ctl-toggle", type = "button",
-                onclick = "scrollToggleControls(this)", title = "Show/hide controls",
-                `aria-label` = "Show or hide the control rail")
+                onclick = "scrollToggleControls(this)", title = "Hide controls",
+                `aria-label` = "Show or hide the control rail", shiny::icon("sliders"))
   # two-panels-per-row toggle (CSS-hidden on screens too narrow to fit two); its
   # initial pressed state reflects the config default, then localStorage takes over.
   two_up <- isTRUE(data$config$layout$two_up)
   two_toggle <- tags$button(class = paste0("scroll-two-toggle", if (two_up) " is-on"),
-                type = "button", onclick = "scrollToggleTwoUp(this)", title = "Two panels per row",
-                `aria-pressed` = if (two_up) "true" else "false", `aria-label` = "Show two panels per row")
+                type = "button", onclick = "scrollToggleTwoUp(this)",
+                title = if (two_up) "One panel per row" else "Two panels per row",
+                `aria-pressed` = if (two_up) "true" else "false",
+                `aria-label` = "Show two panels per row", shiny::icon("table-columns"))
   div(
     class = "scroll-appbar",
     div(class = "scroll-brand", brand),
     view_ui,
     subset_ui,
-    div(class = "scroll-stats",
-        .scroll_stat(uiOutput(ns("scroll_ncells"), inline = TRUE), "cells"),
-        .scroll_stat(format(m$assays[[assay]]$n_features, big.mark = ","), "genes"),
-        .scroll_stat(paste(.scroll_assays_of(m), collapse = ", "), "assays"),
-        .scroll_stat(paste(.scroll_reductions(m), collapse = ", "), "reductions")),
-    two_toggle,
-    toggle
+    # the live cell count -- the one metric that changes with the View/Subset above
+    div(class = "scroll-cells", uiOutput(ns("scroll_ncells"), inline = TRUE)),
+    div(class = "scroll-appbar-actions", info_btn, two_toggle, toggle)
   )
 }
 
@@ -496,7 +499,10 @@ scroll_reset_panels <- function() {
       class = "scroll-rail-item", href = paste0("#", ns(s$id)), title = s$label,
       draggable = "true",                              # drag to reorder (see .scroll_spy_js)
       span(class = "scroll-rail-num", s$num), span(s$label))),
-    div(class = "scroll-rail-foot", "auto-generated from manifest.yaml",
+    div(class = "scroll-rail-foot",
+        span(class = "scroll-rail-ver",
+             sprintf("scroll v%s", tryCatch(as.character(utils::packageVersion("scroll")),
+                                            error = function(e) ""))),
         tags$button(class = "scroll-rail-reset", type = "button",
                     onclick = "scrollResetOrder(this)", "Reset order"))
   )
@@ -728,10 +734,10 @@ scroll_reset_panels <- function() {
 .scroll_render_ncells <- function(output, m, active_cells, active_view) {
   output$scroll_ncells <- renderUI({
     n <- nrow(active_cells()); tot <- m$n_cells
-    lab <- if (!is.null(active_view())) m$subsets[[active_view()]]$label
-    base <- if (n < tot) sprintf("%s of %s", format(n, big.mark = ","),
-                                 format(tot, big.mark = ",")) else format(tot, big.mark = ",")
-    if (!is.null(lab)) tagList(base, HTML(" &middot; "), lab) else base
+    # "N of total cells" when narrowed, else "N cells"; the View pill already names
+    # the subset, so no label suffix here.
+    if (n < tot) sprintf("%s of %s cells", format(n, big.mark = ","), format(tot, big.mark = ","))
+    else sprintf("%s cells", format(tot, big.mark = ","))
   })
   # The cell-count sits in the app bar's flex row, which can have zero layout size
   # when the output first binds -- Shiny then treats it as hidden and suspends it, so

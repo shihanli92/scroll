@@ -1,5 +1,21 @@
 # scroll 0.2.17
 
+## Header redesign
+
+* **The app bar is now title-led and fits one row on a laptop.** Previously it packed the wordmark,
+  dataset title, version badge, a four-metric stats strip and the toggles onto one line — which wrapped
+  to two rows (~115px) on most laptops. Reworked:
+  * The **dataset title is the dominant element** (bold, ink); the `scroll` wordmark is a small muted
+    prefix, and the stat numbers no longer out-weigh the title.
+  * The **stats strip is gone** — genes/assays/reductions move into an **ⓘ dataset popover**; only the
+    live **cell count** stays, beside the View/Subset pills (the one value those controls change).
+  * The **scroll version** moves from a bar badge to the section-rail foot.
+  * The three actions (dataset info · two-up · controls) are a **right-hugging cluster** with real
+    Font Awesome icons (info / table-columns / sliders) instead of font glyphs, a pressed state, and
+    tooltips that update with state.
+  Result: the bar is one row down to ~1000px (≈65px vs the old ~115px two rows), and no longer grows
+  with the number of subset views.
+
 ## UI
 
 * **Denser control column.** A tighter, slightly narrower control column (`--sc-ctl-w` now

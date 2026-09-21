@@ -27,21 +27,26 @@ body{background:var(--sc-ground); color:var(--sc-ink);
 
 /* app bar */
 .scroll-appbar{position:sticky; top:0; z-index:1000; display:flex; align-items:center;
-  justify-content:space-between; gap:24px; padding:14px 28px; flex-wrap:wrap; row-gap:8px;
-  background:rgba(251,252,253,.85); backdrop-filter:saturate(1.4) blur(8px);
-  border-bottom:1px solid var(--sc-line);}
-.scroll-brand{display:flex; align-items:baseline; gap:8px; font-size:19px; min-width:0; flex:1 1 auto;}
-.scroll-logo{font-weight:800; letter-spacing:-.02em;}
-.scroll-slash{color:var(--sc-faint);}
-/* ellipsize a long dataset title instead of letting it force the bar taller/wider */
-.scroll-dataset{font-weight:600; color:var(--sc-muted);
-  min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-.scroll-version{font-size:11px; font-weight:600; color:var(--sc-faint); font-variant-numeric:tabular-nums; padding:1px 6px; border:1px solid var(--sc-line-2); border-radius:6px; align-self:center;}
-.scroll-stats{display:flex; gap:0;}
-.scroll-stat{display:flex; flex-direction:column; padding:0 18px; border-left:1px solid var(--sc-line-2);}
-.scroll-stat:first-child{border-left:0;}
-.scroll-stat-v{font-weight:700; font-variant-numeric:tabular-nums; line-height:1.1;}
-.scroll-stat-l{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--sc-faint);}
+  justify-content:flex-start; gap:16px; padding:12px 28px; flex-wrap:wrap; row-gap:8px;
+  background:color-mix(in srgb, var(--sc-ground) 85%, transparent);
+  backdrop-filter:saturate(1.4) blur(8px);
+  border-bottom:1px solid var(--sc-line); box-shadow:0 6px 16px -14px rgba(17,24,38,.25);}
+/* the dataset title is the dominant element; the wordmark is a small muted prefix */
+.scroll-brand{display:flex; align-items:baseline; gap:7px; min-width:0; flex:0 1 auto;}
+.scroll-logo{font-size:14px; font-weight:700; color:var(--sc-muted); letter-spacing:0;}
+.scroll-slash{color:var(--sc-faint); font-size:14px;}
+.scroll-dataset{font-size:18px; font-weight:700; color:var(--sc-ink); letter-spacing:-.01em;
+  min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}   /* ellipsize a long title */
+/* live cell readout -- the one metric that changes with the View/Subset pills */
+.scroll-cells{font-size:13px; font-weight:600; color:var(--sc-muted);
+  font-variant-numeric:tabular-nums; white-space:nowrap;}
+/* the layout actions travel together and hug the right edge of whichever row they land on */
+.scroll-appbar-actions{display:flex; align-items:center; gap:6px; margin-left:auto; flex:none;}
+/* dataset-details popover body */
+.scroll-info-dl{display:grid; grid-template-columns:auto 1fr; gap:2px 14px; margin:0; font-size:12px; max-width:320px;}
+.scroll-info-dl dt{color:var(--sc-faint); font-weight:600;}
+.scroll-info-dl dd{margin:0; color:var(--sc-ink); font-variant-numeric:tabular-nums;
+  overflow-wrap:anywhere;}
 
 /* global cell-subset filter (app bar pill) */
 .scroll-subset{display:flex; align-items:center; gap:8px; padding:5px 6px 5px 12px;
@@ -107,20 +112,19 @@ body.scroll-warming{overflow:hidden;}
 .scroll-filters{position:sticky; top:calc(var(--sc-appbar-h,70px) + 10px); align-self:start;
   display:flex; flex-direction:column;
   gap:12px; max-height:calc(100vh - var(--sc-appbar-h,70px) - 30px); overflow-y:auto; padding-right:2px;}
-/* collapse toggle: hide the whole control rail to give the plots full width */
-.scroll-ctl-toggle{flex:none; width:32px; height:32px; padding:0; cursor:pointer; line-height:1;
-  border:1px solid var(--sc-line); background:#fff; color:var(--sc-muted); border-radius:8px;
-  font-size:15px;}
-.scroll-ctl-toggle:hover{color:var(--sc-ink); border-color:var(--sc-accent);}
-.scroll-ctl-toggle::before{content:'\\00BB';}                 /* > : hide the rail */
-.scroll-ctl-toggle.is-collapsed::before{content:'\\00AB';}    /* < : show the rail */
-/* two-panels-per-row toggle: same pill as the rail toggle; only shown where two
-   columns can actually fit (a narrower screen can't, and auto-fit stays one column). */
-.scroll-two-toggle{flex:none; width:32px; height:32px; padding:0; cursor:pointer; line-height:1;
-  border:1px solid var(--sc-line); background:#fff; color:var(--sc-muted); border-radius:8px; font-size:14px;}
-.scroll-two-toggle:hover{color:var(--sc-ink); border-color:var(--sc-accent);}
-.scroll-two-toggle::before{content:'\\25EB';}                 /* ◫ : two columns */
-.scroll-two-toggle.is-on{color:var(--sc-accent-deep); border-color:var(--sc-accent); background:var(--sc-wash);}
+/* app-bar icon buttons (dataset info, two-up, controls) -- one shared pill, real
+   Font Awesome icons instead of font glyphs so they match across platforms. State
+   is shown by a pressed style (+ the title tooltip updates in JS), not a glyph swap. */
+.scroll-ctl-toggle,.scroll-two-toggle,.scroll-info-toggle{
+  flex:none; display:inline-flex; align-items:center; justify-content:center;
+  width:32px; height:32px; padding:0; cursor:pointer; line-height:1; font-size:13px;
+  border:1px solid var(--sc-line); background:var(--sc-card); color:var(--sc-muted); border-radius:8px;}
+.scroll-ctl-toggle:hover,.scroll-two-toggle:hover,.scroll-info-toggle:hover{
+  color:var(--sc-ink); border-color:var(--sc-accent);}
+/* pressed / active: two-up on, rail collapsed, or the filters drawer open */
+.scroll-two-toggle.is-on,.scroll-ctl-toggle.is-collapsed,.scroll-ctl-toggle.is-open{
+  color:var(--sc-accent-deep); border-color:var(--sc-accent); background:var(--sc-wash);}
+/* two-up only shown where two columns can actually fit */
 @media (max-width:1499.98px){.scroll-two-toggle{display:none;}}
 .scroll-layout.controls-collapsed{justify-content:start;
   grid-template-columns:var(--sc-rail-w) minmax(0,var(--sc-content-max));}
@@ -209,6 +213,7 @@ body.scroll-warming{overflow:hidden;}
 .scroll-rail-item.active .scroll-rail-num{color:var(--sc-accent);}
 .scroll-rail-foot{margin-top:14px; padding:0 12px; font-size:11px; color:var(--sc-faint);
   font-family:ui-monospace,monospace;}
+.scroll-rail-ver{display:block; font-size:10px; color:var(--sc-faint);}   /* scroll version, moved out of the app bar */
 
 /* Multi-dataset (scroll_multi_app): pin the dataset tab strip at the very top and
    drop each dataset's sticky app bar + panel rail below it, so the dataset
@@ -335,9 +340,10 @@ table.scroll-clone-dt thead th{padding-top:2px; padding-bottom:2px;}
   background:var(--sc-wash);}
 .scroll-dl.btn .fa,.scroll-dl.btn svg{margin-right:5px; opacity:.7;}
 
-/* tighter app bar on smaller screens; drop the version chip on phones */
-@media (max-width:1199.98px){.scroll-appbar{padding:10px 16px; column-gap:14px;} .scroll-stat{padding:0 12px;}}
-@media (max-width:576px){.scroll-brand{font-size:16px;} .scroll-version{display:none;}}
+/* tighter app bar on smaller screens (padding follows the layout's 28/20/16 steps) */
+@media (max-width:1199.98px){.scroll-appbar{padding:10px 20px; column-gap:14px;}}
+@media (max-width:900px){.scroll-appbar{padding:10px 16px;}}
+@media (max-width:576px){.scroll-dataset{font-size:16px;} .scroll-cells{display:none;}}
 /* Below 1400 the right control rail becomes an off-canvas DRAWER (positioning only;
    grid tracks are set per-range below, so they never fight on specificity). Toggled
    by .filters-open (the app-bar button). Including .controls-collapsed keeps a
@@ -357,8 +363,6 @@ table.scroll-clone-dt thead th{padding-top:2px; padding-bottom:2px;}
   .scroll-layout.filters-open>.scroll-filters{transform:none;}
   /* thinner drawer -> theme sub-controls stack one per row (2-up is too wide here) */
   .scroll-filters .scroll-ctl-body .scroll-ctl-body{grid-template-columns:1fr;}
-  .scroll-ctl-toggle::before{content:'\\2261';}          /* ≡ : open filters */
-  .scroll-ctl-toggle.is-open::before{content:'\\00D7';}  /* × : close */
 }
 /* laptop band: drop the 300px filters track (it is a drawer now) */
 @media (min-width:1200px) and (max-width:1399.98px){
@@ -381,7 +385,6 @@ table.scroll-clone-dt thead th{padding-top:2px; padding-bottom:2px;}
   .scroll-rail-item{cursor:default;}
   .scroll-rail-item::before{display:none;}     /* no drag on the horizontal strip */
   .scroll-rail-foot{display:none;}
-  .scroll-stats{display:none;}
 }
 "
 
@@ -390,7 +393,7 @@ function scrollCloseDrawers(){
   document.querySelectorAll('.scroll-layout.filters-open').forEach(function(l){
     l.classList.remove('filters-open');
     var t=l.parentElement&&l.parentElement.querySelector('.scroll-ctl-toggle');
-    if(t){t.classList.remove('is-open'); t.setAttribute('aria-expanded','false');}
+    if(t){t.classList.remove('is-open'); t.setAttribute('aria-expanded','false'); t.title='Open filters';}
   });
 }
 window.scrollToggleControls=function(btn){
@@ -401,11 +404,13 @@ window.scrollToggleControls=function(btn){
     var open=lay.classList.toggle('filters-open');
     btn.classList.toggle('is-open', open);
     btn.setAttribute('aria-expanded', String(open));
+    btn.title = open ? 'Close filters' : 'Open filters';   // icon is fixed; the tooltip carries state
     return;
   }
   var collapsed=lay.classList.toggle('controls-collapsed');  // wide: hide/show the in-grid rail
   btn.classList.toggle('is-collapsed', collapsed);
   btn.setAttribute('aria-expanded', String(!collapsed));
+  btn.title = collapsed ? 'Show controls' : 'Hide controls';
 };
 window.scrollTogglePanelControls=function(btn){   // per-card controls collapse (narrow only)
   var card=btn.closest('.scroll-panel-card'); if(!card) return;
@@ -440,6 +445,7 @@ window.scrollToggleTwoUp=function(btn){
   if(!c) return;
   var on=c.classList.toggle('two-up');
   btn.classList.toggle('is-on', on); btn.setAttribute('aria-pressed', String(on));
+  btn.title = on ? 'One panel per row' : 'Two panels per row';
   try{ localStorage.setItem('scroll:two-up', on?'1':'0'); }catch(e){}
   scrollAdjustTables();                                 // cards changed width -> re-fit any DataTables
 };
@@ -457,7 +463,8 @@ function scrollAdjustTables(){
     var on = v==='1';
     document.querySelectorAll('.scroll-content').forEach(function(c){ c.classList.toggle('two-up', on); });
     document.querySelectorAll('.scroll-two-toggle').forEach(function(b){
-      b.classList.toggle('is-on', on); b.setAttribute('aria-pressed', String(on)); });
+      b.classList.toggle('is-on', on); b.setAttribute('aria-pressed', String(on));
+      b.title = on ? 'One panel per row' : 'Two panels per row'; });
   }
   if(document.readyState!=='loading') apply(); else document.addEventListener('DOMContentLoaded',apply);
 })();

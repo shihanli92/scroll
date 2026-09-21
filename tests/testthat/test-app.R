@@ -175,6 +175,18 @@ test_that("two-up mode packs two panel cards per row (auto-fit, container-scoped
   expect_match(bar, "scrollToggleTwoUp")
 })
 
+test_that("the app bar is title-led: cells readout + dataset popover, no stats strip", {
+  data <- scroll:::.scroll_load(test_project()); on.exit(scroll_disconnect(data$con))
+  bar <- as.character(scroll:::.scroll_appbar(data, "My dataset"))
+  expect_match(bar, "scroll-dataset")                    # dataset title present
+  expect_match(bar, "scroll-cells")                      # live cell readout beside the pills
+  expect_match(bar, "scroll-appbar-actions")             # the right-hugging action cluster
+  expect_match(bar, "scroll-info-dl")                    # dataset facts moved to a popover
+  expect_match(bar, "fa-sliders")                        # real icons, not glyphs
+  expect_no_match(bar, "scroll-stats")                   # the old stats strip is gone
+  expect_no_match(bar, "scroll-version")                 # version badge left the bar
+})
+
 test_that("rail items are draggable to reorder panels, persisted and resettable", {
   js  <- scroll:::.scroll_spy_js()
   expect_match(js, "dragstart"); expect_match(js, "scrollResetOrder")
