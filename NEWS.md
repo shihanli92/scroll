@@ -1,3 +1,11 @@
+# scroll 0.2.17
+
+## UI
+
+* **Denser control column.** A tighter, slightly narrower control column (`--sc-ctl-w` now
+  `clamp(232px, 22%, 320px)`, with smaller group/field gaps) so the inputs don't sprawl on a wide
+  card and the plot gets more room — without introducing any horizontal scroll in the controls.
+
 # scroll 0.2.16
 
 ## UI (wide screens)
@@ -7,10 +15,8 @@
   middle up to `--sc-content-max` (1600px), so a wide monitor gives the plot much more room (e.g.
   ~660px → ~1140px on a 2560px screen) — capped so a scatter/UMAP never grows to an unusable width.
 * **Tighter chrome.** A narrower section rail (`--sc-rail-w` 160px, long labels ellipsize with a
-  hover tooltip), a capped text measure on panel titles/descriptions so text no longer floats across
-  a very wide card, and a tighter, slightly narrower control column (`--sc-ctl-w` now
-  `clamp(232px, 22%, 320px)` with smaller group/field gaps) so the inputs don't sprawl and the plot
-  gets more room — without introducing any horizontal scroll in the controls.
+  hover tooltip) and a capped text measure on panel titles/descriptions, so text no longer floats
+  across a very wide card.
 * **Two panels per row (wide screens).** A toggle in the app bar (shown when the screen is wide
   enough) packs two panel cards side by side; it self-degrades to one column when there isn't room,
   remembers the choice across reloads, and raises the content cap so two panels fit. Each card is
