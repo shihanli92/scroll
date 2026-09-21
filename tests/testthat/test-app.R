@@ -187,6 +187,25 @@ test_that("rail items are draggable to reorder panels, persisted and resettable"
   expect_match(rail, "scrollResetOrder")
 })
 
+test_that("config.yaml layout: overrides the layout CSS vars and the two-up default", {
+  # numbers -> px, strings verbatim; nothing set -> empty (appended to base CSS)
+  expect_identical(scroll:::.scroll_layout_css(list()), "")
+  st <- scroll:::.scroll_layout_css(
+    list(layout = list(content_max = 2000, rail_width = 180,
+                       control_width = "clamp(220px, 22%, 300px)")))
+  expect_match(st, "--sc-content-max:2000px")
+  expect_match(st, "--sc-rail-w:180px")
+  expect_match(st, "--sc-ctl-w:clamp\\(220px, 22%, 300px\\)")
+  # two_up default reaches the content div + the app-bar toggle
+  data <- scroll:::.scroll_load(test_project()); on.exit(scroll_disconnect(data$con))
+  data$config$layout <- list(two_up = TRUE)
+  body <- as.character(scroll:::.scroll_body(data, "t", scroll:::.scroll_builtin_panels()[1]))
+  expect_match(body, "scroll-content two-up")
+  bar <- as.character(scroll:::.scroll_appbar(data, "t"))
+  expect_match(bar, "scroll-two-toggle is-on")
+  expect_match(bar, "aria-pressed=\"true\"")
+})
+
 test_that("wide screens go full-bleed with a capped content width (no fixed max-width)", {
   css <- scroll:::.scroll_css()
   expect_match(css, "--sc-content-max:1600px")

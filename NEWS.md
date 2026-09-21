@@ -5,6 +5,10 @@
 * **Denser control column.** A tighter, slightly narrower control column (`--sc-ctl-w` now
   `clamp(232px, 22%, 320px)`, with smaller group/field gaps) so the inputs don't sprawl on a wide
   card and the plot gets more room — without introducing any horizontal scroll in the controls.
+* **`layout:` config block.** `config.yaml` can now tune the layout without editing CSS:
+  `content_max` (wide-screen content cap), `rail_width`, `control_width` (a number → px, or a CSS
+  string), and `two_up` (start with two panels per row by default; a per-browser toggle still
+  overrides it).
 
 # scroll 0.2.16
 

@@ -468,10 +468,12 @@ scroll_reset_panels <- function() {
     tags$button(class = "scroll-ctl-toggle", type = "button",
                 onclick = "scrollToggleControls(this)", title = "Show/hide controls",
                 `aria-label` = "Show or hide the control rail")
-  # two-panels-per-row toggle (CSS-hidden on screens too narrow to fit two)
-  two_toggle <- tags$button(class = "scroll-two-toggle", type = "button",
-                onclick = "scrollToggleTwoUp(this)", title = "Two panels per row",
-                `aria-pressed` = "false", `aria-label` = "Show two panels per row")
+  # two-panels-per-row toggle (CSS-hidden on screens too narrow to fit two); its
+  # initial pressed state reflects the config default, then localStorage takes over.
+  two_up <- isTRUE(data$config$layout$two_up)
+  two_toggle <- tags$button(class = paste0("scroll-two-toggle", if (two_up) " is-on"),
+                type = "button", onclick = "scrollToggleTwoUp(this)", title = "Two panels per row",
+                `aria-pressed` = if (two_up) "true" else "false", `aria-label` = "Show two panels per row")
   div(
     class = "scroll-appbar",
     div(class = "scroll-brand", brand),
@@ -527,7 +529,7 @@ scroll_reset_panels <- function() {
     div(
       class = paste0("scroll-layout", if (!is.null(controls)) " has-filters"),
       .scroll_rail(panels, ns),
-      div(class = "scroll-content",
+      div(class = paste0("scroll-content", if (isTRUE(data$config$layout$two_up)) " two-up"),
           lapply(panels, function(s) .scroll_panel_card(s, data, ns))),
       controls                                       # right-hand global control rail
     )
@@ -556,6 +558,26 @@ scroll_reset_panels <- function() {
     length(.scroll_subset_names(data$manifest)) > 0
 }
 
+# A CSS length from a config value: a bare number -> px, a string -> used verbatim.
+.scroll_css_len <- function(x) {
+  if (is.null(x) || length(x) != 1) return(NULL)
+  if (is.numeric(x)) paste0(x, "px") else as.character(x)
+}
+# Optional per-app layout overrides (config.yaml `layout:` block) as a `:root` rule,
+# APPENDED to the base CSS (one style tag -- a second <style> in the head is dropped
+# by page_fluid) so it wins over the defaults. The two-up content-max bump is a rule
+# ON `.scroll-layout`, more specific than `:root`, so it still overrides content_max
+# when two-up is on. Returns "" when nothing is set.
+.scroll_layout_css <- function(config) {
+  lay <- config$layout; if (is.null(lay)) return("")
+  parts <- c(
+    if (!is.null(.scroll_css_len(lay$content_max)))   sprintf("--sc-content-max:%s", .scroll_css_len(lay$content_max)),
+    if (!is.null(.scroll_css_len(lay$rail_width)))    sprintf("--sc-rail-w:%s",      .scroll_css_len(lay$rail_width)),
+    if (!is.null(.scroll_css_len(lay$control_width))) sprintf("--sc-ctl-w:%s",       .scroll_css_len(lay$control_width)))
+  if (!length(parts)) return("")
+  sprintf(":root{%s;}", paste(parts, collapse = "; "))
+}
+
 .scroll_page <- function(data, title, panels, warming = .scroll_prewarm_on(data)) {
   # Show the warm-up overlay from the INITIAL html (not after the first flush) when a
   # warm-up will run, so it covers the whole startup -- the initial main-view render
@@ -571,7 +593,7 @@ scroll_reset_panels <- function() {
             div(class = "scroll-warm-bar", div(class = "scroll-warm-fill"))))
   bslib::page_fluid(
     theme = .scroll_theme(),
-    tags$head(tags$style(HTML(.scroll_css())),
+    tags$head(tags$style(HTML(paste0(.scroll_css(), .scroll_layout_css(data$config)))),
               tags$script(HTML(.scroll_spy_js())),
               tags$script(HTML(.scroll_lazy_js())),
               tags$script(HTML(.scroll_warm_js()))),
@@ -810,7 +832,7 @@ scroll_multi_app <- function(projects) {
 
   ui <- bslib::page_fluid(
     theme = .scroll_theme(),
-    tags$head(tags$style(HTML(.scroll_css())),
+    tags$head(tags$style(HTML(paste0(.scroll_css(), .scroll_layout_css(datas[[1]]$config)))),
               tags$script(HTML(.scroll_spy_js())),
               tags$script(HTML(.scroll_lazy_js()))),
     # .scroll-multi lets the CSS pin the dataset tab strip and drop each dataset's

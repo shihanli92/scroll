@@ -452,11 +452,12 @@ function scrollAdjustTables(){
   });
 }
 (function(){
-  function apply(){ var on=false; try{ on=localStorage.getItem('scroll:two-up')==='1'; }catch(e){}
-    if(!on) return;
-    document.querySelectorAll('.scroll-content').forEach(function(c){c.classList.add('two-up');});
+  function apply(){ var v=null; try{ v=localStorage.getItem('scroll:two-up'); }catch(e){}
+    if(v===null) return;                              // no stored pref -> keep the server (config) default
+    var on = v==='1';
+    document.querySelectorAll('.scroll-content').forEach(function(c){ c.classList.toggle('two-up', on); });
     document.querySelectorAll('.scroll-two-toggle').forEach(function(b){
-      b.classList.add('is-on'); b.setAttribute('aria-pressed','true'); });
+      b.classList.toggle('is-on', on); b.setAttribute('aria-pressed', String(on)); });
   }
   if(document.readyState!=='loading') apply(); else document.addEventListener('DOMContentLoaded',apply);
 })();
