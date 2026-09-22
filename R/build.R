@@ -214,6 +214,15 @@ scroll_build <- function(object, outdir,
   invisible(TRUE)
 }
 
+# GetAssayData(layer=) can hand back a DENSE base matrix (some v5 layers, small or
+# ADT assays), which has no @x slot and no sparse triplet — so scroll's export
+# (mat@x, Matrix::summary) fails with "no applicable method for `@`". Coerce any
+# non-Csparse input (dense base matrix, dgeMatrix, dgTMatrix) to a dgCMatrix.
+.scroll_as_sparse <- function(mat) {
+  if (methods::is(mat, "CsparseMatrix")) return(mat)
+  methods::as(Matrix::Matrix(mat, sparse = TRUE), "CsparseMatrix")
+}
+
 # Load + normalize the object to a Seurat v5 object.
 .scroll_load_object <- function(object) {
   if (is.character(object)) {
@@ -305,6 +314,7 @@ scroll_build <- function(object, outdir,
   # streaming builder can append one source at a time into a shared store
   # (scroll_build uses offset = 0: local index == global index).
   mat <- SeuratObject::GetAssayData(object, assay = assay, layer = "data")
+  if (!is.null(mat) && !methods::is(mat, "CsparseMatrix")) mat <- .scroll_as_sparse(mat)
   if (is.null(mat) || nrow(mat) == 0 || length(mat@x) == 0)
     stop("Assay '", assay, "' has an empty `data` layer; normalize the object ",
          "before building.", call. = FALSE)
@@ -366,6 +376,7 @@ scroll_build <- function(object, outdir,
 # partitions. Only the nonzero entries are stored (sparse).
 .scroll_export_counts <- function(object, assay, outdir, cell_ids = NULL) {
   mat <- SeuratObject::GetAssayData(object, assay = assay, layer = "counts")
+  if (!is.null(mat) && !methods::is(mat, "CsparseMatrix")) mat <- .scroll_as_sparse(mat)
   if (is.null(mat) || nrow(mat) == 0 || length(mat@x) == 0)
     stop("Assay '", assay, "' has an empty `counts` layer; cannot export counts ",
          "for pseudobulk.", call. = FALSE)

@@ -2,6 +2,10 @@
 
 ## Robustness
 
+* **Build assays whose layer is a dense matrix.** `GetAssayData(layer=)` can return a dense base
+  matrix (some v5 layers, small/ADT assays), which has no sparse `@x` slot and failed the build with
+  `no applicable method for `@` applied to an object of class "matrix"`. The export now coerces any
+  non-sparse `data`/`counts` layer to a `dgCMatrix` first.
 * **Build large assays past 2 GB of feature strings.** The expr/counts store's `feature` column
   (one gene name per nonzero) is now written as `large_utf8` (int64 offsets). On a large assay the
   column exceeds 2 GB of string bytes, overflowing plain `utf8`'s int32 offsets and failing the build
