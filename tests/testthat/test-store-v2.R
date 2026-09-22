@@ -11,6 +11,9 @@ test_that("v2 build: manifest flags, int32 cell, one file per assay", {
   t <- arrow::open_dataset(adir)
   expect_equal(t$schema$GetFieldByName("cell")$type$ToString(), "int32")
   expect_equal(t$schema$GetFieldByName("value")$type$ToString(), "float")   # float32
+  # `feature` must be large_utf8 (int64 offsets): on a big assay the per-nonzero
+  # gene-name column tops 2 GB, which overflows plain utf8's int32 offsets.
+  expect_equal(t$schema$GetFieldByName("feature")$type$ToString(), "large_string")
   expect_identical(list.files(adir, pattern = "\\.parquet$"), "part-0.parquet")  # single file
 })
 

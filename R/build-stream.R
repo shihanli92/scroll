@@ -55,6 +55,7 @@ scroll_build_stream <- function(outdir, sources, reader, assays = NULL,
                                 id_of = as.character, overwrite = FALSE,
                                 verbose = interactive()) {
   .scroll_need_seurat()
+  .scroll_check_zstd()
   if (isTRUE(quantize))
     stop("scroll_build_stream() writes an unquantized float32 store (a global ",
          "quantization max is unknown while streaming); use quantize = FALSE.", call. = FALSE)

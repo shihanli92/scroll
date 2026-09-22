@@ -41,6 +41,7 @@ scroll_update <- function(dir, object, embeddings = NULL, meta_cols = NULL,
                           subsets = NULL, max_levels = .SCROLL_MAX_LEVELS,
                           verbose = interactive()) {
   .scroll_need_seurat()
+  .scroll_check_zstd()
   cells_path <- file.path(dir, "cells.parquet")
   if (!file.exists(cells_path))
     stop("'", dir, "' has no cells.parquet; is it a built scroll project?", call. = FALSE)
@@ -154,6 +155,7 @@ scroll_update <- function(dir, object, embeddings = NULL, meta_cols = NULL,
 #' @export
 scroll_add_meta <- function(dir, name, values, scope = NULL, overwrite = FALSE,
                             max_levels = .SCROLL_MAX_LEVELS) {
+  .scroll_check_zstd()
   cells_path <- file.path(dir, "cells.parquet")
   if (!file.exists(cells_path) || !file.exists(file.path(dir, "manifest.yaml")))
     stop("'", dir, "' is not a built scroll project (need cells.parquet + manifest.yaml).",

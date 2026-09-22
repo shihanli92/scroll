@@ -1,5 +1,20 @@
 # scroll 0.2.18
 
+## Robustness
+
+* **Build large assays past 2 GB of feature strings.** The expr/counts store's `feature` column
+  (one gene name per nonzero) is now written as `large_utf8` (int64 offsets). On a large assay the
+  column exceeds 2 GB of string bytes, overflowing plain `utf8`'s int32 offsets and failing the build
+  with `Invalid: Failed casting from large_string to string: input array too large`. Reads are
+  unchanged (the `open_dataset` + `feature ==` filter path handles either type).
+* **Clear error when `arrow` lacks the zstd codec.** scroll reads and writes every store with
+  `compression = "zstd"`; a "minimal" arrow build (common on HPC, where `install.packages("arrow")`
+  can't fetch the prebuilt libarrow and falls back to a codec-less build) would otherwise fail deep
+  inside with a cryptic `NotImplemented: Support for codec 'zstd' not built`. `scroll_build()`,
+  `scroll_build_stream()`, `scroll_update()`, `scroll_add_meta()`, and `scroll_connect()` (the read
+  path for `scroll_app()`/`scroll_serve()`) now check up front and stop with a message naming the fix
+  (reinstall a full arrow: `LIBARROW_MINIMAL=false`, or `conda install -c conda-forge r-arrow`).
+
 ## Header redesign
 
 * **The app bar is now title-led and fits one row on a laptop.** Previously it packed the wordmark,

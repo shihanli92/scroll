@@ -73,6 +73,7 @@ scroll_build <- function(object, outdir,
   if (!is.null(exclude_panels) && !is.character(exclude_panels))
     stop("`exclude_panels` must be a character vector of panel ids, or NULL.", call. = FALSE)
   .scroll_need_seurat()
+  .scroll_check_zstd()
   object <- .scroll_load_object(object)
 
   if (is.null(assays)) assays <- SeuratObject::DefaultAssay(object)
@@ -191,6 +192,26 @@ scroll_build <- function(object, outdir,
     stop("scroll's build step needs the 'SeuratObject' package. Install it with ",
          "install.packages('SeuratObject'). (The runtime app does not need it.)",
          call. = FALSE)
+}
+
+# scroll writes AND reads every store with compression = "zstd". A "minimal"
+# arrow build (common on HPC when install.packages() can't fetch the prebuilt
+# libarrow) ships without codecs, so a store cannot be built or even read —
+# otherwise arrow fails deep inside with a cryptic "NotImplemented: Support for
+# codec 'zstd' not built". Fail early at the entry points with a fix instead.
+.scroll_check_zstd <- function() {
+  ok <- tryCatch(isTRUE(arrow::arrow_info()$capabilities[["zstd"]]),
+                 error = function(e) FALSE)
+  if (!ok)
+    stop("The installed 'arrow' was built without the zstd codec, which scroll ",
+         "needs to read and write its stores.\n",
+         "Reinstall a full arrow build in a FRESH R session:\n",
+         "  Sys.setenv(NOT_CRAN = \"true\", LIBARROW_MINIMAL = \"false\", ",
+         "LIBARROW_BINARY = \"true\"); install.packages(\"arrow\")\n",
+         "then confirm: arrow::arrow_info()$capabilities[[\"zstd\"]]  # must be TRUE\n",
+         "(On HPC without internet, `conda install -c conda-forge r-arrow` also works.)",
+         call. = FALSE)
+  invisible(TRUE)
 }
 
 # Load + normalize the object to a Seurat v5 object.
@@ -315,7 +336,10 @@ scroll_build <- function(object, outdir,
   # (`arrow::open_dataset` on expr/<assay> + a `feature` filter) is layout-agnostic,
   # so it reads this single file exactly as it read the old bucketed subdirs.
   vtype <- if (quantize) arrow::uint8() else arrow::float32()
-  sch   <- arrow::schema(feature = arrow::utf8(), cell = arrow::int32(), value = vtype)
+  # `feature` is large_utf8 (int64 offsets): one gene name per nonzero can exceed
+  # 2 GB of string bytes on a large assay, which overflows plain utf8's int32
+  # offsets ("Failed casting from large_string to string: input array too large").
+  sch   <- arrow::schema(feature = arrow::large_utf8(), cell = arrow::int32(), value = vtype)
 
   ford <- order(feats)                                 # features alphabetical by name
   # gather each feature's contiguous nonzero rows, in sorted-feature order
@@ -351,7 +375,7 @@ scroll_build <- function(object, outdir,
   df <- data.frame(feature = feats[trip$i], cell = trip$j,          # int32 cell-index (v2)
                    value = as.integer(round(trip$x)), stringsAsFactors = FALSE)
   tbl <- arrow::as_arrow_table(df)$cast(arrow::schema(
-    feature = arrow::utf8(), cell = arrow::int32(), value = arrow::int32()))
+    feature = arrow::large_utf8(), cell = arrow::int32(), value = arrow::int32()))
   arrow::write_parquet(tbl, file.path(outdir, "counts", paste0(assay, ".parquet")),
                        compression = "zstd")
   invisible(NULL)
@@ -364,7 +388,7 @@ scroll_build <- function(object, outdir,
 # single-object build, which .scroll_export_assay writes pre-sorted).
 .scroll_compact_store <- function(outdir, quantize) {
   vtype <- if (quantize) arrow::uint8() else arrow::float32()
-  sch <- arrow::schema(feature = arrow::utf8(), cell = arrow::int32(), value = vtype)
+  sch <- arrow::schema(feature = arrow::large_utf8(), cell = arrow::int32(), value = vtype)
   root <- file.path(outdir, "expr")
   for (adir in list.dirs(root, recursive = FALSE)) {     # expr/<assay> dirs
     parts <- list.files(adir, pattern = "\\.parquet$", full.names = TRUE)

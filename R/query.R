@@ -17,6 +17,7 @@
 scroll_connect <- function(dir) {
   if (!dir.exists(file.path(dir, "expr")))
     stop("No expr/ store in '", dir, "'; is this a scroll project?", call. = FALSE)
+  .scroll_check_zstd()   # store is zstd-compressed; reads need the codec too
   con <- new.env(parent = emptyenv())
   con$dir <- normalizePath(dir)
   con$datasets <- new.env(parent = emptyenv())   # assay -> arrow Dataset (cached)
