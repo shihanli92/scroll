@@ -47,12 +47,32 @@ with an arrow query that reads only that feature's Parquet partition.
 
 ## Install
 
+Install from GitHub with **devtools** (or the lighter **remotes**) — it pulls the
+runtime dependencies automatically:
+
 ```r
-# runtime: install.packages(c("Matrix","arrow","dplyr","ggplot2",
-#                             "scales","shiny","bslib","yaml","colourpicker"))
-# build only: install.packages("SeuratObject")
-R CMD INSTALL scroll        # from the repo root
+# install.packages("devtools")
+devtools::install_github("shihanli92/scroll")
+
+# to build projects from a Seurat object you also need SeuratObject (a Suggest,
+# so it is not pulled automatically); the runtime app never needs it:
+install.packages("SeuratObject")
 ```
+
+`arrow` must be built with the **zstd** codec (scroll's store is zstd-compressed);
+confirm with `arrow::arrow_info()$capabilities[["zstd"]]`. On HPC or other
+environments where `install.packages("arrow")` yields a codec-less build, reinstall
+with `Sys.setenv(LIBARROW_MINIMAL = "false"); install.packages("arrow")`, or use
+`conda install -c conda-forge r-arrow`.
+
+<details><summary>Install from a local checkout instead</summary>
+
+```r
+# runtime deps: install.packages(c("Matrix","arrow","dplyr","ggplot2",
+#                                  "scales","shiny","bslib","yaml","colourpicker"))
+devtools::install(".")      # from the repo root, or: R CMD INSTALL .
+```
+</details>
 
 ## Build a project
 
