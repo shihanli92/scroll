@@ -24,14 +24,12 @@ reference:
   - atac_spec
 
 - title: Run the app
-  desc: Launch or scaffold the runtime explorer; read optional config defaults.
+  desc: Launch the runtime explorer, or preview a single panel while developing it.
   contents:
   - scroll_app
   - scroll_multi_app
   - scroll_serve
   - scroll_preview_panel
-  - scroll_scaffold_app
-  - scroll_config
 
 - title: Query layer
   desc: >
@@ -42,16 +40,13 @@ reference:
   - scroll_manifest
   - scroll_query_feature
   - scroll_query_features
-  - scroll_query_cells
   - scroll_dequantize
-  - scroll_aggregate_counts
 
 - title: Differential expression
   desc: Live Wilcoxon markers and replicate-aware pseudobulk testing.
   contents:
   - scroll_de
   - scroll_pseudobulk_de
-  - scroll_pseudobulk_stability
 
 - title: Extend the app
   desc: >
@@ -64,28 +59,7 @@ reference:
   - scroll_show_when
   - scroll_helpers
   - scroll_render_plot
-  - scroll_bind_levels
   - scroll_columns
   - scroll_embeddings
   - scroll_features
   - scroll_reset_panels
-
-- title: View cores
-  desc: >
-    The pure ggplot render functions behind each panel, reusable on their own.
-  contents:
-  - render_view
-  - scroll_view_kind
-  - view_umap_colorby
-  - view_feature_plot
-  - view_biaxial
-  - view_dotplot
-  - view_heatmap
-  - view_violin
-  - view_violin_stacked
-  - view_proportions
-  - view_de_table
-  - view_volcano
-  - view_stability
-  - view_contrast_preview
-  - view_contrast_medoids

@@ -28,3 +28,10 @@ diverging palette. A \code{cells} mode instead draws genes x a random subsample 
 cells (capped, grouped) via \code{geom_raster}. \code{group_by} may name >1 column (its
 \code{a | b} interaction).
 }
+\section{Deprecated}{
+
+This plot core is internal to the built-in panels and will no longer be
+exported from scroll 0.3.0.
+}
+
+\keyword{internal}

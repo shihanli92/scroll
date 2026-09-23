@@ -1,3 +1,36 @@
+# scroll 0.2.19
+
+## API surface trimmed (67 -> 43 documented exports)
+
+An audit of the exported functions against the docs, tests, and real downstream
+apps found many exports that were implementation details. The public API is now
+the build / run / query / DE functions plus the custom-panel extension API.
+
+* **No longer exported** (internal; were only used by the built-in panels or tests):
+  `render_view()`, `scroll_view_kind()`, `view_de_table()` (read a v1 `de/` folder
+  that v2 stores do not have), `view_biaxial()`, `view_volcano()`,
+  `view_stability()`, `view_contrast_preview()`, `view_contrast_medoids()`,
+  `view_feature_multi()`, `view_feature_blend()`, `view_violin_multi()`,
+  `view_violin_stacked()`, `scroll_scaffold_app()` (called by `scroll_build()`),
+  and `scroll_config()` (panels read `data$config`).
+* **Deprecated, removed from the export list in 0.3.0.** Calling these from your own
+  code now warns once per session; the built-in panels are unaffected:
+  * `view_umap_colorby()`, `view_feature_plot()`, `view_dotplot()`,
+    `view_heatmap()`, `view_violin()`, `view_proportions()`: use the built-in
+    panels, or build the plot with ggplot2 plus `scroll_point_layer()` /
+    `scroll_discrete_colors()` / `scroll_continuous_scale()`.
+  * `scroll_bind_levels()`: use `scroll_input_levels(from = )`.
+  * `scroll_query_cells()`: use `scroll_de()`, or `scroll_query_features()` for
+    specific genes. (Its `cells` doc now correctly describes the v2 int32 cell key.)
+  * `scroll_aggregate_counts()`: use `scroll_pseudobulk_de()`.
+* **`scroll_pseudobulk_stability()` merged into `scroll_pseudobulk_de(runs = )`.**
+  With `runs > 1` it returns the per-gene stability table (`sel_freq`,
+  `median_logFC`, `sign_agree`, ...), matching the Pseudobulk panel's stability
+  mode; new `lfc` / `padj` arguments set the per-run hit cutoffs. The old name is
+  a deprecated wrapper returning the identical table.
+* Fixes the pkgdown reference build, which failed on four exported `view_*`
+  topics missing from `_pkgdown.yml`.
+
 # scroll 0.2.18
 
 ## Robustness

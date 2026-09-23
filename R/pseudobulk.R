@@ -234,6 +234,15 @@
 #'   Real-replicate results are seed-independent (no random draw).
 #' @param progress Optional `function(fraction, detail)` called at the aggregate
 #'   and model-fit stages, for a UI progress bar. `NULL` (default) is a no-op.
+#' @param runs Number of runs. `1` (default) is a single DE fit. `runs > 1`
+#'   re-runs the fit with fresh random pseudo-replicates (seeds `1..runs`) and
+#'   returns a **stability** table instead (see Value) -- which genes come up
+#'   consistently rather than by a lucky draw. This checks robustness to the
+#'   random sampling only; it does not fix the anti-conservative bias of
+#'   pseudo-replication. Real-replicate fits are seed-independent, so stability is
+#'   only informative with pseudo-replicates.
+#' @param lfc,padj Stability only (`runs > 1`): the logFC and adjusted-p cutoffs
+#'   defining a "hit" in each run.
 #' @return A data.frame (`gene`, `logFC`, `avg_expr`, `p_val`, `p_val_adj`) ranked
 #'   by adjusted p-value; positive `logFC` is up in `ident1`. `logFC`/`avg_expr`
 #'   are log2 (limma's `logFC`/`AveExpr`). Attributes: `"pseudo"` (TRUE when any
@@ -241,13 +250,25 @@
 #'   `"mixed"`, or `"pseudo"`), `"design"` (the model formula), `"n_samples"`
 #'   (per group), `"sample_sizes"` (cells per sample), and `"dropped_na"` (cells
 #'   excluded for a missing replicate value).
+#'
+#'   With `runs > 1`: a data.frame with `gene`, `sel_freq` (fraction of runs in
+#'   which the gene is a hit), `median_logFC`, `sign_agree`, `median_padj`,
+#'   `n_tested`, ranked by selection frequency (attribute `"runs"`: successful runs).
 #' @export
 scroll_pseudobulk_de <- function(data, assay, aggregate_cols, ident1, ident2 = NULL,
                                  replicate_col = NULL, paired = c("auto", "yes", "no"),
                                  min_cells = 10,
                                  n_pseudo = 3, cells_per_pseudo = 50, cells = NULL,
-                                 seed = 1L, progress = NULL) {
+                                 seed = 1L, progress = NULL,
+                                 runs = 1L, lfc = 1, padj = 0.05) {
   paired <- match.arg(paired)
+  if (runs > 1) {
+    runs_list <- .scroll_pseudobulk_runs(
+      data, assay, aggregate_cols, ident1, ident2, replicate_col = replicate_col,
+      paired = paired, min_cells = min_cells, n_pseudo = n_pseudo,
+      cells_per_pseudo = cells_per_pseudo, cells = cells, runs = runs)
+    return(.scroll_stability_aggregate(runs_list, lfc, padj))
+  }
   pr <- function(f, d) if (is.function(progress)) progress(f, d)
   if (!requireNamespace("edgeR", quietly = TRUE) ||
       !requireNamespace("limma", quietly = TRUE))
@@ -354,29 +375,22 @@ scroll_pseudobulk_de <- function(data, assay, aggregate_cols, ident1, ident2 = N
 
 #' Stability of pseudobulk DE across random pseudo-replicate draws
 #'
-#' Runs [scroll_pseudobulk_de()] `runs` times with fresh random pseudo-replicates
-#' and reports, per gene, how often it clears the `lfc` + `padj` cutoffs
-#' (`sel_freq`), its `median_logFC`, sign agreement, and median adjusted p. Use it
-#' to see which genes come up **consistently** rather than by a lucky draw.
-#'
-#' Note: this checks robustness to the random sampling only; it does **not** fix
-#' the anti-conservative bias of pseudo-replication (fabricated replicates
-#' understate biological variance). Treat `sel_freq` as a ranking heuristic, not a
-#' p-value, and prefer real replicates when available.
+#' Deprecated: use `scroll_pseudobulk_de(..., runs = )`, which returns the same
+#' stability table when `runs > 1`. This wrapper will be removed in scroll 0.3.0.
 #'
 #' @inheritParams scroll_pseudobulk_de
 #' @param runs Number of random re-runs.
-#' @param lfc,padj logFC and adjusted-p cutoffs defining a "hit" in each run.
-#' @return A data.frame with `gene`, `sel_freq`, `median_logFC`, `sign_agree`,
-#'   `median_padj`, `n_tested`, ranked by selection frequency.
+#' @return See [scroll_pseudobulk_de()] (`runs > 1`).
+#' @keywords internal
 #' @export
 scroll_pseudobulk_stability <- function(data, assay, aggregate_cols, ident1, ident2 = NULL,
                                         replicate_col = "no_replicate", min_cells = 10,
                                         n_pseudo = 3, cells_per_pseudo = 50, cells = NULL,
                                         runs = 25, lfc = 1, padj = 0.05) {
-  runs_list <- .scroll_pseudobulk_runs(
-    data, assay, aggregate_cols, ident1, ident2, replicate_col = replicate_col,
-    min_cells = min_cells, n_pseudo = n_pseudo, cells_per_pseudo = cells_per_pseudo,
-    cells = cells, runs = runs)
-  .scroll_stability_aggregate(runs_list, lfc, padj)
+  .scroll_soft_deprecate("scroll_pseudobulk_stability",
+                         "Use scroll_pseudobulk_de(runs = ) instead.", parent.frame())
+  scroll_pseudobulk_de(data, assay, aggregate_cols, ident1, ident2,
+                       replicate_col = replicate_col, min_cells = min_cells,
+                       n_pseudo = n_pseudo, cells_per_pseudo = cells_per_pseudo,
+                       cells = cells, runs = max(2L, runs), lfc = lfc, padj = padj)
 }

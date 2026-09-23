@@ -21,3 +21,10 @@ A ggplot.
 \description{
 Embedding colored by a feature's expression
 }
+\section{Deprecated}{
+
+This plot core is internal to the built-in panels and will no longer be
+exported from scroll 0.3.0.
+}
+
+\keyword{internal}

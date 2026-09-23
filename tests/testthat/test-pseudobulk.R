@@ -272,17 +272,22 @@ test_that(".scroll_stability_aggregate scores selection frequency + sign agreeme
   expect_true(agg$median_logFC[agg$gene == "A"] > 1)
 })
 
-test_that("scroll_pseudobulk_stability returns per-gene stability over runs", {
+test_that("scroll_pseudobulk_de(runs > 1) returns per-gene stability over runs", {
   skip_if_not_installed("edgeR"); skip_if_not_installed("limma")
   data <- scroll:::.scroll_load(test_project())
   on.exit(scroll_disconnect(data$con))
-  set.seed(1)
-  st <- scroll_pseudobulk_stability(data, "RNA", aggregate_cols = "celltype",
-                                    ident1 = "T", ident2 = "B", replicate_col = "no_replicate",
-                                    runs = 6, n_pseudo = 3, cells_per_pseudo = 15, min_cells = 5)
+  st <- scroll_pseudobulk_de(data, "RNA", aggregate_cols = "celltype",
+                             ident1 = "T", ident2 = "B", replicate_col = "no_replicate",
+                             runs = 6, n_pseudo = 3, cells_per_pseudo = 15, min_cells = 5)
   expect_true(all(c("gene", "sel_freq", "median_logFC", "sign_agree", "n_tested") %in% names(st)))
   expect_equal(attr(st, "runs"), 6)
   expect_true(all(st$sel_freq >= 0 & st$sel_freq <= 1))
+
+  # the deprecated wrapper returns the identical table (seeds 1..runs are fixed)
+  old <- scroll_pseudobulk_stability(data, "RNA", aggregate_cols = "celltype",
+                                     ident1 = "T", ident2 = "B", replicate_col = "no_replicate",
+                                     runs = 6, n_pseudo = 3, cells_per_pseudo = 15, min_cells = 5)
+  expect_equal(old, st)
 })
 
 test_that("pseudobulk panel gates off without a counts store", {

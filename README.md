@@ -174,8 +174,7 @@ toolbar; the DE table also exports to **CSV**.
 
 Live DE is the one memory-heavy operation: `presto::wilcoxauc` needs an in-memory
 matrix, so a run reconstructs the contrast's expression matrix from the store
-(on-demand, behind a Compute button). Precomputed `de/<contrast>` tables remain
-supported via `view_de_table()` for full rigor / any test.
+(on-demand, behind a Compute button).
 
 **Pseudobulk DE** needs raw counts (edgeR/limma-voom are count-based), which are
 not in the default quantized store. Build with `counts = TRUE` to also export a
@@ -239,8 +238,8 @@ and the `scroll_discrete_colors()` / `scroll_continuous_scale()` palettes.
 
 For full control (cross-output state, custom reactivity), `register_panel(id, ui,
 server, …)` takes a raw `ui(id, data)` / `server(id, data, cells_r)` module pair —
-the same contract the built-ins use — and the helpers `scroll_render_plot()` /
-`scroll_bind_levels()` remove most of the boilerplate. Registering an existing `id`
+the same contract the built-ins use — and `scroll_render_plot()` removes most of the
+plot/download boilerplate. Registering an existing `id`
 overrides that panel in place; `scroll_reset_panels()` clears custom ones.
 
 ## Query features directly (no app needed)
@@ -260,7 +259,7 @@ scroll_disconnect(con)
 | `R/build.R` | `scroll_build()` + Seurat v5 extraction |
 | `R/manifest.R` / `R/scaffold.R` | manifest + `app.R`/`config.yaml` scaffolding |
 | `R/query.R` | arrow query handle + `scroll_query_feature()` / `scroll_query_features()` |
-| `R/views.R` | plot cores: `view_umap_colorby`, `view_feature_plot`, `view_dotplot`, … |
+| `R/views.R` | internal plot cores behind each built-in panel (`view_*`) |
 | `R/app.R` | `scroll_app()` / `scroll_multi_app()` / `scroll_serve()`, the app shell + panel registry |
 | `R/data-handle.R` | the runtime data handle: `.scroll_load()` + LRU-cached feature queries |
 | `R/panel-helpers.R` | control-choice + plot-toolbar helpers shared across the built-in panels |

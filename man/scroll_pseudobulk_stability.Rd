@@ -48,21 +48,14 @@ pseudo-replicates and the maximum cells per pseudo-replicate.}
 
 \item{runs}{Number of random re-runs.}
 
-\item{lfc, padj}{logFC and adjusted-p cutoffs defining a "hit" in each run.}
+\item{lfc, padj}{Stability only (\code{runs > 1}): the logFC and adjusted-p cutoffs
+defining a "hit" in each run.}
 }
 \value{
-A data.frame with \code{gene}, \code{sel_freq}, \code{median_logFC}, \code{sign_agree},
-\code{median_padj}, \code{n_tested}, ranked by selection frequency.
+See \code{\link[=scroll_pseudobulk_de]{scroll_pseudobulk_de()}} (\code{runs > 1}).
 }
 \description{
-Runs \code{\link[=scroll_pseudobulk_de]{scroll_pseudobulk_de()}} \code{runs} times with fresh random pseudo-replicates
-and reports, per gene, how often it clears the \code{lfc} + \code{padj} cutoffs
-(\code{sel_freq}), its \code{median_logFC}, sign agreement, and median adjusted p. Use it
-to see which genes come up \strong{consistently} rather than by a lucky draw.
+Deprecated: use \code{scroll_pseudobulk_de(..., runs = )}, which returns the same
+stability table when \code{runs > 1}. This wrapper will be removed in scroll 0.3.0.
 }
-\details{
-Note: this checks robustness to the random sampling only; it does \strong{not} fix
-the anti-conservative bias of pseudo-replication (fabricated replicates
-understate biological variance). Treat \code{sel_freq} as a ranking heuristic, not a
-p-value, and prefer real replicates when available.
-}
+\keyword{internal}

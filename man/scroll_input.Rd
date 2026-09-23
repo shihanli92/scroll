@@ -122,9 +122,8 @@ A control spec (a list) for \code{register_plot_panel(controls = )}.
 }
 \description{
 Each constructor returns a control spec. \code{scroll_input_column} picks a metadata
-column of a type; \code{scroll_input_levels} is a level selector bound (via
-\code{\link[=scroll_bind_levels]{scroll_bind_levels()}}) to the column chosen by another control (\code{from}) or a
-fixed column; \code{scroll_input_gene} is a server-side gene search over the default
+column of a type; \code{scroll_input_levels} is a level selector bound to the
+column chosen by another control (\code{from}) or a fixed column; \code{scroll_input_gene} is a server-side gene search over the default
 assay; \code{scroll_input_assay} / \code{scroll_input_embedding} pick an assay / reduction
 from the manifest (the embedding narrows to the active subset view when
 \code{view_aware}); \code{scroll_input_custom} wraps your own \code{ui}/\code{bind} as a control; the

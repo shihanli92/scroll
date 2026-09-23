@@ -11,7 +11,8 @@ scroll_query_cells(con, assay, cells, dict = FALSE)
 
 \item{assay}{Assay name.}
 
-\item{cells}{Character vector of cell ids.}
+\item{cells}{Cell keys to fetch: the int32 global row index into
+\code{cells.parquet} for a v2 store (i.e. \code{cells$.gidx}), or barcodes for a v1 store.}
 
 \item{dict}{If \code{TRUE}, return the \code{feature} column dictionary-encoded (an R
 factor) instead of a character vector. arrow builds the dictionary during the
@@ -29,3 +30,10 @@ DE. Unlike a feature lookup this scans all partitions (the cell filter does
 not prune the feature-partitioned store), so it is the one query that touches
 the whole assay; call it on demand, not per interaction.
 }
+\section{Deprecated}{
+
+This is an internal step of \code{\link[=scroll_de]{scroll_de()}} and will no longer be exported from
+scroll 0.3.0.
+}
+
+\keyword{internal}

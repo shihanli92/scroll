@@ -26,3 +26,10 @@ A ggplot.
 \description{
 Dot plot: mean expression x fraction expressing, across groups
 }
+\section{Deprecated}{
+
+This plot core is internal to the built-in panels and will no longer be
+exported from scroll 0.3.0.
+}
+
+\keyword{internal}

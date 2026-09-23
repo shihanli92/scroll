@@ -17,7 +17,10 @@ scroll_pseudobulk_de(
   cells_per_pseudo = 50,
   cells = NULL,
   seed = 1L,
-  progress = NULL
+  progress = NULL,
+  runs = 1L,
+  lfc = 1,
+  padj = 0.05
 )
 }
 \arguments{
@@ -58,6 +61,17 @@ Real-replicate results are seed-independent (no random draw).}
 
 \item{progress}{Optional \verb{function(fraction, detail)} called at the aggregate
 and model-fit stages, for a UI progress bar. \code{NULL} (default) is a no-op.}
+
+\item{runs}{Number of runs. \code{1} (default) is a single DE fit. \code{runs > 1}
+re-runs the fit with fresh random pseudo-replicates (seeds \verb{1..runs}) and
+returns a \strong{stability} table instead (see Value) -- which genes come up
+consistently rather than by a lucky draw. This checks robustness to the
+random sampling only; it does not fix the anti-conservative bias of
+pseudo-replication. Real-replicate fits are seed-independent, so stability is
+only informative with pseudo-replicates.}
+
+\item{lfc, padj}{Stability only (\code{runs > 1}): the logFC and adjusted-p cutoffs
+defining a "hit" in each run.}
 }
 \value{
 A data.frame (\code{gene}, \code{logFC}, \code{avg_expr}, \code{p_val}, \code{p_val_adj}) ranked
@@ -67,6 +81,10 @@ pseudo-replicates were used), \code{"regime"} (\code{"real-paired"}, \code{"real
 \code{"mixed"}, or \code{"pseudo"}), \code{"design"} (the model formula), \code{"n_samples"}
 (per group), \code{"sample_sizes"} (cells per sample), and \code{"dropped_na"} (cells
 excluded for a missing replicate value).
+
+With \code{runs > 1}: a data.frame with \code{gene}, \code{sel_freq} (fraction of runs in
+which the gene is a hit), \code{median_logFC}, \code{sign_agree}, \code{median_padj},
+\code{n_tested}, ranked by selection frequency (attribute \code{"runs"}: successful runs).
 }
 \description{
 Aggregates cells into pseudobulk samples by summing raw counts, then compares

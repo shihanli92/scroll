@@ -16,7 +16,7 @@
 #' @param exclude_panels Optional character vector of panel ids to hide (written as
 #'   `exclude_panels:`); applied after gating / the `panels` allowlist.
 #' @return `dir`, invisibly.
-#' @export
+#' @noRd
 scroll_scaffold_app <- function(dir, panels = NULL, exclude_panels = NULL) {
   man <- scroll_manifest(dir)
   assay <- man$default_assay
@@ -64,7 +64,7 @@ scroll_scaffold_app <- function(dir, panels = NULL, exclude_panels = NULL) {
 #'
 #' @param dir A scroll project directory.
 #' @return The parsed config list, or `NULL` when there is no `config.yaml`.
-#' @export
+#' @noRd
 scroll_config <- function(dir) {
   path <- file.path(dir, "config.yaml")
   if (!file.exists(path)) return(NULL)

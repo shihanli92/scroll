@@ -65,9 +65,15 @@ scroll_features <- function(data, assay = NULL)
 #'   that names neither a metadata column nor another control (a common typo);
 #'   the builder passes this automatically.
 #' @return Invisibly, `NULL`.
+#' @section Deprecated:
+#' Superseded by [scroll_input_levels()] (`from = `), which wires this for you; it
+#' will no longer be exported from scroll 0.3.0.
+#' @keywords internal
 #' @export
 scroll_bind_levels <- function(input, session, id, from, data, selected = 1,
                                control_ids = character()) {
+  .scroll_soft_deprecate("scroll_bind_levels",
+                         "Use scroll_input_levels(from = ) instead.", parent.frame())
   levs <- function(col) .scroll_meta_levels(data, col)
   pick <- function(lv) {
     if (identical(selected, "none") || !length(lv)) character(0)
@@ -155,9 +161,8 @@ scroll_render_plot <- function(output, id, fun, event = NULL, placeholder = NULL
 #' Declarative controls for [register_plot_panel()]
 #'
 #' Each constructor returns a control spec. `scroll_input_column` picks a metadata
-#' column of a type; `scroll_input_levels` is a level selector bound (via
-#' [scroll_bind_levels()]) to the column chosen by another control (`from`) or a
-#' fixed column; `scroll_input_gene` is a server-side gene search over the default
+#' column of a type; `scroll_input_levels` is a level selector bound to the
+#' column chosen by another control (`from`) or a fixed column; `scroll_input_gene` is a server-side gene search over the default
 #' assay; `scroll_input_assay` / `scroll_input_embedding` pick an assay / reduction
 #' from the manifest (the embedding narrows to the active subset view when
 #' `view_aware`); `scroll_input_custom` wraps your own `ui`/`bind` as a control; the

@@ -39,3 +39,10 @@ named by \code{from} changes, the \code{id} selectize is repopulated with that c
 levels. \code{from} may be another control's input id (dynamic) or a literal
 categorical column name (static, populated once).
 }
+\section{Deprecated}{
+
+Superseded by \code{\link[=scroll_input_levels]{scroll_input_levels()}} (\verb{from = }), which wires this for you; it
+will no longer be exported from scroll 0.3.0.
+}
+
+\keyword{internal}

@@ -23,3 +23,10 @@ Sums an assay's raw counts (the \verb{counts/<assay>.parquet} store, written by
 and summation run in arrow's engine, so the full genes x cells matrix is never
 materialized in R. Used by \code{\link[=scroll_pseudobulk_de]{scroll_pseudobulk_de()}}.
 }
+\section{Deprecated}{
+
+This is an internal step of \code{\link[=scroll_pseudobulk_de]{scroll_pseudobulk_de()}} and will no longer be
+exported from scroll 0.3.0.
+}
+
+\keyword{internal}

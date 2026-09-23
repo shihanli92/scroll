@@ -24,3 +24,10 @@ A ggplot.
 \description{
 Violin: a feature's per-group distribution
 }
+\section{Deprecated}{
+
+This plot core is internal to the built-in panels and will no longer be
+exported from scroll 0.3.0.
+}
+
+\keyword{internal}
