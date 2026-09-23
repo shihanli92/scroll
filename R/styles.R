@@ -121,6 +121,22 @@ body.scroll-warming{overflow:hidden;}
   border:1px solid var(--sc-line); background:var(--sc-card); color:var(--sc-muted); border-radius:8px;}
 .scroll-ctl-toggle:hover,.scroll-two-toggle:hover,.scroll-info-toggle:hover{
   color:var(--sc-ink); border-color:var(--sc-accent);}
+/* Hover/focus label under each app-bar button, saying what it does in its current
+   state (text is set in JS on hover/focus, see scrollTip). Replaces the native title
+   tooltip, which appears only after ~1s and is easy to miss. Anchored to the right
+   edge because the cluster hugs the right side of the bar. */
+.scroll-appbar-actions [data-tip]{position:relative;}
+.scroll-appbar-actions [data-tip]::after{content:attr(data-tip); position:absolute;
+  top:calc(100% + 8px); right:0; z-index:1001; width:max-content; max-width:240px;
+  padding:6px 9px; border-radius:6px; background:var(--sc-ink); color:var(--sc-card);
+  font-size:12px; font-weight:500; line-height:1.35; letter-spacing:0; white-space:normal;
+  text-align:left; box-shadow:0 4px 14px rgba(17,24,38,.18); pointer-events:none;
+  opacity:0; transform:translateY(-3px); transition:opacity .12s ease, transform .12s ease;}
+.scroll-appbar-actions [data-tip]:hover::after,
+.scroll-appbar-actions [data-tip]:focus-visible::after{opacity:1; transform:none;
+  transition-delay:.25s;}
+/* the info button's popover is open -> its label would sit on top of it */
+.scroll-info-toggle[aria-describedby]::after{display:none;}
 /* pressed / active: two-up on, rail collapsed, or the filters drawer open */
 .scroll-two-toggle.is-on,.scroll-ctl-toggle.is-collapsed,.scroll-ctl-toggle.is-open{
   color:var(--sc-accent-deep); border-color:var(--sc-accent); background:var(--sc-wash);}
@@ -402,12 +418,35 @@ table.scroll-clone-dt thead th{padding-top:2px; padding-bottom:2px;}
 }
 "
 
-.scroll_spy_js <- function() "
+.scroll_spy_js <- function() paste0(.scroll_tips_js(), "
+// App-bar button labels: what the button does in its CURRENT state. Computed on
+// hover/focus rather than set once, because the controls button changes role with
+// the screen width (in-grid column vs drawer) and a resize would leave it stale.
+function scrollTip(btn){
+  var T=window.SCROLL_TIPS||{}, t=null, lay=null;
+  if(btn.classList.contains('scroll-ctl-toggle')){
+    var body=btn.closest('.scroll-appbar')&&btn.closest('.scroll-appbar').parentElement;
+    lay=body?body.querySelector('.scroll-layout'):document.querySelector('.scroll-layout');
+    var drawer=window.matchMedia('(max-width:1399.98px)').matches ||
+               (lay&&lay.querySelector('.scroll-content.two-up'));
+    t = drawer ? (lay&&lay.classList.contains('filters-open') ? T.drawer_close : T.drawer_open)
+               : (lay&&lay.classList.contains('controls-collapsed') ? T.ctl_show : T.ctl_hide);
+  } else if(btn.classList.contains('scroll-two-toggle')){
+    t = btn.classList.contains('is-on') ? T.two_off : T.two_on;
+  } else if(btn.classList.contains('scroll-info-toggle')){ t = T.info; }
+  if(t){ btn.setAttribute('data-tip', t); btn.setAttribute('aria-label', t); }
+}
+['pointerover','focusin'].forEach(function(ev){
+  document.addEventListener(ev, function(e){
+    var b=e.target.closest&&e.target.closest('.scroll-appbar-actions [data-tip]');
+    if(b) scrollTip(b);
+  });
+});
 function scrollCloseDrawers(){
   document.querySelectorAll('.scroll-layout.filters-open').forEach(function(l){
     l.classList.remove('filters-open');
     var t=l.parentElement&&l.parentElement.querySelector('.scroll-ctl-toggle');
-    if(t){t.classList.remove('is-open'); t.setAttribute('aria-expanded','false'); t.title='Open filters';}
+    if(t){t.classList.remove('is-open'); t.setAttribute('aria-expanded','false');}
   });
 }
 window.scrollToggleControls=function(btn){
@@ -419,13 +458,13 @@ window.scrollToggleControls=function(btn){
     var open=lay.classList.toggle('filters-open');
     btn.classList.toggle('is-open', open);
     btn.setAttribute('aria-expanded', String(open));
-    btn.title = open ? 'Close filters' : 'Open filters';   // icon is fixed; the tooltip carries state
+    scrollTip(btn);
     return;
   }
   var collapsed=lay.classList.toggle('controls-collapsed');  // wide: hide/show the in-grid rail
   btn.classList.toggle('is-collapsed', collapsed);
   btn.setAttribute('aria-expanded', String(!collapsed));
-  btn.title = collapsed ? 'Show controls' : 'Hide controls';
+  scrollTip(btn);
 };
 window.scrollTogglePanelControls=function(btn){   // per-card controls collapse (narrow only)
   var card=btn.closest('.scroll-panel-card'); if(!card) return;
@@ -460,7 +499,7 @@ window.scrollToggleTwoUp=function(btn){
   if(!c) return;
   var on=c.classList.toggle('two-up');
   btn.classList.toggle('is-on', on); btn.setAttribute('aria-pressed', String(on));
-  btn.title = on ? 'One panel per row' : 'Two panels per row';
+  scrollTip(btn);
   scrollCloseDrawers();                                 // filters drawer mode may change -> start closed
   try{ localStorage.setItem('scroll:two-up', on?'1':'0'); }catch(e){}
   scrollAdjustTables();                                 // cards changed width -> re-fit any DataTables
@@ -480,7 +519,7 @@ function scrollAdjustTables(){
     document.querySelectorAll('.scroll-content').forEach(function(c){ c.classList.toggle('two-up', on); });
     document.querySelectorAll('.scroll-two-toggle').forEach(function(b){
       b.classList.toggle('is-on', on); b.setAttribute('aria-pressed', String(on));
-      b.title = on ? 'One panel per row' : 'Two panels per row'; });
+      scrollTip(b); });
   }
   if(document.readyState!=='loading') apply(); else document.addEventListener('DOMContentLoaded',apply);
 })();
@@ -582,7 +621,24 @@ function scrollAdjustTables(){
   };
   if(document.readyState!=='loading') applyStored(); else document.addEventListener('DOMContentLoaded', applyStored);
 })();
-"
+")
+
+# App-bar button labels, shared by the R markup (initial data-tip / aria-label) and
+# the JS that recomputes them from live state (window.SCROLL_TIPS).
+.SCROLL_TIPS <- list(
+  info         = "Dataset details: cells, genes, assays and reductions",
+  two_on       = "Show two panels side by side",
+  two_off      = "Back to one panel per row",
+  ctl_hide     = "Hide the filters & theme column (more room for plots)",
+  ctl_show     = "Show the filters & theme column",
+  drawer_open  = "Open the filters & theme panel",
+  drawer_close = "Close the filters & theme panel")
+
+.scroll_tips_js <- function() {
+  kv <- vapply(names(.SCROLL_TIPS), function(k)
+    sprintf("%s:'%s'", k, gsub("'", "\\\\'", .SCROLL_TIPS[[k]])), "")
+  sprintf("window.SCROLL_TIPS={%s};\n", paste(kv, collapse = ","))
+}
 
 # Lazy panel rendering: report each panel card's on-screen state (viewport + a
 # margin) to its module as input$onscreen. .scroll_lazy_plot uses that to recompute

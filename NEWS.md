@@ -1,3 +1,38 @@
+# scroll 0.2.20
+
+## UI
+
+* **App-bar buttons explain themselves on hover.** The dataset-info, two-up and
+  controls buttons now show a styled label just below them (after a short delay,
+  and on keyboard focus too) saying what they do in their current state, e.g.
+  "Show two panels side by side" / "Back to one panel per row", or "Open the
+  filters & theme panel" when the controls live in a drawer. Replaces the native
+  `title` tooltips, which appeared only after ~1s and were easy to miss. The label
+  is computed from live state on hover, so it stays right after a resize changes
+  the controls button's role.
+
+## Subset views
+
+* **`scroll_add_subset()` works out what a subset changed.** Attaching several
+  reprocessed lineages no longer needs per-subset `embeddings`/`meta` lists or
+  manual renaming:
+  * `embeddings = "auto"` (now the default; `embeddings` was previously required)
+    copies every reduction that is new in the child or whose coordinates differ
+    from the parent's on the shared cells (i.e. re-run on the subset), as
+    `<name>_<reduction>`, ordered UMAP > t-SNE > rest so a 2-D map is the view's
+    primary embedding. Inherited, unchanged reductions are skipped; if nothing was
+    re-run it stops with a clear error.
+  * `meta = "auto"` copies every metadata column that is new or differs from the
+    parent on the shared cells (re-run clusters, recomputed scores). Numerics
+    compare with a tolerance and factors by value, so float noise and re-ordered
+    levels are not flagged. Columns get a `<name>_` prefix so a subset's
+    `seurat_clusters` can't overwrite the parent's; `prefix =` overrides it, and an
+    explicit `meta = c(...)` still copies under the same names.
+  * Both report what they picked with a message.
+* `scroll_build()` with inferred `meta_cols` now always exports the subsets' declared
+  columns, instead of failing validation when inference dropped one (e.g. a
+  high-cardinality subset label).
+
 # scroll 0.2.19
 
 ## API surface trimmed (67 -> 43 documented exports)

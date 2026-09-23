@@ -440,7 +440,7 @@ scroll_reset_panels <- function() {
   # so the header shows only what you're looking at + your controls.
   info_btn <- bslib::popover(
     tags$button(class = "scroll-info-toggle", type = "button",
-                title = "Dataset details", `aria-label` = "Dataset details",
+                `data-tip` = .SCROLL_TIPS$info, `aria-label` = .SCROLL_TIPS$info,
                 shiny::icon("circle-info")),
     tags$dl(class = "scroll-info-dl",
       tags$dt("Cells"),      tags$dd(format(m$n_cells, big.mark = ",")),
@@ -471,16 +471,17 @@ scroll_reset_panels <- function() {
   has_ctrl <- !isFALSE(data$config$theme_controls) || length(.scroll_filter_specs(data)) > 0
   toggle <- if (has_ctrl)
     tags$button(class = "scroll-ctl-toggle", type = "button",
-                onclick = "scrollToggleControls(this)", title = "Hide controls",
-                `aria-label` = "Show or hide the control rail", shiny::icon("sliders"))
+                onclick = "scrollToggleControls(this)", `data-tip` = .SCROLL_TIPS$ctl_hide,
+                `aria-label` = .SCROLL_TIPS$ctl_hide, shiny::icon("sliders"))
   # two-panels-per-row toggle (CSS-hidden on screens too narrow to fit two); its
   # initial pressed state reflects the config default, then localStorage takes over.
   two_up <- isTRUE(data$config$layout$two_up)
   two_toggle <- tags$button(class = paste0("scroll-two-toggle", if (two_up) " is-on"),
                 type = "button", onclick = "scrollToggleTwoUp(this)",
-                title = if (two_up) "One panel per row" else "Two panels per row",
+                `data-tip` = if (two_up) .SCROLL_TIPS$two_off else .SCROLL_TIPS$two_on,
+                `aria-label` = if (two_up) .SCROLL_TIPS$two_off else .SCROLL_TIPS$two_on,
                 `aria-pressed` = if (two_up) "true" else "false",
-                `aria-label` = "Show two panels per row", shiny::icon("table-columns"))
+                shiny::icon("table-columns"))
   div(
     class = "scroll-appbar",
     div(class = "scroll-brand", brand),

@@ -187,6 +187,27 @@ test_that("the app bar is title-led: cells readout + dataset popover, no stats s
   expect_no_match(bar, "scroll-version")                 # version badge left the bar
 })
 
+test_that("app-bar buttons carry a visible hover label saying what they do", {
+  data <- scroll:::.scroll_load(test_project()); on.exit(scroll_disconnect(data$con))
+  bar <- as.character(scroll:::.scroll_appbar(data, "t"))
+  tips <- scroll:::.SCROLL_TIPS
+  # each button starts with its label (entity-escaped '&' in the markup) ...
+  for (k in c("info", "two_on", "ctl_hide"))
+    expect_match(bar, gsub("&", "&amp;", tips[[k]], fixed = TRUE), fixed = TRUE)
+  expect_equal(lengths(regmatches(bar, gregexpr("data-tip=", bar))), 3L)
+  # ... and none keeps a native title (it would double up with the styled label)
+  expect_no_match(bar, "<button[^>]*scroll-(info|two|ctl)-toggle[^>]*title=")
+  # the JS knows every state's label and recomputes it from live state on hover/focus
+  js <- scroll:::.scroll_spy_js()
+  expect_match(js, "window.SCROLL_TIPS=", fixed = TRUE)
+  for (k in names(tips)) expect_match(js, tips[[k]], fixed = TRUE)
+  expect_match(js, "function scrollTip(btn)", fixed = TRUE)
+  expect_match(js, "'pointerover','focusin'", fixed = TRUE)
+  css <- scroll:::.scroll_css()
+  expect_match(css, "[data-tip]::after{content:attr(data-tip)", fixed = TRUE)
+  expect_match(css, ":focus-visible::after", fixed = TRUE)   # keyboard users get it too
+})
+
 test_that("rail items are draggable to reorder panels, persisted and resettable", {
   js  <- scroll:::.scroll_spy_js()
   expect_match(js, "dragstart"); expect_match(js, "scrollResetOrder")
