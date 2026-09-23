@@ -8,9 +8,10 @@ scroll_add_subset(
   object,
   sub_object,
   name,
-  embeddings,
+  embeddings = "auto",
   label = name,
-  meta = NULL
+  meta = NULL,
+  prefix = if (identical(meta, "auto")) paste0(name, "_") else ""
 )
 }
 \arguments{
@@ -24,12 +25,29 @@ re-embedded in isolation). Its cell barcodes must match \code{object}'s.}
 \item{embeddings}{Named character vector \code{new_name = source_reduction} naming
 reduction(s) in \code{sub_object} to copy (e.g. \code{c(umap_tcell = "umap")}). An
 unnamed value reuses the source name. Only the child's cells get coordinates;
-parent cells outside the subset are left uncovered (\code{NA}).}
+parent cells outside the subset are left uncovered (\code{NA}). The first is the
+view's primary embedding (membership = cells with coordinates in it).
+\code{"auto"} (default) copies every reduction that is new in \code{sub_object} or whose
+coordinates differ from \code{object}'s on the shared cells (i.e. it was re-run on
+the subset), as \verb{<name>_<reduction>} (e.g. \code{tcell_umap}), ordered UMAP, then
+t-SNE, then the rest so a 2-D map is the primary. Reductions the child merely
+inherited unchanged are skipped. Every copied dim becomes a \code{cells.parquet}
+column, so a 50-dim PCA/Harmony adds 50 (mostly \code{NA}) columns -- pass an
+explicit vector to keep only the maps you want.}
 
 \item{label}{Human-readable view label (defaults to \code{name}).}
 
 \item{meta}{Metadata columns in \code{sub_object} to copy onto \code{object} as
-subset-scoped columns (\code{NA} for non-members).}
+subset-scoped columns (\code{NA} for non-members). \code{"auto"} detects them: every
+column that is new in \code{sub_object}, or whose values differ from \code{object}'s on
+the shared cells (e.g. re-run clusters or module scores). Unchanged inherited
+columns (\code{sample}, QC metrics, ...) are skipped, and the chosen columns are
+reported with a message -- check them before building.}
+
+\item{prefix}{Prefix for the copied column names. Defaults to \code{"<name>_"} with
+\code{meta = "auto"} (so a subset's \code{seurat_clusters} becomes
+\code{tcell_seurat_clusters} rather than overwriting the parent's) and to \code{""}
+(copy under the same name) for an explicit \code{meta}.}
 }
 \value{
 \code{object} with the reduction(s)/metadata added and a \code{scroll_subsets}

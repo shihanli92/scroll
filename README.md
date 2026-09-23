@@ -201,6 +201,20 @@ obj <- scroll_add_subset(obj, tcell_obj, name = "tcell", label = "T cells",
 scroll_build(obj, "proj")                                      # picks up the subset spec
 ```
 
+Or let scroll work out what the subset changed. By default (`embeddings = "auto"`)
+it copies every reduction that is new in the child or was re-run on it (e.g. a
+subset UMAP) as `<name>_<reduction>`, UMAP first so it becomes the view's primary
+map; `meta = "auto"` does the same for metadata: every column that is new or differs
+from the parent on the shared cells (re-run clusters, recomputed scores), prefixed so
+it can't overwrite the parent's (`seurat_clusters` becomes `tcells_seurat_clusters`).
+Both report what they picked. Handy when attaching several lineages:
+
+```r
+for (n in c("tcells", "nk", "myeloid", "bcells"))
+  obj <- scroll_add_subset(obj, lineages[[n]], name = n, meta = "auto")
+scroll_build(obj, "proj")
+```
+
 The app bar then shows a **View** selector. Picking *T cells* switches to a single
 coherent lens: every panel (DE, DotPlot, Proportions, FeaturePlot) restricts to
 the subset's cells, the scatter panels default to the sub-UMAP, and the subset's

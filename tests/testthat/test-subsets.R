@@ -20,6 +20,93 @@ test_that("scroll_add_subset transfers a reduction + scoped meta by barcode", {
   expect_equal(SeuratObject::Misc(obj2, "scroll_subsets")$tcell$embeddings, "umap_tcell")
 })
 
+test_that("scroll_add_subset(meta = 'auto') copies only new/changed columns, prefixed", {
+  obj <- make_test_object(80, seed = 5)
+  obj$clusters <- factor(sample(c("a", "b"), ncol(obj), replace = TRUE))
+  obj$score <- stats::runif(ncol(obj))
+  tcells <- colnames(obj)[obj$celltype == "T"]
+  sub <- subset(obj, cells = tcells)
+  te <- matrix(stats::rnorm(length(tcells) * 2), ncol = 2,
+               dimnames = list(tcells, c("UMAP_1", "UMAP_2")))
+  sub[["umap"]] <- SeuratObject::CreateDimReducObject(embeddings = te, key = "UMAP_",
+                                                      assay = "RNA")
+  sub$clusters <- factor(sample(c("t1", "t2", "t3"), length(tcells), replace = TRUE))  # re-clustered
+  sub$tnew <- "x"                                                                     # new column
+  sub$score <- sub$score + 1e-12                                                      # float noise only
+  sub$condition <- factor(as.character(sub$condition),                                # levels re-ordered only
+                          levels = rev(sort(unique(as.character(sub$condition)))))
+
+  expect_message(
+    out <- scroll_add_subset(obj, sub, "tcell", embeddings = c(umap_tcell = "umap"),
+                             meta = "auto"),
+    "tcell_clusters")
+  spec <- SeuratObject::Misc(out, "scroll_subsets")$tcell
+  expect_setequal(spec$meta, c("tcell_tnew", "tcell_clusters"))
+  # the parent's own column is untouched; the subset's copy is scoped (NA elsewhere)
+  expect_identical(as.character(out$clusters), as.character(obj$clusters))
+  expect_equal(sum(!is.na(out$tcell_clusters)), length(tcells))
+  expect_true(all(out$tcell_clusters[tcells] %in% c("t1", "t2", "t3")))
+  # and it builds: the scoped, prefixed columns reach the manifest
+  dir <- file.path(tempdir(), "scroll-subset-auto")
+  suppressMessages(scroll_build(out, dir, assays = "RNA", overwrite = TRUE,
+                                meta_cols = c("celltype", spec$meta)))
+  m <- scroll_manifest(dir)
+  expect_equal(m$meta$tcell_clusters$scope, "tcell")
+  expect_setequal(unlist(m$subsets$tcell$meta), spec$meta)
+})
+
+test_that("scroll_add_subset(embeddings = 'auto') copies re-run/new reductions, UMAP first", {
+  obj <- make_test_object(80, seed = 6)
+  pc <- matrix(stats::rnorm(ncol(obj) * 5), ncol = 5,
+               dimnames = list(colnames(obj), paste0("PC_", 1:5)))
+  obj[["pca"]] <- SeuratObject::CreateDimReducObject(embeddings = pc, key = "PC_", assay = "RNA")
+  tcells <- colnames(obj)[obj$celltype == "T"]
+  sub <- subset(obj, cells = tcells)             # inherits umap + pca unchanged
+  mk <- function(key) SeuratObject::CreateDimReducObject(
+    embeddings = matrix(stats::rnorm(length(tcells) * 2), ncol = 2,
+                        dimnames = list(tcells, paste0(key, 1:2))), key = key, assay = "RNA")
+  sub[["tsne"]] <- mk("tSNE_")                   # new
+  sub[["umap"]] <- mk("UMAP_")                   # re-run on the subset
+  sub$tclust <- sample(c("t1", "t2"), length(tcells), replace = TRUE)
+
+  msgs <- testthat::capture_messages(out <- scroll_add_subset(obj, sub, "tc", meta = "auto"))
+  expect_match(msgs[1], "tc_umap \\(2d\\), tc_tsne \\(2d\\)")
+  expect_match(msgs[2], "tc_tclust")
+  spec <- SeuratObject::Misc(out, "scroll_subsets")$tc
+  expect_equal(spec$embeddings, c("tc_umap", "tc_tsne"))     # umap is primary; pca skipped
+  expect_false("tc_pca" %in% SeuratObject::Reductions(out))
+  expect_equal(nrow(SeuratObject::Embeddings(out, "tc_umap")), length(tcells))
+
+  # builds with inferred embeddings + meta_cols; the view keys on the sub-UMAP
+  dir <- file.path(tempdir(), "scroll-subset-auto-emb")
+  suppressMessages(scroll_build(out, dir, assays = "RNA", overwrite = TRUE))
+  m <- scroll_manifest(dir)
+  expect_equal(m$subsets$tc$primary_embedding, "tc_umap")
+  expect_equal(m$subsets$tc$n_cells, length(tcells))
+  expect_equal(m$meta$tc_tclust$scope, "tc")
+
+  # nothing re-run -> a clear error instead of an empty view
+  expect_error(scroll_add_subset(obj, subset(obj, cells = tcells), "none"),
+               "no reduction that is new or differs")
+})
+
+test_that("scroll_add_subset explicit meta keeps names unless prefix is given", {
+  obj <- make_subset_object()
+  expect_true("tsub" %in% names(obj[[]]))
+  obj2 <- make_test_object()
+  tcells <- colnames(obj2)[obj2$celltype == "T"]
+  sub <- subset(obj2, cells = tcells)
+  sub[["umap"]] <- SeuratObject::CreateDimReducObject(
+    embeddings = matrix(stats::rnorm(length(tcells) * 2), ncol = 2,
+                        dimnames = list(tcells, c("UMAP_1", "UMAP_2"))),
+    key = "UMAP_", assay = "RNA")
+  sub$tsub <- "Tfh"
+  out <- scroll_add_subset(obj2, sub, "tc", embeddings = c(umap_tc = "umap"),
+                           meta = "tsub", prefix = "tc_")
+  expect_true("tc_tsub" %in% names(out[[]]))
+  expect_false("tsub" %in% names(out[[]]))
+})
+
 test_that("scroll_add_subset preserves a numeric scoped column (not stringified)", {
   obj <- make_test_object(80, seed = 5)
   tcells <- colnames(obj)[obj$celltype == "T"]

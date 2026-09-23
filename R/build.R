@@ -79,9 +79,14 @@ scroll_build <- function(object, outdir,
   if (is.null(assays)) assays <- SeuratObject::DefaultAssay(object)
   if (is.null(embeddings)) embeddings <- SeuratObject::Reductions(object)
   md <- object[[]]
-  if (is.null(meta_cols)) meta_cols <- .scroll_infer_meta_cols(md)
   # a spec attached by scroll_add_subset() lives in @misc (survives Seurat ops)
   if (is.null(subsets)) subsets <- SeuratObject::Misc(object, "scroll_subsets")
+  if (is.null(meta_cols)) {
+    # inferred: always keep the subsets' declared columns, which inference could
+    # otherwise drop (e.g. a high-cardinality scoped label) and then fail validation
+    meta_cols <- union(.scroll_infer_meta_cols(md),
+                       unlist(lapply(subsets, `[[`, "meta"), use.names = FALSE))
+  }
 
   # Spatial: extract tissue coordinates into a `spatial` reduction (image-pixel
   # space) so DimPlot/FeaturePlot/the Spatial panel can plot on it. Injected
@@ -497,18 +502,55 @@ scroll_build <- function(object, outdir,
 #' @param embeddings Named character vector `new_name = source_reduction` naming
 #'   reduction(s) in `sub_object` to copy (e.g. `c(umap_tcell = "umap")`). An
 #'   unnamed value reuses the source name. Only the child's cells get coordinates;
-#'   parent cells outside the subset are left uncovered (`NA`).
+#'   parent cells outside the subset are left uncovered (`NA`). The first is the
+#'   view's primary embedding (membership = cells with coordinates in it).
+#'   `"auto"` (default) copies every reduction that is new in `sub_object` or whose
+#'   coordinates differ from `object`'s on the shared cells (i.e. it was re-run on
+#'   the subset), as `<name>_<reduction>` (e.g. `tcell_umap`), ordered UMAP, then
+#'   t-SNE, then the rest so a 2-D map is the primary. Reductions the child merely
+#'   inherited unchanged are skipped. Every copied dim becomes a `cells.parquet`
+#'   column, so a 50-dim PCA/Harmony adds 50 (mostly `NA`) columns -- pass an
+#'   explicit vector to keep only the maps you want.
 #' @param label Human-readable view label (defaults to `name`).
 #' @param meta Metadata columns in `sub_object` to copy onto `object` as
-#'   subset-scoped columns (`NA` for non-members).
+#'   subset-scoped columns (`NA` for non-members). `"auto"` detects them: every
+#'   column that is new in `sub_object`, or whose values differ from `object`'s on
+#'   the shared cells (e.g. re-run clusters or module scores). Unchanged inherited
+#'   columns (`sample`, QC metrics, ...) are skipped, and the chosen columns are
+#'   reported with a message -- check them before building.
+#' @param prefix Prefix for the copied column names. Defaults to `"<name>_"` with
+#'   `meta = "auto"` (so a subset's `seurat_clusters` becomes
+#'   `tcell_seurat_clusters` rather than overwriting the parent's) and to `""`
+#'   (copy under the same name) for an explicit `meta`.
 #' @return `object` with the reduction(s)/metadata added and a `scroll_subsets`
 #'   attribute recording the spec.
 #' @export
-scroll_add_subset <- function(object, sub_object, name, embeddings,
-                              label = name, meta = NULL) {
+scroll_add_subset <- function(object, sub_object, name, embeddings = "auto",
+                              label = name, meta = NULL,
+                              prefix = if (identical(meta, "auto")) paste0(name, "_") else "") {
   .scroll_need_seurat()
   if (!inherits(object, "Seurat") || !inherits(sub_object, "Seurat"))
     stop("`object` and `sub_object` must be Seurat objects.", call. = FALSE)
+  force(prefix)   # evaluate against the caller's `meta` before it is resolved below
+  if (identical(embeddings, "auto")) {
+    reds <- .scroll_subset_reductions(object, sub_object)
+    if (!length(reds))
+      stop("scroll_add_subset('", name, "'): sub_object has no reduction that is new ",
+           "or differs from the parent's -- re-embed the subset (e.g. RunUMAP), or ",
+           "name one explicitly with `embeddings = c(new_name = \"reduction\")`.",
+           call. = FALSE)
+    embeddings <- stats::setNames(reds, paste0(name, "_", reds))
+    dims <- vapply(reds, function(r) ncol(SeuratObject::Embeddings(sub_object, r)), integer(1))
+    message(sprintf("scroll_add_subset('%s'): copying %d embedding(s) as %s", name,
+                    length(reds), paste0(names(embeddings), " (", dims, "d)", collapse = ", ")))
+  }
+  if (identical(meta, "auto")) {
+    meta <- .scroll_subset_meta_cols(object, sub_object)
+    message(sprintf("scroll_add_subset('%s'): %s", name,
+      if (length(meta)) paste0("copying ", length(meta), " subset column(s) as ",
+                               paste0(prefix, meta, collapse = ", "))
+      else "no new or changed metadata columns found"))
+  }
   new_names <- names(embeddings) %||% as.character(embeddings)
   new_names[!nzchar(new_names)] <- as.character(embeddings)[!nzchar(new_names)]
   parent_cells <- colnames(object)
@@ -542,16 +584,59 @@ scroll_add_subset <- function(object, sub_object, name, embeddings,
     idx <- match(colnames(sub_object), parent_cells)
     ok <- !is.na(idx)
     col[idx[ok]] <- src[ok]
-    object[[mc]] <- unname(col)
+    object[[paste0(prefix, mc)]] <- unname(col)
   }
+  meta_out <- if (length(meta)) paste0(prefix, meta) else character(0)
   spec <- list(label = label, embeddings = unname(new_names),
-               meta = as.character(meta %||% character(0)))
+               meta = as.character(meta_out))
   # Store in @misc (not a bare attribute): downstream Seurat operations
   # (SetAssayData, subset, ...) preserve @misc but drop object attributes.
   prev <- SeuratObject::Misc(object, "scroll_subsets") %||% list()
   prev[[name]] <- spec
   SeuratObject::Misc(object, "scroll_subsets") <- prev
   object
+}
+
+# Reductions a reprocessed child adds or re-ran relative to its parent: new names,
+# plus same-named ones whose coordinates differ on the shared cells (a different
+# dim count counts as different). Ordered UMAP > t-SNE > rest, so the view's
+# primary embedding (the first) is a 2-D map when there is one.
+.scroll_subset_reductions <- function(parent, child) {
+  reds <- SeuratObject::Reductions(child)
+  if (!length(reds)) return(character(0))
+  have <- SeuratObject::Reductions(parent)
+  changed <- vapply(reds, function(r) {
+    if (!r %in% have) return(TRUE)
+    ce <- SeuratObject::Embeddings(child, r); pe <- SeuratObject::Embeddings(parent, r)
+    cells <- intersect(rownames(ce), rownames(pe))
+    if (!length(cells) || ncol(ce) != ncol(pe)) return(TRUE)
+    !isTRUE(all.equal(unname(ce[cells, , drop = FALSE]), unname(pe[cells, , drop = FALSE])))
+  }, logical(1))
+  reds <- reds[changed]
+  rank <- ifelse(grepl("umap", reds, ignore.case = TRUE), 1L,
+                 ifelse(grepl("tsne", reds, ignore.case = TRUE), 2L, 3L))
+  reds[order(rank, seq_along(reds))]
+}
+
+# Metadata columns a reprocessed child adds or changes relative to its parent,
+# compared on the shared cells: new columns, plus shared ones whose values differ
+# (re-run clusters, recomputed scores). Numerics compare with a tolerance so float
+# noise is not a change; everything else compares as character, so a factor whose
+# levels were merely re-ordered is not flagged.
+.scroll_subset_meta_cols <- function(parent, child) {
+  cells <- intersect(colnames(child), colnames(parent))
+  if (!length(cells))
+    stop("no barcodes of sub_object match the parent object.", call. = FALSE)
+  pm <- parent[[]][cells, , drop = FALSE]
+  cm <- child[[]][cells, , drop = FALSE]
+  shared <- intersect(names(cm), names(pm))
+  same <- vapply(shared, function(col) {
+    a <- pm[[col]]; b <- cm[[col]]
+    if (is.numeric(a) && is.numeric(b))
+      isTRUE(all.equal(unname(a), unname(b), check.attributes = FALSE))
+    else identical(as.character(a), as.character(b))
+  }, logical(1))
+  c(setdiff(names(cm), names(pm)), shared[!same])
 }
 
 .scroll_warn_unsafe_features <- function(feats) {
