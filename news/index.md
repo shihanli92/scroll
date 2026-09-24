@@ -1,5 +1,27 @@
 # Changelog
 
+## scroll 0.3.4
+
+### Style sheet: per-layer settings
+
+- **Layers section.** Every plot’s Style sheet lists the layers the plot
+  actually draws (“Cells”, “Background cells”, “Cluster labels”,
+  “Violins”, “Points”, “Bars”, “Segment labels”, “Genes”, “Cutoff
+  lines”, “Gene labels”, …) with a control for each setting that is NOT
+  mapped in [`aes()`](https://ggplot2.tidyverse.org/reference/aes.html):
+  colour / fill, size, opacity, shape, stroke, line width / type, and
+  text font / face / angle / justification – plus curated parameters
+  (violin trim and width scaling, density smoothing, jitter width /
+  height, label overlap and padding). Blank = unchanged (the current
+  value is shown as a hint). It is generic, so it covers every panel,
+  including modality and custom panels; a setting for a layer not drawn
+  right now is kept for when it returns.
+- Look sliders that duplicated a layer setting were removed so each
+  property has one home: point size / opacity / highlight background
+  (DimPlot, FeaturePlot, Signature, Biaxial), violin width and point
+  size / opacity, bar width / outline, segment-label size, and Spatial /
+  Clone-map point size.
+
 ## scroll 0.3.3
 
 ### Style sheet
