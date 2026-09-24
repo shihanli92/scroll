@@ -145,7 +145,7 @@ scroll_build_stream <- function(outdir, sources, reader, assays = NULL,
 
   # merge cells (old + new, in the same order the global offsets were assigned)
   cells <- do.call(rbind, c(list(old_cells), unname(new_cells)))
-  arrow::write_parquet(cells, cells_path, compression = "zstd")
+  .scroll_rewrite_parquet(cells, cells_path)
   .scroll_compact_store(outdir, quantize = FALSE)
 
   SeuratObject::DefaultAssay(last_seu) <- lock$assays[1]

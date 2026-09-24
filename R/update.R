@@ -5,6 +5,24 @@
 # is all-or-nothing (it wipes `outdir` and re-writes everything), so use this when
 # you only want to append coordinate/metadata columns to an existing app.
 
+# Rewrite a project's cells.parquet in place. On Windows the write fails while any
+# R object in the session still memory-maps the old file (a data.frame from a plain
+# arrow::read_parquet(), or a project loaded in this session). Unreferenced mappings
+# are released by gc(), so retry once after it; otherwise say what is holding it.
+.scroll_rewrite_parquet <- function(df, path) {
+  write <- function() arrow::write_parquet(df, path, compression = "zstd")
+  tryCatch(write(), error = function(e) {
+    if (!grepl("user-mapped section", conditionMessage(e), fixed = TRUE)) stop(e)
+    gc(FALSE)
+    tryCatch(write(), error = function(e2) stop(
+      "Cannot rewrite '", path, "': it is still memory-mapped by an object in this R ",
+      "session (Windows locks mapped files). Remove data read from it with ",
+      "arrow::read_parquet() (or read it with mmap = FALSE), stop any app serving ",
+      "this project, then retry.", call. = FALSE))
+  })
+  invisible(path)
+}
+
 #' Add or update reductions / metadata on a built project (no expr rebuild)
 #'
 #' Rewrites only `cells.parquet` and `manifest.yaml`, aligning new columns to the
@@ -75,7 +93,7 @@ scroll_update <- function(dir, object, embeddings = NULL, meta_cols = NULL,
   add_cols <- setdiff(names(new), "cell")
   for (col in add_cols) cells[[col]] <- new[[col]][idx]
 
-  arrow::write_parquet(cells, cells_path, compression = "zstd")
+  .scroll_rewrite_parquet(cells, cells_path)
 
   # --- merge manifest -------------------------------------------------------
   for (r in embeddings) {
@@ -210,7 +228,7 @@ scroll_add_meta <- function(dir, name, values, scope = NULL, overwrite = FALSE,
   }
 
   cells[[name]] <- v
-  arrow::write_parquet(cells, cells_path, compression = "zstd")
+  .scroll_rewrite_parquet(cells, cells_path)
   man$meta[[name]] <- entry
   # unicode = TRUE to match .scroll_write_manifest() (keeps non-ASCII feature names).
   yaml::write_yaml(man, file.path(dir, "manifest.yaml"), unicode = TRUE)

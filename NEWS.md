@@ -15,7 +15,9 @@
 * **Windows:** `scroll_update()`, `scroll_add_meta()` and appending to a streamed
   build failed with "cannot be performed on a file with a user-mapped section open",
   because `cells.parquet` was still memory-mapped when rewritten in place. Those reads
-  no longer memory-map the file.
+  no longer memory-map the file, and if something else in the session still holds
+  it mapped, the rewrite frees unused mappings and retries once before failing
+  with an error saying what to close.
 * R CMD check is clean on all CI platforms: non-ASCII characters removed from R code,
   arrow's `cast()` binding used unqualified, and `Seurat` / `cachem` declared in
   Suggests (used by tests).

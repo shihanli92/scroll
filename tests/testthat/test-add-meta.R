@@ -13,7 +13,7 @@ test_that("adds a categorical column (function form) selectable as categorical",
   dir <- fresh_project("cat")
   scroll_add_meta(dir, "grp2",
                   function(cells) ifelse(cells$celltype == "T", "Tcell", "other"))
-  cells <- as.data.frame(arrow::read_parquet(file.path(dir, "cells.parquet")))
+  cells <- as.data.frame(arrow::read_parquet(file.path(dir, "cells.parquet"), mmap = FALSE))
   expect_true("grp2" %in% names(cells))
   m <- scroll_manifest(dir)
   expect_equal(m$meta$grp2$type, "categorical")
@@ -26,7 +26,7 @@ test_that("adds a categorical column (function form) selectable as categorical",
 
 test_that("adds a numeric column (row-order vector) with a manifest range", {
   dir <- fresh_project("num")
-  n <- nrow(as.data.frame(arrow::read_parquet(file.path(dir, "cells.parquet"))))
+  n <- nrow(as.data.frame(arrow::read_parquet(file.path(dir, "cells.parquet"), mmap = FALSE)))
   scroll_add_meta(dir, "score", seq_len(n) / n)
   m <- scroll_manifest(dir)
   expect_equal(m$meta$score$type, "numeric")
@@ -38,11 +38,11 @@ test_that("adds a numeric column (row-order vector) with a manifest range", {
 
 test_that("named vector aligns by barcode; unmatched cells become NA", {
   dir <- fresh_project("named")
-  cells <- as.data.frame(arrow::read_parquet(file.path(dir, "cells.parquet")))
+  cells <- as.data.frame(arrow::read_parquet(file.path(dir, "cells.parquet"), mmap = FALSE))
   half <- cells$cell[seq_len(floor(nrow(cells) / 2))]
   vals <- setNames(rep("hit", length(half)), half)
   scroll_add_meta(dir, "flag", vals)
-  got <- as.data.frame(arrow::read_parquet(file.path(dir, "cells.parquet")))$flag
+  got <- as.data.frame(arrow::read_parquet(file.path(dir, "cells.parquet"), mmap = FALSE))$flag
   expect_equal(sum(!is.na(got)), length(half))
   expect_setequal(unique(stats::na.omit(got)), "hit")
 })
@@ -50,10 +50,10 @@ test_that("named vector aligns by barcode; unmatched cells become NA", {
 test_that("overwrite guard, reserved name, and replace-in-place", {
   dir <- fresh_project("ow")
   scroll_add_meta(dir, "lab", rep("a", nrow(
-    as.data.frame(arrow::read_parquet(file.path(dir, "cells.parquet"))))))
+    as.data.frame(arrow::read_parquet(file.path(dir, "cells.parquet"), mmap = FALSE)))))
   expect_error(scroll_add_meta(dir, "lab", "x"), "already exists")
   expect_error(scroll_add_meta(dir, "cell", "x"), "cannot be 'cell'")
-  n <- nrow(as.data.frame(arrow::read_parquet(file.path(dir, "cells.parquet"))))
+  n <- nrow(as.data.frame(arrow::read_parquet(file.path(dir, "cells.parquet"), mmap = FALSE)))
   scroll_add_meta(dir, "lab", rep("b", n), overwrite = TRUE)
   m <- scroll_manifest(dir)
   expect_setequal(unlist(m$meta$lab$levels), "b")
@@ -73,7 +73,7 @@ test_that("scoped column carries scope and member-only levels", {
   suppressMessages(scroll_update(dir, obj2, embeddings = "t_umap"))
 
   # column defined for members (T cells), NA elsewhere; scope it to the view
-  cells <- as.data.frame(arrow::read_parquet(file.path(dir, "cells.parquet")))
+  cells <- as.data.frame(arrow::read_parquet(file.path(dir, "cells.parquet"), mmap = FALSE))
   v <- ifelse(cells$cell %in% tcells,
               sample(c("x", "y"), nrow(cells), replace = TRUE), NA_character_)
   scroll_add_meta(dir, "tsub", v, scope = "tcell")
