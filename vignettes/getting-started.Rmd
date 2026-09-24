@@ -60,7 +60,7 @@ dependencies are all on CRAN and are pulled in automatically.
 
 ```{r}
 install.packages("remotes")
-remotes::install_github("shihanli1992/scroll")
+remotes::install_github("shihanli92/scroll")
 ```
 
 ### Optional features

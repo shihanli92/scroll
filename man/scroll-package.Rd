@@ -11,9 +11,9 @@ Turns a processed Seurat object into a polished, interactive single-cell explore
 \seealso{
 Useful links:
 \itemize{
-  \item \url{https://github.com/shihanli1992/scroll}
-  \item \url{https://shihanli1992.github.io/scroll/}
-  \item Report bugs at \url{https://github.com/shihanli1992/scroll/issues}
+  \item \url{https://github.com/shihanli92/scroll}
+  \item \url{https://shihanli92.github.io/scroll/}
+  \item Report bugs at \url{https://github.com/shihanli92/scroll/issues}
 }
 
 }

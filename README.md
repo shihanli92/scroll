@@ -3,8 +3,8 @@
 *Interactive single-cell explorers, served from your own infrastructure.*
 
 <!-- badges: start -->
-[![R-CMD-check](https://github.com/shihanli1992/scroll/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/shihanli1992/scroll/actions/workflows/R-CMD-check.yaml)
-[![pkgdown](https://github.com/shihanli1992/scroll/actions/workflows/pkgdown.yaml/badge.svg)](https://github.com/shihanli1992/scroll/actions/workflows/pkgdown.yaml)
+[![R-CMD-check](https://github.com/shihanli92/scroll/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/shihanli92/scroll/actions/workflows/R-CMD-check.yaml)
+[![pkgdown](https://github.com/shihanli92/scroll/actions/workflows/pkgdown.yaml/badge.svg)](https://github.com/shihanli92/scroll/actions/workflows/pkgdown.yaml)
 <!-- badges: end -->
 
 `scroll` turns a processed Seurat object into a polished, interactive web
@@ -28,7 +28,7 @@ step.
 > views** for reprocessed sub-embeddings; rich declarative controls (data-derived choices,
 > cascading levels, preferred defaults, palette picker); PNG/PDF/CSV export; a
 > rasterization/memoization performance pass; and the public `register_panel()`
-> extension point. Documentation: [pkgdown site](https://shihanli1992.github.io/scroll/).
+> extension point. Documentation: [pkgdown site](https://shihanli92.github.io/scroll/).
 
 ## The two phases
 

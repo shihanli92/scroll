@@ -14,8 +14,8 @@ Description: Turns a processed Seurat object into a polished, interactive
     via 'arrow', so runtime memory stays flat regardless of matrix size. A
     streaming builder assembles multi-million-cell projects one source at a time.
 License: MIT + file LICENSE
-URL: https://github.com/shihanli1992/scroll, https://shihanli1992.github.io/scroll/
-BugReports: https://github.com/shihanli1992/scroll/issues
+URL: https://github.com/shihanli92/scroll, https://shihanli92.github.io/scroll/
+BugReports: https://github.com/shihanli92/scroll/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3

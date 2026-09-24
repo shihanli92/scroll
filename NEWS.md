@@ -998,7 +998,7 @@ Each built-in analysis panel carries its own fine-grained controls:
 ## Documentation
 
 * Reference documentation for every export, published as a
-  [pkgdown site](https://shihanli1992.github.io/scroll/).
+  [pkgdown site](https://shihanli92.github.io/scroll/).
 
 ## Internal
 
