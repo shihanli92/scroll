@@ -78,6 +78,54 @@ test_that("scRepertoire / AIRR / Platypus normalize to the same rep_cells as scr
   expect_equal(norm(vdj_screpertoire_test_project()), r0)
 })
 
+test_that("AIRR columns match ignoring case, and a strict_clone_id + _count are found", {
+  # the same draw exported with lowercase _vdj/_vj suffixes and a differently-named
+  # clonotype (+ size) column, as some AIRR pipelines write it
+  obj <- make_vdj_airr_object()
+  md <- obj[[]]
+  ren <- c(v_call_VDJ = "v_call_vdj", j_call_VDJ = "j_call_vdj", v_call_VJ = "v_call_vj",
+           j_call_VJ = "j_call_vj", junction_aa_VDJ = "junction_aa_vdj",
+           junction_aa_VJ = "junction_aa_vj", clone_id = "strict_clone_id",
+           duplicate_count = "strict_clone_id_count")
+  for (old in names(ren)) { obj[[ren[[old]]]] <- md[[old]]; obj[[old]] <- NULL }
+
+  msgs <- testthat::capture_messages(
+    r <- scroll:::.scroll_vdj_resolve_spec(
+      vdj_spec("TCR", group_col = "celltype", source = "airr"), obj[[]]))
+  expect_equal(unname(r$spec$segments), c("v_call_vdj", "j_call_vdj", "v_call_vj", "j_call_vj"))
+  expect_equal(unname(r$spec$cdr3), c("junction_aa_vdj", "junction_aa_vj"))
+  expect_equal(r$spec$clone_col, "strict_clone_id")
+  expect_equal(r$spec$count_col, "strict_clone_id_count")
+  expect_match(paste(msgs, collapse = ""), "v_call_VDJ -> v_call_vdj")
+  # auto-detection still recognises it as AIRR
+  r_auto <- suppressMessages(scroll:::.scroll_vdj_resolve_spec(
+    vdj_spec("TCR", group_col = "celltype"), obj[[]]))
+  expect_equal(r_auto$spec$source, "airr")
+
+  # and it bakes to exactly the canonical repertoire table
+  dir <- file.path(tempdir(), "scroll-vdj-airr-lower")
+  suppressMessages(scroll_build(obj, dir, assays = "RNA", meta_cols = "celltype",
+                                vdj = vdj_spec("TCR", group_col = "celltype", source = "airr"),
+                                overwrite = TRUE))
+  keep <- c("cell", "clone_id", "group", "clone_count",
+            "TRBV", "TRBJ", "TRAV", "TRAJ", "cdr3_beta", "cdr3_alpha")
+  norm <- function(d) {
+    x <- as.data.frame(arrow::read_parquet(file.path(d, "repertoire", "rep_cells.parquet")))
+    x <- x[order(x$cell), keep]; rownames(x) <- NULL; x
+  }
+  expect_equal(norm(dir), norm(vdj_test_project()))
+})
+
+test_that("an explicit clone_col is case-corrected but never swapped for another column", {
+  md <- make_vdj_airr_object(40)[[]]
+  r <- suppressMessages(scroll:::.scroll_vdj_resolve_spec(
+    vdj_spec("TCR", group_col = "celltype", source = "airr", clone_col = "CLONE_ID"), md))
+  expect_equal(r$spec$clone_col, "clone_id")                       # case-corrected
+  r2 <- suppressMessages(scroll:::.scroll_vdj_resolve_spec(
+    vdj_spec("TCR", group_col = "celltype", source = "airr", clone_col = "nope"), md))
+  expect_equal(r2$spec$clone_col, "nope")                          # left alone -> CDR3 fallback
+})
+
 test_that("the resolved source is recorded in the manifest vdj block", {
   expect_equal(scroll_manifest(vdj_airr_test_project())$vdj$source, "airr")
   expect_equal(scroll_manifest(vdj_platypus_test_project())$vdj$source, "platypus")

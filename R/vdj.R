@@ -77,11 +77,17 @@
 #' @param source Upstream convention to read: `"auto"` (default; detect from the
 #'   metadata columns), `"scroll"`, `"scRepertoire"`, `"airr"`, or `"platypus"`. Any
 #'   column you pass explicitly (`segments`, `cdr3`, `clone_col`, …) overrides the preset.
+#'   Column names are matched ignoring case when the exact name is absent (so
+#'   `v_call_vdj` satisfies the AIRR preset's `v_call_VDJ`); each such match is
+#'   reported with a message.
 #' @param group_col A categorical per-cell column to group repertoire summaries by
 #'   (e.g. cell type / cluster). Required.
-#' @param clone_col Per-cell clonotype id. `NULL` (default) derives a clonotype from
-#'   the pasted CDR3 columns.
-#' @param count_col Optional per-cell clone-size column; `NULL` computes clone size
+#' @param clone_col Per-cell clonotype id. `NULL` (default) uses the preset's clone
+#'   column, else (for a non-`"scroll"` source) the first present of `clone_id`,
+#'   `strict_clone_id`, `clonotype_id`, `raw_clonotype_id`, `clonotype`, else derives
+#'   a clonotype from the pasted CDR3 columns.
+#' @param count_col Optional per-cell clone-size column. `NULL` uses
+#'   `<clone_col>_count` / `<clone_col>_size` when present, else computes clone size
 #'   from `clone_col` frequency.
 #' @param segments Named character vector `label = column` of V/J gene columns
 #'   (defaults by `chain_type`).
@@ -231,7 +237,11 @@ vdj_spec <- function(chain_type = c("TCR", "BCR"), group_col, clone_col = NULL,
 # (possibly augmented) `md` and the filled `spec`.
 .scroll_vdj_resolve_spec <- function(spec, md) {
   ct <- spec$chain_type
-  hits <- function(map) if (length(map)) sum(map %in% names(md)) else 0L
+  # case-insensitive, so a preset still scores when columns were exported as e.g.
+  # `v_call_vdj` rather than dandelion's `v_call_VDJ`
+  hits <- function(map) if (length(map)) sum(tolower(map) %in% tolower(names(md))) else 0L
+  clone_explicit <- !is.null(spec$clone_col); count_explicit <- !is.null(spec$count_col)
+  loosen <- function(spec) .scroll_vdj_loosen(spec, md, clone_explicit, count_explicit)
 
   # 1. scRepertoire: explicit, or auto-detected compound columns the current map misses
   if (identical(spec$source, "scRepertoire") ||
@@ -263,20 +273,78 @@ vdj_spec <- function(chain_type = c("TCR", "BCR"), group_col, clone_col = NULL,
 
   # 2. explicit name-map preset
   if (spec$source %in% c("scroll", "airr", "platypus"))
-    return(list(spec = fill(spec, .SCROLL_VDJ_PRESETS[[spec$source]][[ct]]), md = md))
+    return(list(spec = loosen(fill(spec, .SCROLL_VDJ_PRESETS[[spec$source]][[ct]])), md = md))
 
   # 3. auto: keep the (explicit or default) map when it matches; else sniff presets
   if (identical(spec$source, "auto")) {
     if (spec$segments_explicit || hits(spec$segments) > 0) {
       if (!spec$segments_explicit) spec$source <- "scroll"   # default map matched
-      return(list(spec = spec, md = md))
+      return(list(spec = loosen(spec), md = md))
     }
     scores <- vapply(names(.SCROLL_VDJ_PRESETS), function(nm)
       hits(.SCROLL_VDJ_PRESETS[[nm]][[ct]]$segments), integer(1))
     best <- names(scores)[which.max(scores)]
     if (scores[[best]] > 0) { spec <- fill(spec, .SCROLL_VDJ_PRESETS[[best]][[ct]]); spec$source <- best }
   }
-  list(spec = spec, md = md)
+  list(spec = loosen(spec), md = md)
+}
+
+# Common per-cell clonotype-id column names, tried (case-insensitively) when no
+# clone_col was given and the preset's is absent.
+.SCROLL_VDJ_CLONE_COLS <- c("clone_id", "strict_clone_id", "clonotype_id",
+                            "raw_clonotype_id", "clonotype")
+
+# Map wanted column names onto `have`: an exact name is kept; otherwise the one
+# column equal ignoring case is used (ambiguous or no match -> left as is, so the
+# usual missing-column warning still fires). Names of `want` are preserved.
+.scroll_ci_cols <- function(want, have) {
+  if (!length(want)) return(want)
+  low <- tolower(have)
+  out <- vapply(unname(want), function(w) {
+    if (w %in% have) return(w)
+    h <- have[low == tolower(w)]
+    if (length(h) == 1L) h else w
+  }, "")
+  names(out) <- names(want)
+  out
+}
+
+# Loosen a resolved spec against the actual columns: fix column-name case, find a
+# clonotype column under a common name when none was given (preset/explicit maps
+# only), and pick up a
+# `<clone_col>_count` / `_size` clone-size column. An explicitly passed clone/count
+# column is only case-corrected, never swapped for a different column. Reports
+# what it loosened with a message.
+.scroll_vdj_loosen <- function(spec, md, clone_explicit, count_explicit) {
+  have <- names(md); notes <- character()
+  fix <- function(x) {
+    y <- .scroll_ci_cols(x, have)
+    ch <- !is.na(x) & y != x
+    if (any(ch)) notes <<- c(notes, paste0(x[ch], " -> ", y[ch]))
+    y
+  }
+  spec$segments <- fix(spec$segments)
+  spec$cdr3     <- fix(spec$cdr3)
+  if (!is.null(spec$clone_col)) spec$clone_col <- fix(spec$clone_col)
+  # (not for the scroll convention, whose documented NULL clone_col = derive from CDR3)
+  if (!clone_explicit && !identical(spec$source, "scroll") &&
+      (is.null(spec$clone_col) || !spec$clone_col %in% have)) {
+    cand <- .scroll_ci_cols(.SCROLL_VDJ_CLONE_COLS, have)
+    cand <- cand[cand %in% have]
+    spec$clone_col <- if (length(cand)) cand[[1]] else NULL
+    if (length(cand)) notes <- c(notes, paste0("clonotype = ", cand[[1]]))
+  }
+  if (!is.null(spec$count_col)) spec$count_col <- fix(spec$count_col)
+  if (!count_explicit && !is.null(spec$clone_col) &&
+      (is.null(spec$count_col) || !spec$count_col %in% have)) {
+    cand <- .scroll_ci_cols(paste0(spec$clone_col, c("_count", "_size")), have)
+    cand <- cand[cand %in% have]
+    spec$count_col <- if (length(cand)) cand[[1]] else NULL
+    if (length(cand)) notes <- c(notes, paste0("clone size = ", cand[[1]]))
+  }
+  if (length(notes))
+    message("vdj (source '", spec$source, "'): matched ", paste(notes, collapse = "; "))
+  spec
 }
 
 # ---- bake -------------------------------------------------------------------

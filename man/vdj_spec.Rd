@@ -28,10 +28,13 @@ panel labels (TRBV/TRAV… vs IGHV/IGKV…).}
 \item{group_col}{A categorical per-cell column to group repertoire summaries by
 (e.g. cell type / cluster). Required.}
 
-\item{clone_col}{Per-cell clonotype id. \code{NULL} (default) derives a clonotype from
-the pasted CDR3 columns.}
+\item{clone_col}{Per-cell clonotype id. \code{NULL} (default) uses the preset's clone
+column, else (for a non-\code{"scroll"} source) the first present of \code{clone_id},
+\code{strict_clone_id}, \code{clonotype_id}, \code{raw_clonotype_id}, \code{clonotype}, else derives
+a clonotype from the pasted CDR3 columns.}
 
-\item{count_col}{Optional per-cell clone-size column; \code{NULL} computes clone size
+\item{count_col}{Optional per-cell clone-size column. \code{NULL} uses
+\verb{<clone_col>_count} / \verb{<clone_col>_size} when present, else computes clone size
 from \code{clone_col} frequency.}
 
 \item{segments}{Named character vector \code{label = column} of V/J gene columns
@@ -42,7 +45,10 @@ from \code{clone_col} frequency.}
 
 \item{source}{Upstream convention to read: \code{"auto"} (default; detect from the
 metadata columns), \code{"scroll"}, \code{"scRepertoire"}, \code{"airr"}, or \code{"platypus"}. Any
-column you pass explicitly (\code{segments}, \code{cdr3}, \code{clone_col}, …) overrides the preset.}
+column you pass explicitly (\code{segments}, \code{cdr3}, \code{clone_col}, …) overrides the preset.
+Column names are matched ignoring case when the exact name is absent (so
+\code{v_call_vdj} satisfies the AIRR preset's \code{v_call_VDJ}); each such match is
+reported with a message.}
 
 \item{antigen_col, tissue_col, cluster_col, loc_col, broad_col}{Optional grouping /
 annotation columns (antigen split, tissue split, per-cluster diversity, and the

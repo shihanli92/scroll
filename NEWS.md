@@ -1,3 +1,20 @@
+# scroll 0.2.21
+
+## Repertoire (VDJ)
+
+* **AIRR / preset column matching is more forgiving.** `vdj_spec()` now matches a
+  preset's (or your explicit) column names ignoring case when the exact name is
+  absent, so AIRR per-cell columns exported as `v_call_vdj` / `junction_aa_vj`
+  satisfy the preset's `v_call_VDJ` / `junction_aa_VJ` (auto-detection recognises
+  them too). With no `clone_col` given and the preset's clone column absent, it
+  looks for a common clonotype column (`clone_id`, `strict_clone_id`,
+  `clonotype_id`, `raw_clonotype_id`, `clonotype`), and picks up a
+  `<clone_col>_count` / `_size` clone-size column. Each match is reported with a
+  message. An explicit clone/count column is only case-corrected, never swapped;
+  the `"scroll"` convention keeps deriving clonotypes from the CDR3s when
+  `clone_col` is `NULL`. Previously such a project failed to build with "vdj: no
+  clone_col and no CDR3 columns to derive a clonotype from".
+
 # scroll 0.2.20
 
 ## UI
