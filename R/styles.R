@@ -390,6 +390,41 @@ table.scroll-clone-dt thead th{padding-top:2px; padding-bottom:2px;}
   transform:translateX(105%); visibility:hidden;
   transition:transform .18s ease, visibility 0s linear .18s;}
 .scroll-sheet.is-open{transform:none; visibility:visible; transition:transform .18s ease;}
+/* Style box: while a sheet is open, the styled panel card and its sheet are lifted
+   (moved in the DOM by scrollToggleStyle) into one centred box over a dim backdrop,
+   and the page behind is frozen. Moving them out of .scroll-content is what lets a
+   real backdrop sit between them and the page (the cards otherwise share
+   .scroll-content's stacking context), and escapes its container-type, which would
+   pin a position:fixed box to it. On close they go back where they were. */
+html.scroll-styling{overflow:hidden;}
+.scroll-style-stage{position:fixed; inset:0; z-index:1070; display:flex; align-items:center;
+  justify-content:center; padding:24px; background:rgba(17,24,38,.46);
+  backdrop-filter:blur(2px); animation:scrollstagein .16s ease;}
+@keyframes scrollstagein{from{opacity:0;}to{opacity:1;}}
+.scroll-style-box{display:flex; align-items:stretch; width:min(1500px, calc(100vw - 48px));
+  max-height:calc(100dvh - 48px); background:var(--sc-card); border-radius:14px;
+  overflow:hidden; box-shadow:0 30px 80px -20px rgba(17,24,38,.55);}
+.scroll-style-box-plot{flex:1 1 auto; min-width:0; overflow:auto; overscroll-behavior:contain;}
+.scroll-style-box .scroll-panel-card{border:none; border-radius:0; box-shadow:none; margin:0;}
+/* fit the whole card in the box: a compact header and a plot sized to the box height
+   (instead of the page's viewport-based height), so the plot is never cut off */
+.scroll-style-box .scroll-panel-card>.card-header{padding:12px 20px;}
+.scroll-style-box .scroll-panel-card .scroll-desc{display:none;}
+.scroll-style-box .scroll-title{margin-top:4px; font-size:19px;}
+.scroll-style-box .scroll-plot-hold{min-height:0 !important;}
+.scroll-style-box .scroll-plot .shiny-plot-output{
+  height:round(down, clamp(300px, calc(100dvh - 250px), 1100px), 1px) !important;}
+.scroll-style-box .scroll-sheet{position:static; transform:none; visibility:visible;
+  transition:none; flex:0 0 min(360px, 40%); width:auto; height:auto; min-height:0;
+  z-index:auto; box-shadow:none; border-left:1px solid var(--sc-line);}
+.scroll-style-box .scroll-sheet-body{min-height:0;}
+/* narrow screens: stack the plot over its form */
+@media (max-width:900px){
+  .scroll-style-stage{padding:10px;}
+  .scroll-style-box{flex-direction:column; width:calc(100vw - 20px); max-height:calc(100dvh - 20px);}
+  .scroll-style-box .scroll-sheet{flex:0 0 auto; max-height:45dvh; border-left:none;
+    border-top:1px solid var(--sc-line);}
+}
 .scroll-sheet-head{display:flex; align-items:center; gap:10px; padding:12px 16px;
   border-bottom:1px solid var(--sc-line);}
 .scroll-sheet-titles{display:flex; flex-direction:column; min-width:0; flex:1;}
@@ -528,12 +563,22 @@ window.scrollTogglePanelControls=function(btn){   // per-card controls collapse 
 // sections (seeded from the panel's current style). Sheets are non-modal and are
 // NOT closed by an outside click -- the point is to click around while editing.
 function scrollCloseSheets(){
+  // put a lifted card and its sheet back where they came from, drop the box
+  document.querySelectorAll('.scroll-style-stage').forEach(function(stage){
+    var card=stage.querySelector('.scroll-panel-card'), sh=stage.querySelector('.scroll-sheet');
+    var ph=document.querySelector('.scroll-style-placeholder');
+    if(card&&ph) ph.parentNode.replaceChild(card, ph);
+    if(sh&&sh._scrollHome) sh._scrollHome.appendChild(sh);
+    stage.remove();
+  });
+  document.querySelectorAll('.scroll-style-placeholder').forEach(function(p){ p.remove(); });
   document.querySelectorAll('.scroll-sheet.is-open').forEach(function(sh){
     sh.classList.remove('is-open'); sh.setAttribute('inert','');
   });
   document.querySelectorAll('.scroll-style-btn.is-open').forEach(function(b){
     b.classList.remove('is-open'); b.setAttribute('aria-expanded','false');
   });
+  document.documentElement.classList.remove('scroll-styling');     // unfreeze the page
 }
 window.scrollCloseSheets=scrollCloseSheets;
 window.scrollToggleStyle=function(btn){
@@ -547,10 +592,24 @@ window.scrollToggleStyle=function(btn){
     sh.setAttribute('data-opened','1');
     Shiny.setInputValue(btn.getAttribute('data-open'), Date.now(), {priority:'event'});
   }
-  if(window.jQuery) jQuery(sh).trigger('shown');
-  // keep the plot being styled on screen (an off-screen card stops rendering live)
+  // Lift the card + sheet into one centred box. A same-height placeholder holds the
+  // card's slot so the (frozen) page behind does not reflow. Moving bound Shiny
+  // elements keeps their bindings (the rail's drag-reorder does the same); the plot
+  // re-renders at the box's width, and again at its own width when put back.
   var card=btn.closest('.scroll-panel-card');
-  if(card) card.scrollIntoView({block:'nearest', behavior:'smooth'});
+  if(card){
+    var ph=document.createElement('div'); ph.className='scroll-style-placeholder';
+    ph.style.height=card.offsetHeight+'px'; card.parentNode.insertBefore(ph, card);
+    sh._scrollHome=sh.parentNode;
+    var stage=document.createElement('div'); stage.className='scroll-style-stage';
+    var box=document.createElement('div'); box.className='scroll-style-box';
+    box.setAttribute('role','dialog'); box.setAttribute('aria-modal','true');
+    var left=document.createElement('div'); left.className='scroll-style-box-plot';
+    left.appendChild(card); box.appendChild(left); box.appendChild(sh); stage.appendChild(box);
+    document.body.appendChild(stage);
+  }
+  document.documentElement.classList.add('scroll-styling');
+  if(window.jQuery){ jQuery(sh).trigger('shown'); if(card) jQuery(card).trigger('shown'); }
 };
 // A colour picker's popup opens at its swatch and is clipped by the sheet's scroll
 // box; when one opens inside a sheet, nudge it horizontally back inside the sheet.
@@ -572,8 +631,15 @@ function scrollFitPicker(inp){
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){ scrollCloseDrawers(); scrollCloseSheets(); } });
 document.addEventListener('click',function(e){   // click outside the drawer (or its toggle) closes it
-  if(e.target.closest('.scroll-filters')||e.target.closest('.scroll-ctl-toggle')||
-     e.target.closest('.scroll-sheet')||e.target.closest('.scroll-style-btn')) return;
+  var t=e.target;
+  // while styling, only a click on the backdrop itself (outside the box) closes it;
+  // everything else is either in the box or a popup a control in it opened
+  if(document.documentElement.classList.contains('scroll-styling')){
+    if(t.classList&&t.classList.contains('scroll-style-stage')) scrollCloseSheets();
+    return;
+  }
+  if(t.closest('.scroll-filters')||t.closest('.scroll-ctl-toggle')||
+     t.closest('.scroll-sheet')||t.closest('.scroll-style-btn')) return;
   scrollCloseDrawers();
 });
 /* Keep --sc-appbar-h in sync with the app bar's measured bottom, so sticky offsets

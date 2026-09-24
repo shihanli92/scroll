@@ -1,7 +1,7 @@
 Package: scroll
 Type: Package
 Title: Interactive Single-Cell Explorers from Seurat Objects
-Version: 0.3.2
+Version: 0.3.3
 Authors@R:
     person("Shihan", "Li", email = "shihanli1992@gmail.com", role = c("aut", "cre"))
 Description: Turns a processed Seurat object into a polished, interactive

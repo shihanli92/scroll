@@ -354,3 +354,14 @@ test_that("the text colour reaches axis, legend and strip text (not just the tit
   for (e in c("axis.text", "axis.title", "legend.text", "legend.title", "strip.text"))
     expect_identical(ggplot2::calc_element(e, ggplot2::theme_grey() + th)$colour, "#D62839", info = e)
 })
+
+test_that("opening a sheet lifts the card + sheet into one centred box (page frozen)", {
+  css <- scroll:::.scroll_css(); js <- scroll:::.scroll_spy_js()
+  expect_match(css, "html.scroll-styling{overflow:hidden;}", fixed = TRUE)
+  expect_match(css, ".scroll-style-stage{position:fixed; inset:0;", fixed = TRUE)
+  expect_match(css, ".scroll-style-box .scroll-sheet{position:static;", fixed = TRUE)
+  expect_match(js, "classList.add('scroll-styling')", fixed = TRUE)
+  expect_match(js, "classList.remove('scroll-styling')", fixed = TRUE)
+  expect_match(js, "scroll-style-placeholder", fixed = TRUE)   # the card's slot is held
+  expect_match(js, "sh._scrollHome.appendChild(sh)", fixed = TRUE)   # sheet goes back home
+})

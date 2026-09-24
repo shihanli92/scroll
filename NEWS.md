@@ -1,3 +1,14 @@
+# scroll 0.3.3
+
+## Style sheet
+
+* **Style box.** Opening a plot's Style sheet now lifts the panel card and its Style
+  form together into one centred box over a dimmed backdrop, with the page behind it
+  frozen (no scrolling to other panels). The plot is sized to fit inside the box.
+  Close with the X, Escape, a click on the backdrop, or the paintbrush again; the
+  panel returns to its place in the page. Below 900px wide the plot sits above the
+  form.
+
 # scroll 0.3.2
 
 ## Fixes
