@@ -62,7 +62,7 @@ dotplot_ui <- function(id, data) {
         conditionalPanel("input['display'] == 'dots'", ns = ns,
           sliderInput(ns("dotrange"), "Dot size", 0, 10, c(1, 6), 0.5)),
         conditionalPanel("input['display'] == 'tiles' && input['scale']", ns = ns,
-          sliderInput(ns("clip"), "Clip z at ±", 0.5, 5, 2.5, 0.5)),
+          sliderInput(ns("clip"), "Clip z at \u00b1", 0.5, 5, 2.5, 0.5)),
         conditionalPanel("input['display'] == 'tiles'", ns = ns,       # label rows past ~60 genes
           selectizeInput(ns("mark"), "Label genes", choices = NULL, multiple = TRUE,
                          options = list(placeholder = "Pick genes to label with leader lines",

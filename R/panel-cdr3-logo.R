@@ -87,7 +87,7 @@
       chain <- input$chain %||% unlist(data$manifest$vdj$cdr3_chains)[1]
       sc <- paste0("cdr3_", chain)
       if (!sc %in% names(rc))
-        stop("CDR3 sequences not baked — rebuild the project with a current scroll_build().")
+        stop("CDR3 sequences not baked - rebuild the project with a current scroll_build().")
       rc <- .scroll_vdj_scope(rc, cells)          # honour the global filter / subset view
       grp <- if (!is.null(input$group) && nzchar(input$group) && input$group %in% names(rc) &&
                  any(!is.na(rc[[input$group]]))) input$group else NULL

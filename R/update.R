@@ -64,7 +64,9 @@ scroll_update <- function(dir, object, embeddings = NULL, meta_cols = NULL,
     return(invisible(dir))
   }
 
-  cells <- as.data.frame(arrow::read_parquet(cells_path))
+  # mmap = FALSE: this file is rewritten in place below, and Windows refuses to
+  # overwrite a file that is still memory-mapped by the read.
+  cells <- as.data.frame(arrow::read_parquet(cells_path, mmap = FALSE))
 
   # extract the new columns from `object` and align to the existing cells by
   # barcode; a cell missing from `object` gets NA (partial coverage).
@@ -165,7 +167,7 @@ scroll_add_meta <- function(dir, name, values, scope = NULL, overwrite = FALSE,
   if (identical(name, "cell"))
     stop("`name` cannot be 'cell' (the barcode column).", call. = FALSE)
 
-  cells <- as.data.frame(arrow::read_parquet(cells_path), stringsAsFactors = FALSE)
+  cells <- as.data.frame(arrow::read_parquet(cells_path, mmap = FALSE), stringsAsFactors = FALSE)
   n <- nrow(cells)
   if (name %in% names(cells) && !isTRUE(overwrite))
     stop("Column '", name, "' already exists; pass overwrite = TRUE to replace it.",

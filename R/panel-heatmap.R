@@ -45,7 +45,7 @@ heatmap_ui <- function(id, data) {
       .scroll_group("Values",
         bslib::input_switch(ns("scale"), "Scale per gene (z-score)", TRUE),
         conditionalPanel("input['scale']", ns = ns,
-          sliderInput(ns("clip"), "Clip z at ±", 0.5, 5, 2.5, 0.5))),
+          sliderInput(ns("clip"), "Clip z at \u00b1", 0.5, 5, 2.5, 0.5))),
       .scroll_group("Labels",
         # gene rows are unlabelled past ~60 genes; mark a chosen subset with
         # side labels + leader lines (ComplexHeatmap anno_mark style)

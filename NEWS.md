@@ -1,3 +1,30 @@
+# scroll 0.2.22
+
+## Build
+
+* **Pseudobulk on streamed builds.** `scroll_build_stream()` gains `counts = TRUE`,
+  which exports each source's raw `counts` layer under the running global cell
+  index (one part per source in `counts/<assay>/`) and records `has_counts`, so
+  the Pseudobulk DE panel now works on large multi-source projects. The counts
+  are identical to a single `scroll_build(counts = TRUE)` of the same cells. An
+  append run must match the project's original `counts` setting (it errors
+  otherwise, so pseudobulk never silently misses sources).
+
+## Fixes
+
+* **Windows:** `scroll_update()`, `scroll_add_meta()` and appending to a streamed
+  build failed with "cannot be performed on a file with a user-mapped section open",
+  because `cells.parquet` was still memory-mapped when rewritten in place. Those reads
+  no longer memory-map the file.
+* R CMD check is clean on all CI platforms: non-ASCII characters removed from R code,
+  arrow's `cast()` binding used unqualified, and `Seurat` / `cachem` declared in
+  Suggests (used by tests).
+
+## Docs
+
+* Repository, badge and pkgdown links now point at `shihanli92/scroll`, and the
+  default branch is `main` (CI runs on it).
+
 # scroll 0.2.21
 
 ## Repertoire (VDJ)

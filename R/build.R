@@ -378,8 +378,11 @@ scroll_build <- function(object, outdir,
 # (counts/<assay>.parquet, columns feature/cell/value, integer, unquantized).
 # Unlike expr/ this is NOT feature-partitioned: pseudobulk always full-scans all
 # genes to aggregate, and one file scans far faster than tens of thousands of
-# partitions. Only the nonzero entries are stored (sparse).
-.scroll_export_counts <- function(object, assay, outdir, cell_ids = NULL) {
+# partitions. Only the nonzero entries are stored (sparse). A streaming build passes
+# `offset` (the running global cell index) and `dest` (one part per source under
+# counts/<assay>/); the reader opens either layout.
+.scroll_export_counts <- function(object, assay, outdir, cell_ids = NULL, offset = 0L,
+                                  dest = file.path(outdir, "counts", paste0(assay, ".parquet"))) {
   mat <- SeuratObject::GetAssayData(object, assay = assay, layer = "counts")
   if (!is.null(mat) && !methods::is(mat, "CsparseMatrix")) mat <- .scroll_as_sparse(mat)
   if (is.null(mat) || nrow(mat) == 0 || length(mat@x) == 0)
@@ -388,12 +391,11 @@ scroll_build <- function(object, outdir,
   .scroll_check_cell_order(mat, cell_ids, assay)   # int cell-index <-> cells.parquet row order
   feats <- rownames(mat)
   trip <- Matrix::summary(mat)             # i (feature), j (cell), x (count)
-  df <- data.frame(feature = feats[trip$i], cell = trip$j,          # int32 cell-index (v2)
+  df <- data.frame(feature = feats[trip$i], cell = offset + trip$j, # int32 cell-index (v2)
                    value = as.integer(round(trip$x)), stringsAsFactors = FALSE)
   tbl <- arrow::as_arrow_table(df)$cast(arrow::schema(
     feature = arrow::large_utf8(), cell = arrow::int32(), value = arrow::int32()))
-  arrow::write_parquet(tbl, file.path(outdir, "counts", paste0(assay, ".parquet")),
-                       compression = "zstd")
+  arrow::write_parquet(tbl, dest, compression = "zstd")
   invisible(NULL)
 }
 

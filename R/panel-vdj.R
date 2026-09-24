@@ -460,7 +460,7 @@
         # column AND honours the global cell filter / subset view.
         ch <- .scroll_vdj_chisq(d, grp, seg)
         if (is.null(ch) || !nrow(ch))
-          stop("Chi-square needs ≥2 groups and ≥2 genes with data.")
+          stop("Chi-square needs >= 2 groups and >= 2 genes with data.")
         ch$residual <- pmax(pmin(ch$residual, 3), -3)
         ord <- names(sort(tapply(abs(ch$residual), ch$gene, max)))
         ch$gene <- factor(ch$gene, levels = ord)

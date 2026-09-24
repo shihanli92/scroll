@@ -133,21 +133,25 @@ scroll_query_cells <- function(con, assay, cells, dict = FALSE) {
   ds <- .scroll_dataset(con, assay)
   q  <- dplyr::filter(ds, .data$cell %in% !!cells)
   if (dict)
-    q <- dplyr::mutate(q, feature = arrow::cast(
+    # `cast()` is an arrow dplyr binding (evaluated by arrow, not an R function)
+    q <- dplyr::mutate(q, feature = cast(
       .data$feature, arrow::dictionary(index_type = arrow::int32(),
                                        value_type = arrow::utf8())))
   out <- dplyr::collect(dplyr::select(q, "feature", "cell", "value"))
   as.data.frame(out, stringsAsFactors = FALSE)
 }
 
-# Path to an assay's raw-counts Parquet (counts/<assay>.parquet), rejecting an
-# assay name that is not a plain path segment (defense-in-depth, mirrors
-# .scroll_assay_dir).
+# Path to an assay's raw-counts store, rejecting an assay name that is not a plain
+# path segment (defense-in-depth, mirrors .scroll_assay_dir). A single-object build
+# writes one file (counts/<assay>.parquet); a streaming build writes one part per
+# source under counts/<assay>/. arrow::open_dataset() reads either.
 .scroll_counts_path <- function(dir, assay) {
   if (length(assay) != 1L || is.na(assay) || !nzchar(assay) ||
       basename(assay) != assay || grepl("[/\\\\]", assay))
     stop("Invalid assay name: ", assay, call. = FALSE)
-  file.path(dir, "counts", paste0(assay, ".parquet"))
+  f <- file.path(dir, "counts", paste0(assay, ".parquet"))
+  d <- file.path(dir, "counts", assay)
+  if (!file.exists(f) && dir.exists(d)) d else f
 }
 
 #' Aggregate raw counts into pseudobulk samples

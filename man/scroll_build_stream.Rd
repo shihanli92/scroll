@@ -12,6 +12,7 @@ scroll_build_stream(
   embeddings = NULL,
   meta_cols = NULL,
   quantize = FALSE,
+  counts = FALSE,
   id_of = as.character,
   overwrite = FALSE,
   verbose = interactive()
@@ -35,6 +36,11 @@ be present in \strong{every} source — a source missing any is an error naming 
 (extra columns a source happens to carry are simply ignored).}
 
 \item{quantize}{Must be \code{FALSE} (streaming stores float32; see Details).}
+
+\item{counts}{If \code{TRUE}, also export each source's raw \code{counts} layer (one part
+per source under \verb{counts/<assay>/}), enabling the Pseudobulk DE panel — same
+as \code{\link[=scroll_build]{scroll_build()}}'s \code{counts = TRUE}. An append run must match the setting
+the project was first built with.}
 
 \item{id_of}{\verb{function(source) -> character} id used for append-tracking and
 part-file tags (default \code{as.character}).}

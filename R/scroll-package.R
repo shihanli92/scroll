@@ -10,6 +10,9 @@ NULL
 # Warns only when called from OUTSIDE the package -- the built-in panels, scroll_de,
 # and tests call these internally and must stay silent -- and once per session per
 # function. `env` is the deprecated function's parent.frame() (its caller).
+# `cast` is an arrow dplyr binding used inside dplyr::mutate() on an arrow query
+utils::globalVariables("cast")
+
 .scroll_dep_seen <- new.env(parent = emptyenv())
 .scroll_soft_deprecate <- function(what, instead, env) {
   # internal = called from the namespace, or from the attached package env (where

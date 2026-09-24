@@ -43,6 +43,10 @@
 #'   be present in **every** source — a source missing any is an error naming it
 #'   (extra columns a source happens to carry are simply ignored).
 #' @param quantize Must be `FALSE` (streaming stores float32; see Details).
+#' @param counts If `TRUE`, also export each source's raw `counts` layer (one part
+#'   per source under `counts/<assay>/`), enabling the Pseudobulk DE panel — same
+#'   as [scroll_build()]'s `counts = TRUE`. An append run must match the setting
+#'   the project was first built with.
 #' @param id_of `function(source) -> character` id used for append-tracking and
 #'   part-file tags (default `as.character`).
 #' @param overwrite If `TRUE`, wipe `outdir` first (a fresh build).
@@ -52,7 +56,7 @@
 #' @export
 scroll_build_stream <- function(outdir, sources, reader, assays = NULL,
                                 embeddings = NULL, meta_cols = NULL, quantize = FALSE,
-                                id_of = as.character, overwrite = FALSE,
+                                counts = FALSE, id_of = as.character, overwrite = FALSE,
                                 verbose = interactive()) {
   .scroll_need_seurat()
   .scroll_check_zstd()
@@ -74,11 +78,17 @@ scroll_build_stream <- function(outdir, sources, reader, assays = NULL,
   if (!length(todo)) { message("scroll_build_stream: nothing new to add."); return(invisible(outdir)) }
 
   cells_path <- file.path(outdir, "cells.parquet")
-  old_cells  <- if (file.exists(cells_path)) as.data.frame(arrow::read_parquet(cells_path)) else NULL
+  old_cells  <- if (file.exists(cells_path)) as.data.frame(arrow::read_parquet(cells_path, mmap = FALSE)) else NULL
   offset <- if (is.null(old_cells)) 0L else nrow(old_cells)
-  gmax   <- if (file.exists(file.path(outdir, "manifest.yaml")))
-              tryCatch(lapply(scroll_manifest(outdir)$assays, function(a) a$max),
-                       error = function(e) list()) else list()
+  old_man <- if (file.exists(file.path(outdir, "manifest.yaml")))
+               tryCatch(scroll_manifest(outdir), error = function(e) NULL)
+  gmax   <- if (is.null(old_man)) list() else lapply(old_man$assays, function(a) a$max)
+  # A counts store must cover every cell or pseudobulk would silently drop the
+  # sources without one, so an append run must match the original setting.
+  if (!is.null(old_man) && !identical(isTRUE(old_man$has_counts), isTRUE(counts)))
+    stop(sprintf(paste0("scroll_build_stream: this project was built with counts = %s; ",
+                        "append with the same setting, or rebuild with overwrite = TRUE."),
+                 isTRUE(old_man$has_counts)), call. = FALSE)
 
   lock <- NULL; new_cells <- list(); last_seu <- NULL
   for (i in todo) {
@@ -116,6 +126,12 @@ scroll_build_stream <- function(outdir, sources, reader, assays = NULL,
       .scroll_stream_move(file.path(tmp_root, "expr", assay),
                           file.path(outdir, "expr", assay), tag = .scroll_safe_tag(id))
       gmax[[assay]] <- max(gmax[[assay]] %||% 0, ai$max)
+      if (isTRUE(counts)) {
+        cdir <- file.path(outdir, "counts", assay)
+        dir.create(cdir, recursive = TRUE, showWarnings = FALSE)
+        .scroll_export_counts(seu, assay, outdir, cell_ids = cframe$cell, offset = offset,
+                              dest = file.path(cdir, paste0(.scroll_safe_tag(id), "-part.parquet")))
+      }
     }
     unlink(file.path(tmp_root, "expr"), recursive = TRUE)
 
@@ -140,7 +156,7 @@ scroll_build_stream <- function(outdir, sources, reader, assays = NULL,
   names(assay_info) <- lock$assays
   .scroll_write_manifest(outdir, last_seu, assay_info, lock$embeddings, cells,
                          lock$meta_cols, n_cells = nrow(cells), quantize = FALSE,
-                         has_counts = FALSE, cells = cells, subsets = NULL)
+                         has_counts = isTRUE(counts), cells = cells, subsets = NULL)
   scroll_scaffold_app(outdir)
   message("scroll (streamed) project built at: ", normalizePath(outdir),
           "  (", format(nrow(cells), big.mark = ","), " cells)")

@@ -247,7 +247,7 @@ atac_test_project <- local({
         # a real Signac ChromatinAssay annotation would fill nearest_gene; here we
         # patch the baked table to exercise the gene -> peak lookup (3 RNA markers).
         pf <- file.path(dir, "atac", "peaks.parquet")
-        pk <- as.data.frame(arrow::read_parquet(pf))
+        pk <- as.data.frame(arrow::read_parquet(pf, mmap = FALSE))
         pk$nearest_gene <- rep(c("CD3D", "CD8A", "MS4A1"), length.out = nrow(pk))
         pk$distance <- rep(c(0, 1200, 5000), length.out = nrow(pk))
         arrow::write_parquet(pk, pf)

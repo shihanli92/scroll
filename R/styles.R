@@ -320,8 +320,8 @@ body.scroll-warming{overflow:hidden;}
   padding:5px 10px; border:1px solid var(--sc-line); border-radius:7px; background:#fff;
   color:var(--sc-muted);}
 .scroll-ctl-btn:hover{color:var(--sc-accent-deep); border-color:var(--sc-accent);}
-.scroll-ctl-btn::after{content:' \\25BE'; opacity:.7;}                 /* ▾ open */
-.scroll-ctl-btn[aria-expanded='false']::after{content:' \\25B8';}     /* ▸ collapsed */
+.scroll-ctl-btn::after{content:' \\25BE'; opacity:.7;}                 /* down-triangle: open */
+.scroll-ctl-btn[aria-expanded='false']::after{content:' \\25B8';}     /* right-triangle: collapsed */
 @container sc-card (max-width:719.98px){
   .scroll-panel-card:has(.scroll-panel.bslib-grid) .scroll-ctl-btn{display:inline-flex;}
   .scroll-panel-card.scroll-ctl-hidden .scroll-panel.bslib-grid>.bslib-grid-item:first-child{display:none;}
