@@ -113,6 +113,9 @@ use.
 - [`scroll_show_when()`](https://shihanli92.github.io/scroll/reference/scroll_show_when.md)
   : Show a control only when another control has a given value
 
+- [`scroll_style_input()`](https://shihanli92.github.io/scroll/reference/scroll_style_input.md)
+  : Put a control in the plot's Style sheet
+
 - [`scroll_point_layer()`](https://shihanli92.github.io/scroll/reference/scroll_helpers.md)
   [`scroll_discrete_colors()`](https://shihanli92.github.io/scroll/reference/scroll_helpers.md)
   [`scroll_continuous_scale()`](https://shihanli92.github.io/scroll/reference/scroll_helpers.md)

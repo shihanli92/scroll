@@ -11,7 +11,7 @@ pair of functions:"></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">scroll</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.22</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -53,7 +53,9 @@ pair of functions:</p>
 <span>  title <span class="op">=</span> <span class="va">label</span>,</span>
 <span>  desc <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  after <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  before <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  before <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  style_ui <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  style_caps <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -87,6 +89,22 @@ appends at the end. Ignored when replacing an existing id.</p></dd>
 <dd><p>Id of the panel to insert this one before (e.g. <code>"dimplot"</code> to
 put it at the top). Takes precedence over <code>after</code>. Ignored when replacing an
 existing id.</p></dd>
+
+
+<dt id="arg-style-ui">style_ui<a class="anchor" aria-label="anchor" href="#arg-style-ui"></a></dt>
+<dd><p>Optional <code>function(id, data)</code> returning look-only controls to show
+in the plot's <strong>Style sheet</strong> (the paintbrush button in a
+<code>.scroll_plot_area()</code> toolbar); namespace them with <code>NS(id)</code> like <code>ui</code>, and the
+server reads them as usual. The sheet also carries per-plot titles/labels and
+theme; a server receives them by declaring a <code>style_r</code> argument (the whole
+style) and/or <code>theme_r</code> (just the theme family).</p></dd>
+
+
+<dt id="arg-style-caps">style_caps<a class="anchor" aria-label="anchor" href="#arg-style-caps"></a></dt>
+<dd><p>Which "Scales &amp; axes" options the Style sheet offers for this
+plot: <code>list(limits = c("x","y"), trans = list(x = , y = ), breaks = , flip = , facet = )</code>. <code>NULL</code> (default) offers visible-range limits on both axes; <code><a href="https://rdrr.io/r/base/list.html" class="external-link">list()</a></code>
+offers none. Transforms are any of <code>"log10"</code>, <code>"sqrt"</code>, <code>"log1p"</code>,
+<code>"pseudo_log"</code>, <code>"reverse"</code>.</p></dd>
 
 </dl></div>
     <div class="section level2">

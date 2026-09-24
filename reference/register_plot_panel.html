@@ -15,7 +15,7 @@ subset/view awareness. The silent-failure footguns of a hand-written server
 
     <a class="navbar-brand me-2" href="../index.html">scroll</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.22</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -61,7 +61,8 @@ subset/view awareness. The silent-failure footguns of a hand-written server
 <span>  after <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  before <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  compute <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  csv <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  csv <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  style_caps <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -80,7 +81,9 @@ id; <code>data</code> is the handle (<code>data$query1</code>, <code>data$con</c
 
 
 <dt id="arg-controls">controls<a class="anchor" aria-label="anchor" href="#arg-controls"></a></dt>
-<dd><p>A list of <code>scroll_input_*()</code> specs (see <a href="scroll_input.html">scroll_input</a>).</p></dd>
+<dd><p>A list of <code>scroll_input_*()</code> specs (see <a href="scroll_input.html">scroll_input</a>). Wrap a
+look-only control in <code><a href="scroll_style_input.html">scroll_style_input()</a></code> to place it in the plot's Style
+sheet instead of the control column.</p></dd>
 
 
 <dt id="arg-label-title-desc-after-before">label, title, desc, after, before<a class="anchor" aria-label="anchor" href="#arg-label-title-desc-after-before"></a></dt>
@@ -96,6 +99,11 @@ id; <code>data</code> is the handle (<code>data$query1</code>, <code>data$con</c
 <dd><p>If <code>TRUE</code>, add a CSV button that exports the plot's source data. The
 <code>plot</code> function opts in by attaching the table to its result, e.g.
 <code>attr(p, "scroll_source") &lt;- df; p</code>. Default <code>FALSE</code>.</p></dd>
+
+
+<dt id="arg-style-caps">style_caps<a class="anchor" aria-label="anchor" href="#arg-style-caps"></a></dt>
+<dd><p>Scales &amp; axes options for the plot's Style sheet, as in
+<code><a href="register_panel.html">register_panel()</a></code>.</p></dd>
 
 </dl></div>
     <div class="section level2">

@@ -190,12 +190,28 @@ scroll_multi_app(c("PBMC 3k" = "pbmc3k", "CITE-seq" = "cite"))
 | **DE** | contrast (group vs group / vs rest) · live Wilcoxon via `presto`, computed once and shown as a **Table** (sortable, min-% / top-N filters) and a **Volcano** (logFC & adj-p cutoffs · top-N labels via ggrepel) |
 | **Pseudobulk DE** | aggregate cells into sample-level counts (combined-interaction groups × replicate) and test with **edgeR/limma-voom**; pseudo-replicate modes (`no_replicate` pools each group) + min-cell cutoffs; optional **stability** re-runs (report each gene’s selection frequency across random draws). Needs a counts store (see below). Table + Volcano/stability output |
 
-Every plot has an **aspect-ratio** control (reshapes within a fixed
-canvas) and a clean black-box theme. Categorical colors are assigned
-**deterministically by level name**, so a cell type keeps its color
-across every panel. Each plot exports to **PNG** (raster) or **PDF**
-(vector, for figures/slides) from its toolbar; the DE table also exports
-to **CSV**.
+Each card’s control column holds *what to plot*; **how it looks** lives
+in the plot’s **Style sheet**, opened from the paintbrush button in its
+toolbar. The sheet updates the plot live and holds:
+
+- **Plot**: the panel’s own look controls (palette, point size, opacity,
+  aspect ratio, …).
+- **Titles & labels**: title, subtitle, caption, axis labels, legend
+  title.
+- **Theme**: text sizes and font, legend position, axes, gridlines,
+  border, strips and margin. “Apply theme to all plots” copies one
+  plot’s theme to every panel.
+- **Scales & axes** (where they make sense for the panel): visible axis
+  ranges, log / sqrt / reversed scales, break counts, flipped
+  coordinates, free facet scales.
+
+Categorical colors are assigned **deterministically by level name**, so
+a cell type keeps its color across every panel. Each plot exports to
+**PNG** (raster) or **PDF** (vector, for figures/slides) from its
+toolbar; the DE table also exports to **CSV**. Custom panels get the
+sheet too: wrap a look-only control in
+[`scroll_style_input()`](https://shihanli92.github.io/scroll/reference/scroll_style_input.md)
+to place it there.
 
 Live DE is the one memory-heavy operation:
 [`presto::wilcoxauc`](https://rdrr.io/pkg/presto/man/wilcoxauc.html)

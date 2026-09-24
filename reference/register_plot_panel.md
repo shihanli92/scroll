@@ -21,7 +21,8 @@ register_plot_panel(
   after = NULL,
   before = NULL,
   compute = TRUE,
-  csv = FALSE
+  csv = FALSE,
+  style_caps = NULL
 )
 ```
 
@@ -42,6 +43,9 @@ register_plot_panel(
 
   A list of `scroll_input_*()` specs (see
   [scroll_input](https://shihanli92.github.io/scroll/reference/scroll_input.md)).
+  Wrap a look-only control in
+  [`scroll_style_input()`](https://shihanli92.github.io/scroll/reference/scroll_style_input.md)
+  to place it in the plot's Style sheet instead of the control column.
 
 - label, title, desc, after, before:
 
@@ -58,6 +62,11 @@ register_plot_panel(
   If `TRUE`, add a CSV button that exports the plot's source data. The
   `plot` function opts in by attaching the table to its result, e.g.
   `attr(p, "scroll_source") <- df; p`. Default `FALSE`.
+
+- style_caps:
+
+  Scales & axes options for the plot's Style sheet, as in
+  [`register_panel()`](https://shihanli92.github.io/scroll/reference/register_panel.md).
 
 ## Value
 

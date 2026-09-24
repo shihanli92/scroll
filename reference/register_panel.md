@@ -16,7 +16,9 @@ register_panel(
   title = label,
   desc = NULL,
   after = NULL,
-  before = NULL
+  before = NULL,
+  style_ui = NULL,
+  style_caps = NULL
 )
 ```
 
@@ -49,6 +51,25 @@ register_panel(
   Id of the panel to insert this one before (e.g. `"dimplot"` to put it
   at the top). Takes precedence over `after`. Ignored when replacing an
   existing id.
+
+- style_ui:
+
+  Optional `function(id, data)` returning look-only controls to show in
+  the plot's **Style sheet** (the paintbrush button in a
+  `.scroll_plot_area()` toolbar); namespace them with `NS(id)` like
+  `ui`, and the server reads them as usual. The sheet also carries
+  per-plot titles/labels and theme; a server receives them by declaring
+  a `style_r` argument (the whole style) and/or `theme_r` (just the
+  theme family).
+
+- style_caps:
+
+  Which "Scales & axes" options the Style sheet offers for this plot:
+  `list(limits = c("x","y"), trans = list(x = , y = ), breaks = , flip = , facet = )`.
+  `NULL` (default) offers visible-range limits on both axes;
+  [`list()`](https://rdrr.io/r/base/list.html) offers none. Transforms
+  are any of `"log10"`, `"sqrt"`, `"log1p"`, `"pseudo_log"`,
+  `"reverse"`.
 
 ## Value
 

@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="index.html">scroll</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.22</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -172,7 +172,18 @@ Install from a local checkout instead
 </tr>
 </tbody>
 </table>
-<p>Every plot has an <strong>aspect-ratio</strong> control (reshapes within a fixed canvas) and a clean black-box theme. Categorical colors are assigned <strong>deterministically by level name</strong>, so a cell type keeps its color across every panel. Each plot exports to <strong>PNG</strong> (raster) or <strong>PDF</strong> (vector, for figures/slides) from its toolbar; the DE table also exports to <strong>CSV</strong>.</p>
+<p>Each card’s control column holds <em>what to plot</em>; <strong>how it looks</strong> lives in the plot’s <strong>Style sheet</strong>, opened from the paintbrush button in its toolbar. The sheet updates the plot live and holds:</p>
+<ul>
+<li>
+<strong>Plot</strong>: the panel’s own look controls (palette, point size, opacity, aspect ratio, …).</li>
+<li>
+<strong>Titles &amp; labels</strong>: title, subtitle, caption, axis labels, legend title.</li>
+<li>
+<strong>Theme</strong>: text sizes and font, legend position, axes, gridlines, border, strips and margin. “Apply theme to all plots” copies one plot’s theme to every panel.</li>
+<li>
+<strong>Scales &amp; axes</strong> (where they make sense for the panel): visible axis ranges, log / sqrt / reversed scales, break counts, flipped coordinates, free facet scales.</li>
+</ul>
+<p>Categorical colors are assigned <strong>deterministically by level name</strong>, so a cell type keeps its color across every panel. Each plot exports to <strong>PNG</strong> (raster) or <strong>PDF</strong> (vector, for figures/slides) from its toolbar; the DE table also exports to <strong>CSV</strong>. Custom panels get the sheet too: wrap a look-only control in <code><a href="reference/scroll_style_input.html">scroll_style_input()</a></code> to place it there.</p>
 <p>Live DE is the one memory-heavy operation: <code><a href="https://rdrr.io/pkg/presto/man/wilcoxauc.html" class="external-link">presto::wilcoxauc</a></code> needs an in-memory matrix, so a run reconstructs the contrast’s expression matrix from the store (on-demand, behind a Compute button).</p>
 <p><strong>Pseudobulk DE</strong> needs raw counts (edgeR/limma-voom are count-based), which are not in the default quantized store. Build with <code>counts = TRUE</code> to also export a <code>counts/&lt;assay&gt;.parquet</code> store; the Pseudobulk DE panel then sums counts per pseudobulk sample <strong>in arrow’s engine</strong> (RAM stays flat) and runs limma-voom:</p>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
