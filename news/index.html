@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">scroll</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.21</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.22</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,6 +32,24 @@
       <small>Source: <a href="https://github.com/shihanli92/scroll/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.2.22" id="scroll-0222">scroll 0.2.22<a class="anchor" aria-label="anchor" href="#scroll-0222"></a></h2>
+<div class="section level3">
+<h3 id="build-0-2-22">Build<a class="anchor" aria-label="anchor" href="#build-0-2-22"></a></h3>
+<ul><li>
+<strong>Pseudobulk on streamed builds.</strong> <code><a href="../reference/scroll_build_stream.html">scroll_build_stream()</a></code> gains <code>counts = TRUE</code>, which exports each source’s raw <code>counts</code> layer under the running global cell index (one part per source in <code>counts/&lt;assay&gt;/</code>) and records <code>has_counts</code>, so the Pseudobulk DE panel now works on large multi-source projects. The counts are identical to a single <code>scroll_build(counts = TRUE)</code> of the same cells. An append run must match the project’s original <code>counts</code> setting (it errors otherwise, so pseudobulk never silently misses sources).</li>
+</ul></div>
+<div class="section level3">
+<h3 id="fixes-0-2-22">Fixes<a class="anchor" aria-label="anchor" href="#fixes-0-2-22"></a></h3>
+<ul><li>
+<strong>Windows:</strong> <code><a href="../reference/scroll_update.html">scroll_update()</a></code>, <code><a href="../reference/scroll_add_meta.html">scroll_add_meta()</a></code> and appending to a streamed build failed with “cannot be performed on a file with a user-mapped section open”, because <code>cells.parquet</code> was still memory-mapped when rewritten in place. Those reads no longer memory-map the file.</li>
+<li>R CMD check is clean on all CI platforms: non-ASCII characters removed from R code, arrow’s <code>cast()</code> binding used unqualified, and <code>Seurat</code> / <code>cachem</code> declared in Suggests (used by tests).</li>
+</ul></div>
+<div class="section level3">
+<h3 id="docs-0-2-22">Docs<a class="anchor" aria-label="anchor" href="#docs-0-2-22"></a></h3>
+<ul><li>Repository, badge and pkgdown links now point at <code>shihanli92/scroll</code>, and the default branch is <code>main</code> (CI runs on it).</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.2.21" id="scroll-0221">scroll 0.2.21<a class="anchor" aria-label="anchor" href="#scroll-0221"></a></h2>
 <div class="section level3">

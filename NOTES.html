@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">scroll</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.21</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.22</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -129,7 +129,7 @@
 <li>
 <strong>Pseudobulk covariates.</strong> Only <code>group</code> (+ optional replicate block) enter the design; a general <code>covariates =</code> (extra metadata terms) is a natural follow-up.</li>
 <li>
-<strong>Counts in streaming builds.</strong> <code><a href="reference/scroll_build_stream.html">scroll_build_stream()</a></code> hard-codes <code>has_counts = FALSE</code>, so the Pseudobulk panel is unavailable on streamed (large/multi-source) projects — the case where flat-RAM pseudobulk is most valuable. Write per-source counts parts + compact.</li>
+<del><strong>Counts in streaming builds.</strong></del> — DONE (0.2.22). <code>scroll_build_stream(counts = TRUE)</code> writes one counts part per source under <code>counts/&lt;assay&gt;/</code> (no compaction needed: pseudobulk full-scans anyway, and <code>open_dataset()</code> reads the directory).</li>
 </ul></div>
 <div class="section level2">
 <h2 id="known-behavior-documented-working-as-intended">Known behavior (documented, working as intended)<a class="anchor" aria-label="anchor" href="#known-behavior-documented-working-as-intended"></a></h2>

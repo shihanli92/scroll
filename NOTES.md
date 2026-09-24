@@ -123,12 +123,10 @@ caveat). Items below were **consciously deferred**, not forgotten.
 - **Pseudobulk covariates.** Only `group` (+ optional replicate block)
   enter the design; a general `covariates =` (extra metadata terms) is a
   natural follow-up.
-- **Counts in streaming builds.**
-  [`scroll_build_stream()`](https://shihanli92.github.io/scroll/reference/scroll_build_stream.md)
-  hard-codes `has_counts = FALSE`, so the Pseudobulk panel is
-  unavailable on streamed (large/multi-source) projects — the case where
-  flat-RAM pseudobulk is most valuable. Write per-source counts parts +
-  compact.
+- ~~**Counts in streaming builds.**~~ — DONE (0.2.22).
+  `scroll_build_stream(counts = TRUE)` writes one counts part per source
+  under `counts/<assay>/` (no compaction needed: pseudobulk full-scans
+  anyway, and `open_dataset()` reads the directory).
 
 ## Known behavior (documented, working as intended)
 

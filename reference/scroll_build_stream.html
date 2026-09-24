@@ -17,7 +17,7 @@ cell index, and the manifest written once at the end. The store is compacted
 
     <a class="navbar-brand me-2" href="../index.html">scroll</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.21</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.22</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -62,6 +62,7 @@ cell index, and the manifest written once at the end. The store is <strong>compa
 <span>  embeddings <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  meta_cols <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  quantize <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  counts <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  id_of <span class="op">=</span> <span class="va">as.character</span>,</span>
 <span>  overwrite <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/interactive.html" class="external-link">interactive</a></span><span class="op">(</span><span class="op">)</span></span>
@@ -100,6 +101,13 @@ be present in <strong>every</strong> source — a source missing any is an error
 
 <dt id="arg-quantize">quantize<a class="anchor" aria-label="anchor" href="#arg-quantize"></a></dt>
 <dd><p>Must be <code>FALSE</code> (streaming stores float32; see Details).</p></dd>
+
+
+<dt id="arg-counts">counts<a class="anchor" aria-label="anchor" href="#arg-counts"></a></dt>
+<dd><p>If <code>TRUE</code>, also export each source's raw <code>counts</code> layer (one part
+per source under <code>counts/&lt;assay&gt;/</code>), enabling the Pseudobulk DE panel — same
+as <code><a href="scroll_build.html">scroll_build()</a></code>'s <code>counts = TRUE</code>. An append run must match the setting
+the project was first built with.</p></dd>
 
 
 <dt id="arg-id-of">id_of<a class="anchor" aria-label="anchor" href="#arg-id-of"></a></dt>

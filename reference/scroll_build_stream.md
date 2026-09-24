@@ -20,6 +20,7 @@ scroll_build_stream(
   embeddings = NULL,
   meta_cols = NULL,
   quantize = FALSE,
+  counts = FALSE,
   id_of = as.character,
   overwrite = FALSE,
   verbose = interactive()
@@ -58,6 +59,15 @@ scroll_build_stream(
 - quantize:
 
   Must be `FALSE` (streaming stores float32; see Details).
+
+- counts:
+
+  If `TRUE`, also export each source's raw `counts` layer (one part per
+  source under `counts/<assay>/`), enabling the Pseudobulk DE panel —
+  same as
+  [`scroll_build()`](https://shihanli92.github.io/scroll/reference/scroll_build.md)'s
+  `counts = TRUE`. An append run must match the setting the project was
+  first built with.
 
 - id_of:
 
