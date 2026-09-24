@@ -65,12 +65,13 @@ test_that("filters are deferred behind Apply and cleared on Reset", {
   })
 })
 
-test_that("the control rail renders collapsible Theme + Filters sections", {
+test_that("the control rail renders a collapsible Filters section (no theme)", {
   data <- scroll:::.scroll_load(test_project())
   on.exit(scroll_disconnect(data$con))
   aside <- as.character(scroll:::.scroll_controls_ui(data))
   expect_true(any(grepl("scroll-filters", aside)))       # the sidebar wrapper
   expect_true(any(grepl("<details", aside)))             # collapsible sections
-  expect_true(any(grepl("Theme", aside)) && any(grepl("Filters", aside)))
+  expect_true(any(grepl("Filters", aside)))
+  expect_false(any(grepl("theme", aside)))               # styling moved to the per-plot sheet
   expect_true(any(grepl("Reset all", aside)))
 })

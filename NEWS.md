@@ -1,3 +1,39 @@
+# scroll 0.3.1
+
+## Per-plot Style sheet
+
+* **A Style button on every plot.** A paintbrush left of the export-scale slider
+  opens that plot's **side sheet** (the plot stays visible and updates live as you
+  edit). Each card's control column now holds only *what to plot*; the sheet holds
+  *how it looks*:
+  * **Plot** -- the panel's own look controls, moved out of the control column
+    (palette, manual colours, point size, opacity, labels / legend toggles,
+    rasterize, aspect ratio, dot range, violin width and points, bar styling and
+    ordering, spot size, ...). Input ids are unchanged.
+  * **Titles & labels** -- title, subtitle, caption, x / y axis labels and legend
+    title, per plot (a patchwork grid gets one title over the grid).
+  * **Theme** -- the text / legend / axes / panel / facet options that used to sit
+    in the right rail, now **per plot**; *Apply theme to all plots* copies one plot's
+    theme to every panel.
+  * **Scales & axes** -- visible x / y ranges, log10 / sqrt / log1p / pseudo-log /
+    reversed axes, break counts, flipped coordinates and fixed / free facet scales,
+    each offered only where it makes sense for the panel (an embedding can be
+    reversed but not log-scaled; a violin can be flipped). The plot's own coord,
+    axis labels and expansion are kept.
+* The right rail is now **filters only**.
+* Custom panels: `scroll_style_input()` places a declarative control in the sheet;
+  `register_panel()` / `register_plot_panel()` gain `style_ui` and `style_caps`; a
+  raw server receives the plot's style by declaring `style_r` (and still gets its
+  theme through `theme_r`). Titles, labels and theme apply live even on
+  Compute-gated builder panels (no re-compute).
+
+## Fixes
+
+* Theme colour pickers left at their default no longer paint text, borders and
+  gridlines **white**: colourpicker (>= 1.3) reports an empty picker as `#FFFFFF`,
+  so an applied theme used to hide plot titles and frames. An untouched picker now
+  means "no change".
+
 # scroll 0.2.22
 
 ## Build

@@ -6,6 +6,11 @@
 
 # --- panel registry + shell ---------------------------------------------------
 
+# Scales & axes offered in a panel's Style sheet (see .scroll_style_caps): an
+# embedding may be reversed (never log-scaled); a signed numeric axis gets pseudo-log.
+.SCROLL_CAPS_EMBEDDING <- list(limits = c("x", "y"), trans = list(x = "reverse", y = "reverse"))
+.SCROLL_TRANS_SIGNED <- c("log10", "pseudo_log", "sqrt", "reverse")
+
 # The built-in panels, in scroll order. Each entry: display meta + its module's
 # ui/server. Display numbers are assigned at assembly time (see
 # .scroll_assemble_panels), so appended custom panels number correctly.
@@ -13,50 +18,62 @@
   list(id = "dimplot", label = "DimPlot",
        title = "Cells by annotation",
        desc = "The embedding coloured by any cell metadata column.",
-       ui = dimplot_ui, server = dimplot_server),
+       ui = dimplot_ui, style_ui = dimplot_style_ui,
+       style_caps = .SCROLL_CAPS_EMBEDDING, server = dimplot_server),
   list(id = "featureplot", label = "FeaturePlot",
        title = "Gene expression",
        desc = "The embedding coloured by a gene's expression.",
-       ui = featureplot_ui, server = featureplot_server),
+       ui = featureplot_ui, style_ui = featureplot_style_ui,
+       style_caps = .SCROLL_CAPS_EMBEDDING, server = featureplot_server),
   list(id = "signature", label = "Signature",
        title = "Gene signature score",
        desc = "Score a gene list per cell, on the embedding or as a violin by group.",
-       ui = signature_ui, server = signature_server),
+       ui = signature_ui, style_ui = signature_style_ui,
+       style_caps = .SCROLL_CAPS_EMBEDDING, server = signature_server),
   list(id = "biaxial", label = "Biaxial",
        title = "Biaxial signal",
        desc = "Pairwise scatters of numeric columns (e.g. hashtags) coloured by a selection.",
        when = function(m) length(.scroll_num_cols(m)) >= 2,
-       ui = biaxial_ui, server = biaxial_server),
+       ui = biaxial_ui, style_ui = biaxial_style_ui,
+       style_caps = list(limits = c("x", "y"), breaks = c("x", "y"), facet = TRUE,
+                         trans = list(x = .SCROLL_TRANS_SIGNED, y = .SCROLL_TRANS_SIGNED)), server = biaxial_server),
   list(id = "dotplot", label = "DotPlot",
        title = "Marker panel",
        desc = "Mean expression and fraction expressing across groups.",
        when = function(m) length(.scroll_cat_cols(m)) >= 1,
-       ui = dotplot_ui, server = dotplot_server),
+       ui = dotplot_ui, style_ui = dotplot_style_ui,
+       style_caps = list(), server = dotplot_server),
   list(id = "heatmap", label = "Heatmap",
        title = "Single-cell heatmap",
        desc = "Genes across a subsample of individual cells, grouped and rasterized.",
        when = function(m) length(.scroll_cat_cols(m)) >= 1,
-       ui = heatmap_ui, server = heatmap_server),
+       ui = heatmap_ui, style_ui = heatmap_style_ui,
+       style_caps = list(), server = heatmap_server),
   list(id = "violin", label = "Violin",
        title = "Expression distribution",
        desc = "A gene's per-group expression distribution.",
        when = function(m) length(.scroll_cat_cols(m)) >= 1,
-       ui = violin_ui, server = violin_server),
+       ui = violin_ui, style_ui = violin_style_ui,
+       style_caps = list(limits = "y", breaks = "y", flip = TRUE,
+                         trans = list(y = c("sqrt", "log1p", "pseudo_log", "reverse"))), server = violin_server),
   list(id = "proportions", label = "Proportions",
        title = "Composition",
        desc = "Stacked composition of one annotation within another.",
        when = function(m) length(.scroll_cat_cols(m)) >= 2,
-       ui = proportions_ui, server = proportions_server),
+       ui = proportions_ui, style_ui = proportions_style_ui,
+       style_caps = list(limits = "y", breaks = "y"), server = proportions_server),
   list(id = "de", label = "DE",
        title = "Differential expression",
        desc = "Wilcoxon markers for a contrast (live via presto): ranked table + volcano.",
        when = .scroll_has_contrast,
-       ui = de_ui, server = de_server),
+       ui = de_ui, style_ui = de_style_ui,
+       style_caps = list(limits = c("x", "y"), breaks = c("x", "y")), server = de_server),
   list(id = "pseudobulk", label = "Pseudobulk DE",
        title = "Pseudobulk differential expression",
        desc = "Aggregate cells into pseudobulk samples and test with edgeR/limma-voom.",
        when = function(m) isTRUE(m$has_counts) && .scroll_has_contrast(m),
-       ui = pseudobulk_de_ui, server = pseudobulk_de_server)
+       ui = pseudobulk_de_ui, style_ui = pseudobulk_de_style_ui,
+       style_caps = list(limits = c("x", "y"), breaks = c("x", "y")), server = pseudobulk_de_server)
 ),
   # Modality panels: each carries a `when(manifest)` predicate and only surfaces
   # for projects whose manifest has the matching block (see .scroll_assemble_panels).
@@ -98,6 +115,17 @@
 #' @param before Id of the panel to insert this one before (e.g. `"dimplot"` to
 #'   put it at the top). Takes precedence over `after`. Ignored when replacing an
 #'   existing id.
+#' @param style_ui Optional `function(id, data)` returning look-only controls to show
+#'   in the plot's **Style sheet** (the paintbrush button in a
+#'   `.scroll_plot_area()` toolbar); namespace them with `NS(id)` like `ui`, and the
+#'   server reads them as usual. The sheet also carries per-plot titles/labels and
+#'   theme; a server receives them by declaring a `style_r` argument (the whole
+#'   style) and/or `theme_r` (just the theme family).
+#' @param style_caps Which "Scales & axes" options the Style sheet offers for this
+#'   plot: `list(limits = c("x","y"), trans = list(x = , y = ), breaks = , flip = ,
+#'   facet = )`. `NULL` (default) offers visible-range limits on both axes; `list()`
+#'   offers none. Transforms are any of `"log10"`, `"sqrt"`, `"log1p"`,
+#'   `"pseudo_log"`, `"reverse"`.
 #' @return Invisibly, `id`.
 #' @examples
 #' # A minimal custom panel: a cells-per-group bar chart.
@@ -121,12 +149,16 @@
 #' scroll_reset_panels()   # (undo, so the example leaves no state)
 #' @export
 register_panel <- function(id, ui, server, label = id, title = label,
-                           desc = NULL, after = NULL, before = NULL) {
+                           desc = NULL, after = NULL, before = NULL, style_ui = NULL,
+                           style_caps = NULL) {
   .scroll_check_panel_id(id)
   if (!is.function(ui) || !is.function(server))
     stop("`ui` and `server` must be functions.", call. = FALSE)
+  if (!is.null(style_ui) && !is.function(style_ui))
+    stop("`style_ui` must be a function(id, data) or NULL.", call. = FALSE)
   spec <- list(id = id, label = label, title = title, desc = desc %||% "",
-               ui = ui, server = server, after = after, before = before)
+               ui = ui, server = server, after = after, before = before,
+               style_ui = style_ui, style_caps = style_caps)
   reg <- .scroll_registry$panels
   ids <- vapply(reg, `[[`, "", "id")
   reg[[if (id %in% ids) which(ids == id) else length(reg) + 1L]] <- spec
@@ -272,119 +304,12 @@ scroll_reset_panels <- function() {
     ctrls)
 }
 
-# ---- global theme controls (right sidebar) ----------------------------------
-# Font size / legend position / gridlines applied to every plot via .scroll_ggtheme().
-# Each defaults to "Default" (a no-op), so rendering is unchanged until the user picks.
-# Every scroll_theme_* input id here must be mirrored in .scroll_active_theme() below
-# and handled in .scroll_ggtheme(). Each control is independent + no-op at Default, so
-# trimming any is a clean three-line deletion (control, reactive read, ggtheme block).
-.scroll_theme_ui <- function(data, ns = identity) {
-  if (isFALSE(data$config$theme_controls)) return(NULL)
-  sel <- function(id, label, choices)
-    div(class = "scroll-filter", selectInput(ns(id), label, choices))
-  # colour picker (empty = no override, so Default stays a no-op); falls back to a hex
-  # text field when colourpicker is not installed.
-  col <- function(id, label)
-    div(class = "scroll-filter scroll-colour",
-        if (requireNamespace("colourpicker", quietly = TRUE))
-          colourpicker::colourInput(ns(id), label, value = "", showColour = "background",
-                                    allowTransparent = TRUE)
-        else textInput(ns(id), label, placeholder = "#hex or name"))
-  sz <- function(s, m, l) c("Default" = "", "Small" = s, "Medium" = m, "Large" = l)
-  showhide <- c("Default" = "", "Show" = "show", "Hide" = "hide")
-  onoff    <- c("Default" = "", "On" = "on", "Off" = "off")
-  .scroll_details("Theme", open = TRUE,
-    div(class = "scroll-apply-row",
-        actionButton(ns("scroll_theme_apply"), "Apply", class = "btn-sm btn-primary"),
-        actionLink(ns("scroll_theme_reset"), "Reset")),
-    .scroll_details("Text & fonts", open = TRUE,
-      sel("scroll_theme_font", "Text size", sz("11", "13", "16")),
-      sel("scroll_theme_font_family", "Font",
-          c("Default" = "", "Sans" = "sans", "Serif" = "serif", "Mono" = "mono")),
-      col("scroll_theme_text_colour", "Text colour"),
-      sel("scroll_theme_title_size", "Title size", sz("14", "18", "22")),
-      sel("scroll_theme_title_style", "Title style",
-          c("Default" = "", "Plain" = "plain", "Bold" = "bold", "Italic" = "italic")),
-      sel("scroll_theme_axis_title_size", "Axis-title size", sz("11", "13", "15")),
-      sel("scroll_theme_axis_text_size", "Axis-text size", sz("9", "11", "13")),
-      sel("scroll_theme_legend_text_size", "Legend-text size", sz("9", "11", "13")),
-      sel("scroll_theme_strip_text_size", "Strip-text size", sz("10", "12", "14"))),
-    .scroll_details("Legend", open = FALSE,
-      sel("scroll_theme_legend", "Position",
-          c("Default" = "", "Right" = "right", "Left" = "left", "Top" = "top",
-            "Bottom" = "bottom", "Hidden" = "none")),
-      sel("scroll_theme_legend_dir", "Direction",
-          c("Default" = "", "Horizontal" = "horizontal", "Vertical" = "vertical")),
-      sel("scroll_theme_legend_title", "Legend title", showhide),
-      sel("scroll_theme_legend_key", "Key background",
-          c("Default" = "", "White" = "white", "None" = "none"))),
-    .scroll_details("Axes", open = FALSE,
-      sel("scroll_theme_axes", "Axis text", showhide),
-      sel("scroll_theme_axis_titles", "Axis titles", showhide),
-      sel("scroll_theme_axis_ticks", "Axis ticks", showhide),
-      sel("scroll_theme_axis_line", "Axis lines", showhide),
-      col("scroll_theme_axis_colour", "Axis colour"),        # shared by lines + ticks
-      sel("scroll_theme_angle", "X label angle",
-          c("Default" = "", "0" = "0", "45" = "45", "90" = "90")),
-      sel("scroll_theme_yangle", "Y label angle",
-          c("Default" = "", "0" = "0", "90" = "90"))),
-    .scroll_details("Panel", open = FALSE,
-      sel("scroll_theme_grid_major", "Major gridlines", onoff),
-      sel("scroll_theme_grid_minor", "Minor gridlines", onoff),
-      col("scroll_theme_grid_colour", "Gridline colour"),
-      sel("scroll_theme_line_size", "Line thickness",
-          c("Default" = "", "Thin" = "thin", "Medium" = "medium", "Thick" = "thick")),
-      col("scroll_theme_line_colour", "Line colour"),
-      sel("scroll_theme_border", "Panel border", onoff),
-      col("scroll_theme_border_colour", "Border colour")),
-    .scroll_details("Facets & spacing", open = FALSE,
-      col("scroll_theme_strip_bg", "Strip background"),
-      sel("scroll_theme_margin", "Plot margin",
-          c("Default" = "", "Compact" = "compact", "Normal" = "normal", "Roomy" = "roomy"))))
-}
-
-# The right-hand control rail: a Theme section (always, unless disabled) plus the
-# Filters section (when the project has filterable columns).
+# The right-hand control rail: the Filters section (when the project has filterable
+# columns). Plot styling lives in each panel's Style sheet (R/style.R).
 .scroll_controls_ui <- function(data, ns = identity) {
-  th <- .scroll_theme_ui(data, ns); fl <- .scroll_filters_ui(data, ns)
-  if (is.null(th) && is.null(fl)) return(NULL)
-  tags$aside(class = "scroll-filters", th, fl)
-}
-
-# The global theme state as a reactive, read by panels that declare a `theme_r` formal.
-.scroll_theme_keys <- function()
-  c("font", "font_family", "text_colour", "title_size", "title_style",
-    "axis_title_size", "axis_text_size", "legend_text_size", "strip_text_size",
-    "legend", "legend_dir", "legend_title", "legend_key",
-    "axes", "axis_titles", "axis_ticks", "axis_line", "axis_colour", "angle", "yangle",
-    "grid_major", "grid_minor", "grid_colour", "line_size", "line_colour",
-    "border", "border_colour", "strip_bg", "margin")
-
-# which theme keys are colour pickers (reset differently from the selects)
-.scroll_theme_colour_keys <- function()
-  c("text_colour", "axis_colour", "grid_colour", "line_colour", "border_colour",
-    "strip_bg")
-
-# snapshot the current theme control values into a plain named list (for .scroll_ggtheme)
-.scroll_theme_values <- function(input)
-  stats::setNames(lapply(.scroll_theme_keys(),
-    function(k) .scroll_nz(input[[paste0("scroll_theme_", k)]])), .scroll_theme_keys())
-
-# Deferred theme: only commit the controls to `theme_rv` on Apply; Reset clears the
-# controls and reverts to the default (no-op) theme.
-.scroll_bind_theme <- function(input, session, data, theme_rv) {
-  if (isFALSE(data$config$theme_controls)) return(invisible())
-  observeEvent(input$scroll_theme_apply, theme_rv(.scroll_theme_values(input)))
-  observeEvent(input$scroll_theme_reset, {
-    cols <- .scroll_theme_colour_keys()
-    have_cp <- requireNamespace("colourpicker", quietly = TRUE)
-    for (k in .scroll_theme_keys()) {
-      id <- paste0("scroll_theme_", k)
-      if (k %in% cols && have_cp) colourpicker::updateColourInput(session, id, value = "")
-      else updateSelectInput(session, id, selected = "")
-    }
-    theme_rv(list())
-  })
+  fl <- .scroll_filters_ui(data, ns)
+  if (is.null(fl)) return(NULL)
+  tags$aside(class = "scroll-filters", fl)
 }
 
 # Narrow `cells` by every active filter (AND). An untouched control is a no-op: an
@@ -468,7 +393,7 @@ scroll_reset_panels <- function() {
     selectizeInput(ns("scroll_subset_val"), NULL, choices = NULL, multiple = TRUE,
                    width = "200px", options = list(placeholder = "all")))
   # toggle to collapse/expand the right control rail (frees plot width on narrow screens)
-  has_ctrl <- !isFALSE(data$config$theme_controls) || length(.scroll_filter_specs(data)) > 0
+  has_ctrl <- length(.scroll_filter_specs(data)) > 0
   toggle <- if (has_ctrl)
     tags$button(class = "scroll-ctl-toggle", type = "button",
                 onclick = "scrollToggleControls(this)", `data-tip` = .SCROLL_TIPS$ctl_hide,
@@ -539,7 +464,10 @@ scroll_reset_panels <- function() {
       div(class = paste0("scroll-content", if (isTRUE(data$config$layout$two_up)) " two-up"),
           lapply(panels, function(s) .scroll_panel_card(s, data, ns))),
       controls                                       # right-hand global control rail
-    )
+    ),
+    # per-panel Style sheets: outside the grid (and outside the cards, whose
+    # container-type would clip a position:fixed child)
+    .scroll_style_sheets(data, panels, ns)
   )
 }
 
@@ -615,9 +543,11 @@ scroll_reset_panels <- function() {
 .scroll_wire <- function(input, output, session, data, panels, cache = NULL,
                          prewarm = TRUE) {
   active_view <- reactive(.scroll_nz(input$scroll_view))
-  # deferred filters + theme: committed only on their Apply buttons (Reset clears both)
+  # deferred filters: committed only on Apply (Reset clears). Each panel has its own
+  # style value (theme, ...), edited live from its Style sheet.
   filt_rv  <- reactiveVal(list())
-  theme_rv <- reactiveVal(list())
+  style_rvs <- stats::setNames(lapply(panels, function(s) reactiveVal(list())),
+                               vapply(panels, `[[`, "", "id"))
   active_cells <- .scroll_active_cells(input, data, active_view, filt_rv)
   # A cheap, faithful signature of the active cell set (view + ad-hoc subset +
   # applied filters) -- panels append their own controls to it as a plot-cache key.
@@ -629,9 +559,8 @@ scroll_reset_panels <- function() {
                                input$scroll_subset_val, filt_rv()))
   .scroll_bind_subset_control(input, session, data)
   .scroll_bind_filters(input, session, data, filt_rv)
-  .scroll_bind_theme(input, session, data, theme_rv)
   .scroll_render_ncells(output, data$manifest, active_cells, active_view)
-  .scroll_mount_panels(data, panels, active_cells, active_view, theme_rv,
+  .scroll_mount_panels(data, panels, active_cells, active_view, style_rvs,
                        cache_key_r = cache_key_r, cache = cache)
   # optional startup warm-up: cycle the subset views once so their (cached) scatters
   # pre-render, making the first visit to each view instant too. Only meaningful when
@@ -746,15 +675,21 @@ scroll_reset_panels <- function() {
   outputOptions(output, "scroll_ncells", suspendWhenHidden = FALSE)
 }
 
-# Mount each panel's server, threading `active_view` only to panels that declare a
-# `view_r` formal (keeping register_panel()'s 3-arg server contract compatible).
-.scroll_mount_panels <- function(data, panels, active_cells, active_view, active_theme = reactive(NULL),
+# Mount each panel's server, threading optional arguments only to panels that
+# declare them (keeping register_panel()'s 3-arg server contract compatible):
+# `view_r` (active subset view), `style_r` (this panel's style value), `theme_r` (its
+# theme family, for servers written before per-plot styling), and the plot cache.
+# Every panel also gets its Style sheet server.
+.scroll_mount_panels <- function(data, panels, active_cells, active_view, style_rvs = list(),
                                  cache_key_r = reactive(NULL), cache = NULL) {
   for (sec in panels) {
+    rv <- style_rvs[[sec$id]] %||% reactiveVal(list())
+    .scroll_style_server(sec$id, data, rv, all = style_rvs, caps = .scroll_style_caps(sec))
     fmls <- names(formals(sec$server))
     args <- list(sec$id, data, cells_r = active_cells)      # named so formal order can vary
     if ("view_r" %in% fmls)      args$view_r      <- active_view
-    if ("theme_r" %in% fmls)     args$theme_r     <- active_theme
+    if ("style_r" %in% fmls)     args$style_r     <- rv
+    if ("theme_r" %in% fmls)     args$theme_r     <- local({ r <- rv; reactive(r()$theme) })
     if ("cache_key_r" %in% fmls) args$cache_key_r <- cache_key_r
     if ("cache" %in% fmls)       args$cache       <- cache
     do.call(sec$server, args)

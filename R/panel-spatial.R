@@ -67,12 +67,24 @@
 # A dedicated (non-declarative) panel so it can own brush-to-zoom + dblclick-reset
 # on the plot. Gated on a spatial embedding existing — so it also surfaces for
 # imaging platforms (Xenium/CosMx) that carry cell centroids but no H&E raster.
+# The look controls, shown in the panel's Style sheet (same input ids).
+spatial_style_ui <- function(id, data) {
+  ns <- shiny::NS(id)
+  m <- data$manifest
+  if (!length(.scroll_spatial_embeddings(m))) return(NULL)
+  shiny::tagList(
+    selectInput(ns("cpalette"), "Palette (numeric)", .scroll_continuous_palettes, selected = "viridis"),
+    conditionalPanel("input['mode'] == 'Metadata'", ns = ns,
+      selectInput(ns("dpalette"), "Palette (categorical)", names(.scroll_discrete_palettes))),
+    sliderInput(ns("size"), "Spot size", 0.2, 4, 1.4, 0.2),
+    if (length(m$images) > 0) checkboxInput(ns("image"), "Show tissue image", TRUE))  # any FOV/slide image
+}
+
 spatial_ui <- function(id, data) {
   ns <- shiny::NS(id)
   m <- data$manifest
   emb <- .scroll_spatial_embeddings(m)
   if (!length(emb)) return(.scroll_empty_panel("No spatial embedding in this project."))
-  has_img <- length(m$images) > 0                          # any FOV/slide carries an image
   meta_cols <- c(.scroll_cat_cols(m), .scroll_num_cols(m))
   ctl <- list(
     # embedding selector only when several tissue maps were baked (multi-FOV/slide)
@@ -83,18 +95,13 @@ spatial_ui <- function(id, data) {
                      options = list(placeholder = "type a gene", maxOptions = 50))),
     conditionalPanel("input['mode'] == 'Metadata'", ns = ns,
       selectInput(ns("meta"), "Metadata", meta_cols)),
-    selectInput(ns("cpalette"), "Palette", .scroll_continuous_palettes, selected = "viridis"),
-    conditionalPanel("input['mode'] == 'Metadata'", ns = ns,
-      selectInput(ns("dpalette"), "Palette (categorical)", names(.scroll_discrete_palettes))),
-    sliderInput(ns("size"), "Spot size", 0.2, 4, 1.4, 0.2),
-    if (has_img) checkboxInput(ns("image"), "Show tissue image", TRUE),
     tags$p(class = "scroll-desc", HTML("Drag to zoom &middot; double-click to reset.")))
   bslib::layout_columns(
     col_widths = c(3, 9), class = "scroll-panel",
     div(class = "scroll-controls", do.call(.scroll_group, c(list("Controls"), ctl))),
     div(class = "scroll-plot",
         div(class = "scroll-plot-bar",
-            .scroll_size_slider(ns),
+            .scroll_style_button(ns), .scroll_size_slider(ns),
             .scroll_dl_button(ns("png"), "PNG"), .scroll_dl_button(ns("pdf"), "PDF"),
             .scroll_dl_button(ns("csv"), "CSV")),
         .scroll_spin(plotOutput(ns("plot"), height = .SCROLL_PLOT_H,
@@ -103,7 +110,7 @@ spatial_ui <- function(id, data) {
 }
 
 spatial_server <- function(id, data, cells_r = shiny::reactive(data$cells),
-                           view_r = shiny::reactive(NULL), theme_r = shiny::reactive(NULL)) {
+                           view_r = shiny::reactive(NULL), theme_r = shiny::reactive(NULL), style_r = shiny::reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     updateSelectizeInput(session, "gene", server = TRUE,
@@ -130,10 +137,11 @@ spatial_server <- function(id, data, cells_r = shiny::reactive(data$cells),
       fr <- frame_r()
       show_img <- is.null(input$image) || isTRUE(input$image)
       img <- if (show_img) .scroll_spatial_image(data, fr$emb) else NULL
-      .scroll_spatial_plot(fr$df, img, fr$values, fr$is_num,
-                           input$size %||% 1.4, fr$lab, zoom(),
-                           input$cpalette %||% "viridis", input$dpalette %||% "Tableau 10") +
+      p <- .scroll_spatial_plot(fr$df, img, fr$values, fr$is_num,
+                                input$size %||% 1.4, fr$lab, zoom(),
+                                input$cpalette %||% "viridis", input$dpalette %||% "Tableau 10") +
         .scroll_ggtheme(theme_r())
+      .scroll_apply_style(p, style_r())
     })
     output$plot <- renderPlot(plot_r())
     .scroll_plot_downloads(output, plot_r, id)
@@ -150,5 +158,6 @@ spatial_server <- function(id, data, cells_r = shiny::reactive(data$cells),
   gate <- function(m) length(.scroll_spatial_embeddings(m)) > 0
   list(list(id = "spatial", label = "Spatial", title = "Tissue map",
             desc = "Cells/spots in tissue space, coloured by a gene or metadata. Drag to zoom.",
-            when = gate, ui = spatial_ui, server = spatial_server))
+            when = gate, ui = spatial_ui, style_ui = spatial_style_ui, style_caps = list(),
+            server = spatial_server))
 }

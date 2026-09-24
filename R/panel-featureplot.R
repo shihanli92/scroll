@@ -19,32 +19,38 @@ featureplot_ui <- function(id, data) {
         if (length(assays) > 1)
           selectInput(ns("assay"), "Assay", assays, selected = m$default_assay)),
       .scroll_group("Co-expression",
-        bslib::input_switch(ns("blend"), "Blend (exactly 2 genes)", FALSE),
-        conditionalPanel(
-          condition = sprintf("input['%s']", ns("blend")),
-          sliderInput(ns("blend_threshold"), "Blend threshold", 0, 1, 0.5, 0.05),
-          colourpicker::colourInput(ns("blend_c1"), "First gene colour", "#FF0000"),
-          colourpicker::colourInput(ns("blend_c2"), "Second gene colour", "#00FF00"))),
+        bslib::input_switch(ns("blend"), "Blend (exactly 2 genes)", FALSE)),
       .scroll_group("Embedding",
         selectInput(ns("reduction"), "Reduction", .scroll_view_embeddings(m, NULL),
                     selected = .scroll_default(data, "default_embedding", .scroll_view_embeddings(m, NULL)[[1]]))),
-      .scroll_group("Appearance",
-        selectInput(ns("palette"), "Palette", .scroll_continuous_palettes, selected = "grey-purple"),
-        sliderInput(ns("size"), "Point size", 0.1, 5, 0.7, 0.1),
-        sliderInput(ns("clip"), "Color quantiles (%)", 0, 100, c(0, 100), 1),
-        bslib::input_switch(ns("order"), "Expressing cells on top", TRUE),
-        bslib::input_switch(ns("legend"), "Legend", TRUE),
-        bslib::input_switch(ns("raster"), "Rasterize (fast)", TRUE)),
       .scroll_group("Layout",
-        selectInput(ns("split"), "Split by", c("None" = "", stats::setNames(cats, cats))),
-        .scroll_aspect_input(ns))
+        selectInput(ns("split"), "Split by", c("None" = "", stats::setNames(cats, cats))))
     ),
     .scroll_plot_area(ns, csv = TRUE)
   )
 }
 
+# The look controls, shown in the panel's Style sheet (same input ids).
+featureplot_style_ui <- function(id, data) {
+  ns <- NS(id)
+  tagList(
+    selectInput(ns("palette"), "Palette", .scroll_continuous_palettes, selected = "grey-purple"),
+    sliderInput(ns("size"), "Point size", 0.1, 5, 0.7, 0.1),
+    sliderInput(ns("clip"), "Color quantiles (%)", 0, 100, c(0, 100), 1),
+    bslib::input_switch(ns("order"), "Expressing cells on top", TRUE),
+    bslib::input_switch(ns("legend"), "Legend", TRUE),
+    bslib::input_switch(ns("raster"), "Rasterize (fast)", TRUE),
+    .scroll_aspect_input(ns),
+    # blend colours (the Blend switch itself stays with the data controls)
+    conditionalPanel(
+      condition = sprintf("input['%s']", ns("blend")),
+      sliderInput(ns("blend_threshold"), "Blend threshold", 0, 1, 0.5, 0.05),
+      colourpicker::colourInput(ns("blend_c1"), "First gene colour", "#FF0000"),
+      colourpicker::colourInput(ns("blend_c2"), "Second gene colour", "#00FF00")))
+}
+
 featureplot_server <- function(id, data, cells_r = reactive(data$cells),
-                               view_r = reactive(NULL), theme_r = reactive(NULL),
+                               view_r = reactive(NULL), theme_r = reactive(NULL), style_r = reactive(NULL),
                                cache_key_r = reactive(NULL), cache = NULL) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
@@ -129,8 +135,9 @@ featureplot_server <- function(id, data, cells_r = reactive(data$cells),
       view_feature_plot(d$cells, list(embedding = d$embedding, feature = d$feature),
                         d$values, st)
     }
-    plot_r   <- .scroll_lazy_plot(input, function() build(.scroll_use_raster(input$raster, data_r()$n)))
-    export_r <- reactive(build(FALSE))
+    plot_r   <- .scroll_lazy_plot(input, function() build(.scroll_use_raster(input$raster, data_r()$n)),
+                                 style_r)
+    export_r <- reactive(.scroll_apply_style(build(FALSE), style_r()))
     # cache key: active cells + reduction/assay/features/blend + raster + cosmetics
     # (+ onscreen, so an off-screen lazy render is never cached under a shown key)
     key_r <- reactive(list(cache_key_r(), isTRUE(input$onscreen %||% TRUE),
@@ -138,7 +145,7 @@ featureplot_server <- function(id, data, cells_r = reactive(data$cells),
                            isTRUE(input$blend), input$blend_threshold,
                            input$blend_c1, input$blend_c2,
                            .scroll_use_raster(input$raster, nrow(cells_r())),
-                           cosmetic_r()))
+                           cosmetic_r(), style_r()))
     .scroll_render_cached(output, plot_r, key_r, cache)
     csv_r <- reactive({
       d <- data_r()

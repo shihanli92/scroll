@@ -251,16 +251,16 @@
          scroll_show_when(scroll_input_choice("yscale", "Y axis", c("Log", "Raw")),
                           control = "view", equals = "Rank-abundance"),
          # palette + manual per-group colour picker (rank-abundance colours by group)
-         scroll_show_when(.scroll_vdj_colour_control("group", "group_levels"),
-                          control = "view", equals = "Rank-abundance"),
+         scroll_style_input(scroll_show_when(.scroll_vdj_colour_control("group", "group_levels"),
+                                             control = "view", equals = "Rank-abundance")),
          # expansion category cut points, as quantiles of the expanded clones (one slider,
          # three knobs). Single = 1 cell; Hyperexpanded = above the Large quantile.
          scroll_show_when(.scroll_expansion_quantile_control(),
                           control = "view", equals = "Expansion composition"),
          # ordered palette + manual pickers for the five expansion categories
-         scroll_show_when(.scroll_expansion_colour_control(),
-                          control = "view", equals = "Expansion composition"),
-         scroll_input_slider("aspect", "Aspect ratio", 0.4, 3, 1, 0.1)),
+         scroll_style_input(scroll_show_when(.scroll_expansion_colour_control(),
+                                             control = "view", equals = "Expansion composition")),
+         scroll_style_input(scroll_input_slider("aspect", "Aspect ratio", 0.4, 3, 1, 0.1))),
     function(cells, input, data) {
       rc <- .scroll_vdj_read(data, "rep_cells.parquet")
       if (is.null(rc) || !nrow(rc)) stop("No repertoire store; rebuild with vdj =.")
@@ -365,13 +365,13 @@
          # Pairing heatmap fill: a continuous palette + min/max quantile cut-offs on the
          # colour scale (a two-knob range slider), so a few dominant pairings don't wash
          # out the rest -- values past the cut-offs saturate to the end colour.
-         scroll_show_when(
+         scroll_style_input(scroll_show_when(
            scroll_input_palette("cpalette", "Colour", type = "continuous",
                                 selected = "viridis"),
-           control = "view", equals = "Pairing"),
-         scroll_show_when(
+           control = "view", equals = "Pairing")),
+         scroll_style_input(scroll_show_when(
            scroll_input_slider("cquant", "Colour quantiles", 0, 1, c(0, 1), 0.01),
-           control = "view", equals = "Pairing"),
+           control = "view", equals = "Pairing")),
          # Group-by applies to every view: re-groups Frequency and the (runtime-recomputed)
          # chi-square residuals, and facets the pairing heatmap. "None" (the default) pools
          # all cells into a single ungrouped plot (chi-square still requires a group).
@@ -381,9 +381,9 @@
          scroll_input_levels("group_levels", "Groups", none = TRUE, watch = "group",
            choices = function(input, data) .scroll_vdj_col_levels(input, data, "group")),
          # per-group point colours (Frequency only; the heatmap views use a fill scale)
-         scroll_show_when(.scroll_vdj_colour_control("group", "group_levels"),
-                          control = "view", equals = "Frequency"),
-         scroll_input_slider("aspect", "Aspect ratio", 0.4, 3, 1, 0.1)),
+         scroll_style_input(scroll_show_when(.scroll_vdj_colour_control("group", "group_levels"),
+                                             control = "view", equals = "Frequency")),
+         scroll_style_input(scroll_input_slider("aspect", "Aspect ratio", 0.4, 3, 1, 0.1))),
     function(cells, input, data) {
       rc <- .scroll_vdj_read(data, "rep_cells.parquet")
       if (is.null(rc) || !nrow(rc)) stop("No repertoire store; rebuild with vdj =.")
@@ -532,8 +532,8 @@
            widget = "select"),
          scroll_input_levels("group_levels", "Groups", none = TRUE, watch = "colorby",
            choices = function(input, data) .scroll_vdj_col_levels(input, data, "colorby")),
-         .scroll_vdj_colour_control("colorby", "group_levels"),
-         scroll_input_slider("aspect", "Aspect ratio", 0.4, 3, 1, 0.1)),
+         scroll_style_input(.scroll_vdj_colour_control("colorby", "group_levels")),
+         scroll_style_input(scroll_input_slider("aspect", "Aspect ratio", 0.4, 3, 1, 0.1))),
     function(cells, input, data) {
       rc <- .scroll_vdj_read(data, "rep_cells.parquet")
       lc <- if (identical(input$chain, "Combined")) "cdr3_combined" else paste0("cdr3_", input$chain, "_len")
@@ -624,8 +624,8 @@
            choices = function(input, data) .scroll_vdj_col_levels(input, data, "by")),
          scroll_input_choice("metric", "Metric",
            c("shannon", "simpson", "clonality", "gini", "top_clone_prop")),
-         .scroll_vdj_colour_control("by", "group_levels"),
-         scroll_input_slider("aspect", "Aspect ratio", 0.4, 3, 1, 0.1)),
+         scroll_style_input(.scroll_vdj_colour_control("by", "group_levels")),
+         scroll_style_input(scroll_input_slider("aspect", "Aspect ratio", 0.4, 3, 1, 0.1))),
     function(cells, input, data) {
       rc <- .scroll_vdj_read(data, "rep_cells.parquet")
       if (is.null(rc) || !nrow(rc)) stop("No repertoire store; rebuild with vdj =.")

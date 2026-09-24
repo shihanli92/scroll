@@ -58,26 +58,32 @@ dotplot_ui <- function(id, data) {
         # same genes x groups data as dots or as a tile heatmap
         selectInput(ns("display"), "Display", c("Dots" = "dots", "Heatmap (tiles)" = "tiles")),
         bslib::input_switch(ns("scale"), "Scale expression (z-score)", TRUE),
-        selectInput(ns("palette"), "Palette", .scroll_continuous_palettes, selected = "magma"),
-        conditionalPanel("input['display'] == 'dots'", ns = ns,
-          sliderInput(ns("dotrange"), "Dot size", 0, 10, c(1, 6), 0.5)),
-        conditionalPanel("input['display'] == 'tiles' && input['scale']", ns = ns,
-          sliderInput(ns("clip"), "Clip z at \u00b1", 0.5, 5, 2.5, 0.5)),
         conditionalPanel("input['display'] == 'tiles'", ns = ns,       # label rows past ~60 genes
           selectizeInput(ns("mark"), "Label genes", choices = NULL, multiple = TRUE,
                          options = list(placeholder = "Pick genes to label with leader lines",
                                         plugins = list("remove_button"))))),
       .scroll_group("Layout",
         selectInput(ns("cluster"), "Cluster (hclust)",
-                    c("Off" = "off", "Rows" = "rows", "Columns" = "columns", "Both" = "both")),
-        .scroll_aspect_input(ns))
+                    c("Off" = "off", "Rows" = "rows", "Columns" = "columns", "Both" = "both")))
     ),
     .scroll_plot_area(ns, csv = TRUE)
   )
 }
 
+# The look controls, shown in the panel's Style sheet (same input ids).
+dotplot_style_ui <- function(id, data) {
+  ns <- NS(id)
+  tagList(
+    selectInput(ns("palette"), "Palette", .scroll_continuous_palettes, selected = "magma"),
+    conditionalPanel("input['display'] == 'dots'", ns = ns,
+      sliderInput(ns("dotrange"), "Dot size", 0, 10, c(1, 6), 0.5)),
+    conditionalPanel("input['display'] == 'tiles' && input['scale']", ns = ns,
+      sliderInput(ns("clip"), "Clip z at \u00b1", 0.5, 5, 2.5, 0.5)),
+    .scroll_aspect_input(ns))
+}
+
 dotplot_server <- function(id, data, cells_r = reactive(data$cells),
-                           view_r = reactive(NULL), theme_r = reactive(NULL)) {
+                           view_r = reactive(NULL), theme_r = reactive(NULL), style_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     .scroll_bind_view_cats(input, session, view_r, m, "group")
@@ -109,13 +115,13 @@ dotplot_server <- function(id, data, cells_r = reactive(data$cells),
       list(theme = theme_r(), palette = input$palette, dot_size = input$dotrange,
            clip = input$clip %||% 2.5, mark_genes = input$mark, aspect = input$aspect)))
     plot_r <- .scroll_lazy_plot(input, function() {
-      d <- data_r()
+      d <- data_r(); st <- c(cosmetic_r(), list(style = style_r()))
       if (identical(d$display, "tiles"))
         view_heatmap(d$cells, list(group_by = d$group_by, features = d$features),
-                     NULL, cosmetic_r(), assembly = d$assembly)
+                     NULL, st, assembly = d$assembly)
       else view_dotplot(d$cells, list(group_by = d$group_by, features = d$features),
-                        NULL, cosmetic_r(), assembly = d$assembly)
-    })
+                        NULL, st, assembly = d$assembly)
+    }, style_r)
     output$plot <- renderPlot(plot_r())
     csv_r <- reactive({ d <- data_r()
       if (identical(d$display, "tiles"))

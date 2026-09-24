@@ -20,38 +20,44 @@ proportions_ui <- function(id, data) {
           selectInput(ns("filllayout"), "Fill columns",
                       c("Combine levels" = "combine", "Facet (grid)" = "grid",
                         "Facet (stacked rows)" = "stacked"), selected = "combine"))),
-      .scroll_group("Appearance",
+      .scroll_group("Bars",
+        # counts vs fractions changes what the plot says, so it stays with the data
         selectInput(ns("position"), "Bars",
                     c("Fill (100%)" = "fill", "Stack (counts)" = "stack",
-                      "Grouped (dodge)" = "dodge"), selected = "fill"),
-        sliderInput(ns("barwidth"), "Bar width", 0.3, 1, 0.8, 0.05),
-        sliderInput(ns("outline"), "Bar outline", 0, 1, 0.2, 0.1),
-        selectInput(ns("palette"), "Palette", .scroll_cat_palettes()),
-        uiOutput(ns("manual")),
-        bslib::input_switch(ns("legend"), "Legend", TRUE)),
-      .scroll_group("Order & labels",
-        selectInput(ns("xorder"), "Order groups",
-                    c("Alphabetical" = "alpha", "Total count" = "total",
-                      "By fill level" = "level", "Reverse" = "reverse")),
-        conditionalPanel("input['xorder'] == 'level'", ns = ns,
-          selectInput(ns("orderlevel"), "Order by level", choices = NULL)),
-        selectInput(ns("fillorder"), "Order fill",
-                    c("Alphabetical" = "alpha", "Abundance" = "abundance", "Reverse" = "reverse")),
-        selectInput(ns("labels"), "Segment labels",
-                    c("None" = "none", "Count" = "count", "Percent" = "percent")),
-        conditionalPanel("input['labels'] != 'none'", ns = ns,
-          sliderInput(ns("labelmin"), "Hide labels below (%)", 0, 50, 0, 1),
-          sliderInput(ns("labelsize"), "Label size", 1.5, 6, 2.8, 0.1)),
-        bslib::input_switch(ns("totals"), "Show group totals", FALSE),
-        bslib::input_switch(ns("horizontal"), "Horizontal bars", FALSE)),
-      .scroll_group("Layout", .scroll_aspect_input(ns))
+                      "Grouped (dodge)" = "dodge"), selected = "fill"))
     ),
     .scroll_plot_area(ns, csv = TRUE)
   )
 }
 
+# The look controls, shown in the panel's Style sheet (same input ids).
+proportions_style_ui <- function(id, data) {
+  ns <- NS(id)
+  tagList(
+    selectInput(ns("palette"), "Palette", .scroll_cat_palettes()),
+    uiOutput(ns("manual")),
+    sliderInput(ns("barwidth"), "Bar width", 0.3, 1, 0.8, 0.05),
+    sliderInput(ns("outline"), "Bar outline", 0, 1, 0.2, 0.1),
+    bslib::input_switch(ns("legend"), "Legend", TRUE),
+    bslib::input_switch(ns("horizontal"), "Horizontal bars", FALSE),
+    selectInput(ns("xorder"), "Order groups",
+                c("Alphabetical" = "alpha", "Total count" = "total",
+                  "By fill level" = "level", "Reverse" = "reverse")),
+    conditionalPanel("input['xorder'] == 'level'", ns = ns,
+      selectInput(ns("orderlevel"), "Order by level", choices = NULL)),
+    selectInput(ns("fillorder"), "Order fill",
+                c("Alphabetical" = "alpha", "Abundance" = "abundance", "Reverse" = "reverse")),
+    selectInput(ns("labels"), "Segment labels",
+                c("None" = "none", "Count" = "count", "Percent" = "percent")),
+    conditionalPanel("input['labels'] != 'none'", ns = ns,
+      sliderInput(ns("labelmin"), "Hide labels below (%)", 0, 50, 0, 1),
+      sliderInput(ns("labelsize"), "Label size", 1.5, 6, 2.8, 0.1)),
+    bslib::input_switch(ns("totals"), "Show group totals", FALSE),
+    .scroll_aspect_input(ns))
+}
+
 proportions_server <- function(id, data, cells_r = reactive(data$cells),
-                               view_r = reactive(NULL), theme_r = reactive(NULL)) {
+                               view_r = reactive(NULL), theme_r = reactive(NULL), style_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     .scroll_bind_view_cats(input, session, view_r, m, "group")                  # single-select x
@@ -89,7 +95,7 @@ proportions_server <- function(id, data, cells_r = reactive(data$cells),
     plot_r <- .scroll_lazy_plot(input, function() {
       d <- data_r()
       view_proportions(d$cells, list(group_by = d$group_by, fill_by = d$fill_by), cosmetic_r())
-    })
+    }, style_r)
     output$plot <- renderPlot(plot_r())
     csv_r <- reactive({ d <- data_r(); .scroll_proportions_source(d$cells, d$group_by, d$fill_by) })
     .scroll_plot_downloads(output, plot_r, id, csv_r = csv_r)

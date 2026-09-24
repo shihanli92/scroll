@@ -249,7 +249,8 @@
 # actually changed. Purely element-level theme() overrides (no base-theme swap).
 .scroll_ggtheme <- function(gs = NULL) {
   if (is.null(gs)) return(NULL)
-  g   <- function(k) { v <- gs[[k]] %||% ""; if (nzchar(v)) v else NULL }   # "" -> NULL
+  g   <- function(k) { v <- gs[[k]] %||% ""                                  # "" -> NULL
+                       if (nzchar(v) && !.scroll_is_no_colour(v)) v else NULL }
   num <- function(k) { v <- g(k); if (is.null(v)) NULL else suppressWarnings(as.numeric(v)) }
   etext <- function(...) { a <- Filter(Negate(is.null), list(...))
                            if (length(a)) do.call(ggplot2::element_text, a) else NULL }
@@ -332,6 +333,149 @@
 
   if (!length(parts)) return(NULL)
   do.call(ggplot2::theme, parts)
+}
+
+# ---- per-plot style (R/style.R) --------------------------------------------------
+
+# ggplot2 labs() arguments from a style's `labels` family: only the set ones. The
+# legend title goes to whichever of colour / fill the plot maps (`aes`; both when
+# unknown, e.g. for every sub-plot of a patchwork grid).
+.scroll_label_args <- function(labels, aes = c("colour", "fill")) {
+  lb <- labels %||% list()
+  out <- list()
+  for (k in c("title", "subtitle", "caption", "x", "y"))
+    if (!is.null(.scroll_nz(lb[[k]]))) out[[k]] <- lb[[k]]
+  if (!is.null(.scroll_nz(lb$legend))) for (a in aes) out[[a]] <- lb$legend
+  out
+}
+
+# The legend aesthetics (colour / fill) a ggplot maps, globally or in any layer.
+.scroll_legend_aes <- function(p) {
+  m <- c(names(p$mapping), unlist(lapply(p$layers, function(l) names(l$mapping))))
+  m[m == "color"] <- "colour"
+  intersect(c("colour", "fill"), m)
+}
+
+# Apply a panel's style (labels; theme is applied by the view finishers) to a
+# finished plot. A patchwork grid gets its title/subtitle/caption as one annotation
+# over the grid and the axis/legend labels on every sub-plot; an aplot composite
+# (dendrogram DotPlot/Heatmap) is returned unchanged -- those views apply the style
+# to their main plot before attaching the trees. Attributes (e.g. a builder panel's
+# `scroll_source` CSV table) are preserved.
+.scroll_apply_style <- function(p, style = NULL) {
+  if (is.null(style) || !length(style)) return(p)
+  la <- .scroll_label_args(style$labels,
+                           if (inherits(p, "ggplot") && !inherits(p, "patchwork"))
+                             .scroll_legend_aes(p) else "colour")
+  sc <- style$scales
+  if (!length(la) && !length(sc)) return(p)
+  if (inherits(p, "patchwork")) {
+    ann <- la[intersect(names(la), c("title", "subtitle", "caption"))]
+    rest <- la[setdiff(names(la), names(ann))]
+    if (length(rest)) p <- p & do.call(ggplot2::labs, rest)
+    if (length(sc)) p <- p & .scroll_coord_limits(NULL, sc)   # shared axis ranges
+    if (length(ann)) p <- p + do.call(patchwork::plot_annotation, ann)
+    return(p)
+  }
+  if (!inherits(p, "ggplot")) return(p)
+  if (length(la)) p <- p + do.call(ggplot2::labs, la)
+  if (length(sc)) p <- .scroll_apply_scales(p, sc)
+  p
+}
+
+# ---- scales & axes (the style's `scales` family) ------------------------------------
+
+# A number from a sheet text box ("" / junk -> NA, i.e. "keep automatic").
+.scroll_num_or_na <- function(x) {
+  v <- suppressWarnings(as.numeric(x %||% NA))
+  if (length(v) != 1L || !is.finite(v)) NA_real_ else v
+}
+
+# A scales transform by name, across scales versions (transform_* in >= 1.3.0).
+.scroll_transform <- function(name) {
+  fn <- switch(name, log10 = "log10", sqrt = "sqrt", log1p = "log1p",
+               pseudo_log = "pseudo_log", reverse = "reverse", NULL)
+  if (is.null(fn)) return(NULL)
+  f <- get0(paste0("transform_", fn), envir = asNamespace("scales"), inherits = FALSE) %||%
+       get0(paste0(fn, "_trans"), envir = asNamespace("scales"), inherits = FALSE)
+  if (is.null(f)) NULL else f()
+}
+
+# The coord to add for the style's visible ranges, keeping the plot's own coord class
+# (flipped bars stay flipped, an equal-aspect embedding stays equal) and merging with
+# limits the view already set. NULL when no limit is set. `p` NULL = plain cartesian
+# (a patchwork, applied to every sub-plot).
+.scroll_coord_limits <- function(p, sc, flip = FALSE) {
+  lim <- function(a) {
+    v <- c(.scroll_num_or_na(sc[[paste0(a, "min")]]), .scroll_num_or_na(sc[[paste0(a, "max")]]))
+    if (all(is.na(v))) NULL else v
+  }
+  xl <- lim("x"); yl <- lim("y")
+  co <- if (!is.null(p)) p$coordinates
+  if (is.null(xl) && is.null(yl) && !flip) return(NULL)
+  keep <- function(new, old) new %||% old
+  old_x <- co$limits$x; old_y <- co$limits$y
+  if (inherits(co, "CoordFlip") || flip)
+    return(ggplot2::coord_flip(xlim = keep(xl, old_x), ylim = keep(yl, old_y),
+                               expand = co$expand %||% TRUE))
+  # an equal-aspect coord (CoordFixed, or in ggplot2 >= 4 a CoordCartesian with a ratio)
+  if (inherits(co, "CoordFixed") || !is.null(co$ratio))
+    return(ggplot2::coord_fixed(ratio = co$ratio, xlim = keep(xl, old_x), ylim = keep(yl, old_y),
+                                expand = co$expand %||% TRUE))
+  if (is.null(co) || inherits(co, "CoordCartesian"))
+    return(ggplot2::coord_cartesian(xlim = keep(xl, old_x), ylim = keep(yl, old_y),
+                                    expand = co$expand %||% TRUE))
+  NULL                                                  # polar / other coords: leave alone
+}
+
+# Swap an axis's transform / break count on the plot's EXISTING continuous position
+# scale (cloned, so its labels and expansion -- e.g. percent labels, a flush baseline
+# -- are kept). With no explicit scale yet, one is added only if the mapped data is
+# numeric (a continuous scale on a discrete axis would fail at draw time).
+.scroll_mod_scale <- function(p, aes, trans = NULL, nbreaks = NULL) {
+  if (is.null(trans) && is.null(nbreaks)) return(p)
+  scs <- p$scales$scales
+  hit <- which(vapply(scs, function(s) aes %in% s$aesthetics, logical(1)))
+  if (length(hit)) {
+    sc <- scs[[hit[1]]]
+    if (!inherits(sc, "ScaleContinuousPosition")) return(p)       # discrete axis
+    sc <- sc$clone()
+  } else {
+    m <- p$mapping[[aes]]
+    # a mapping is a quosure (formula-like): its expression + environment
+    v <- if (!is.null(m)) tryCatch({ f <- unclass(m)
+                                     eval(f[[length(f)]], p$data, attr(m, ".Environment") %||% baseenv()) },
+                                   error = function(e) NULL)
+    if (!is.numeric(v)) return(p)
+    sc <- if (aes == "x") ggplot2::scale_x_continuous() else ggplot2::scale_y_continuous()
+  }
+  if (!is.null(trans)) sc$trans <- trans
+  if (!is.null(nbreaks)) sc$n.breaks <- nbreaks
+  p$scales <- p$scales$clone()
+  if (length(hit)) p$scales$scales[[hit[1]]] <- sc else p$scales$add(sc)
+  p
+}
+
+.scroll_apply_scales <- function(p, sc) {
+  for (a in c("x", "y")) {
+    tr <- .scroll_nz(sc[[paste0(a, "trans")]])
+    nb <- suppressWarnings(as.integer(sc[[paste0(a, "breaks")]] %||% NA))
+    p <- .scroll_mod_scale(p, a, if (!is.null(tr)) .scroll_transform(tr),
+                           if (isTRUE(nb > 0)) nb)
+  }
+  fs <- .scroll_nz(sc$facet)
+  if (!is.null(fs) && inherits(p$facet, c("FacetWrap", "FacetGrid"))) {
+    # a child facet with new params. The parent must be bound to a local first: ggproto
+    # captures it lazily, and `p$facet` would then resolve to the child itself (a cycle).
+    free <- list(x = fs %in% c("free", "free_x"), y = fs %in% c("free", "free_y"))
+    parent <- p$facet
+    child <- ggplot2::ggproto(NULL, parent,
+                              params = utils::modifyList(parent$params, list(free = free)))
+    p$facet <- child
+  }
+  co <- .scroll_coord_limits(p, sc, flip = identical(sc$flip, "flip"))
+  if (!is.null(co)) p <- suppressMessages(p + co)
+  p
 }
 
 # Per-group centroid labels for a categorical scatter.
@@ -832,7 +976,7 @@ view_dotplot <- function(cells, params, expr_long, state = list(), assembly = NU
   # aspect.ratio letterboxes the panel, which would detach the aplot trees, so
   # apply it only to the plain (untreed) dot plot; with dendrograms the composite
   # fills the fixed canvas.
-  p <- p + .scroll_ggtheme(state$theme)                    # global theme override always applies
+  p <- .scroll_apply_style(p + .scroll_ggtheme(state$theme), state$style)  # before the trees
   if (is.null(hr) && is.null(hc)) p <- .scroll_apply_aspect(p, state$aspect %||% 1)  # aspect only when untreed
   .scroll_dotplot_trees(p, hr, hc)
 }
@@ -1056,6 +1200,7 @@ view_heatmap <- function(cells, params, expr_long, state = list(), assembly = NU
     if (grouped)
       p <- p + ggplot2::facet_grid(cols = ggplot2::vars(.data$group), scales = "free_x",
                                    space = "free_x", switch = "x")
+    p <- .scroll_apply_style(p, state$style)               # before any composite is built
     if (use_marks)
       return(aplot::insert_right(p, .scroll_heatmap_marks_panel(feats_lev, marks, n), width = 0.3))
     return(.scroll_hclust_trees(p, assembly$hr, NULL))     # gene dendrogram only
@@ -1068,7 +1213,7 @@ view_heatmap <- function(cells, params, expr_long, state = list(), assembly = NU
     ggplot2::labs(x = glab, y = NULL) +
     .scroll_base_theme(legend = showleg, axis_text = TRUE, x_angle = 45) +
     ggplot2::theme(panel.grid = ggplot2::element_blank()) + hide_y
-  p <- p + .scroll_ggtheme(state$theme)                    # global theme override always applies
+  p <- .scroll_apply_style(p + .scroll_ggtheme(state$theme), state$style)  # before any composite
   if (use_marks)
     return(aplot::insert_right(p, .scroll_heatmap_marks_panel(feats_lev, marks, n), width = 0.3))
   if (is.null(assembly$hr) && is.null(assembly$hc))

@@ -34,28 +34,32 @@ violin_ui <- function(id, data) {
         # split -> side-by-side coloured violins within each group (Seurat split.by)
         selectInput(ns("split"), "Split by", c("None" = "", stats::setNames(cats, cats)))),
       .scroll_group("Violins",
-        sliderInput(ns("vwidth"), "Violin width", 0.3, 1.2, 0.9, 0.05),
         # stacked = one compact row per gene (Seurat stacked violin); points off then
-        bslib::input_switch(ns("stack"), "Stacked (one row per gene)", FALSE)),
-      .scroll_group("Appearance",
-        selectInput(ns("palette"), "Palette", .scroll_cat_palettes()),
-        uiOutput(ns("manual")),
-        bslib::input_switch(ns("legend"), "Legend", FALSE)),
-      .scroll_group("Points",
-        bslib::input_switch(ns("jitter"), "Show points", FALSE),
-        # point controls only apply when points are shown and not stacked
-        conditionalPanel("input['jitter'] == true && input['stack'] != true", ns = ns,
-          sliderInput(ns("psize"), "Point size", 0.1, 2, 0.3, 0.1),
-          sliderInput(ns("palpha"), "Point opacity", 0.05, 1, 0.3, 0.05),
-          sliderInput(ns("pfrac"), "Subsample points (%)", 1, 100, 100, 1))),
-      .scroll_group("Layout", .scroll_aspect_input(ns))
+        bslib::input_switch(ns("stack"), "Stacked (one row per gene)", FALSE))
     ),
     .scroll_plot_area(ns, csv = TRUE)
   )
 }
 
+# The look controls, shown in the panel's Style sheet (same input ids).
+violin_style_ui <- function(id, data) {
+  ns <- NS(id)
+  tagList(
+    selectInput(ns("palette"), "Palette", .scroll_cat_palettes()),
+    uiOutput(ns("manual")),
+    sliderInput(ns("vwidth"), "Violin width", 0.3, 1.2, 0.9, 0.05),
+    bslib::input_switch(ns("legend"), "Legend", FALSE),
+    bslib::input_switch(ns("jitter"), "Show points", FALSE),
+    # point controls only apply when points are shown and not stacked
+    conditionalPanel("input['jitter'] == true && input['stack'] != true", ns = ns,
+      sliderInput(ns("psize"), "Point size", 0.1, 2, 0.3, 0.1),
+      sliderInput(ns("palpha"), "Point opacity", 0.05, 1, 0.3, 0.05),
+      sliderInput(ns("pfrac"), "Subsample points (%)", 1, 100, 100, 1)),
+    .scroll_aspect_input(ns))
+}
+
 violin_server <- function(id, data, cells_r = reactive(data$cells),
-                          view_r = reactive(NULL), theme_r = reactive(NULL)) {
+                          view_r = reactive(NULL), theme_r = reactive(NULL), style_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     # Group by is multi-select (interaction); Split by is single-select. Both view-aware.
@@ -117,7 +121,7 @@ violin_server <- function(id, data, cells_r = reactive(data$cells),
       view_violin(d$cells, list(feature = d$feature, group_by = d$group_by,
                                 value_col = d$value_col, split_by = d$split_by),
                   d$values, cosmetic_r())
-    })
+    }, style_r)
     output$plot <- renderPlot(plot_r())
     csv_r <- reactive({
       d <- data_r()

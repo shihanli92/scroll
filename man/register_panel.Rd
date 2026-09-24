@@ -12,7 +12,9 @@ register_panel(
   title = label,
   desc = NULL,
   after = NULL,
-  before = NULL
+  before = NULL,
+  style_ui = NULL,
+  style_caps = NULL
 )
 }
 \arguments{
@@ -31,6 +33,18 @@ appends at the end. Ignored when replacing an existing id.}
 \item{before}{Id of the panel to insert this one before (e.g. \code{"dimplot"} to
 put it at the top). Takes precedence over \code{after}. Ignored when replacing an
 existing id.}
+
+\item{style_ui}{Optional \verb{function(id, data)} returning look-only controls to show
+in the plot's \strong{Style sheet} (the paintbrush button in a
+\code{.scroll_plot_area()} toolbar); namespace them with \code{NS(id)} like \code{ui}, and the
+server reads them as usual. The sheet also carries per-plot titles/labels and
+theme; a server receives them by declaring a \code{style_r} argument (the whole
+style) and/or \code{theme_r} (just the theme family).}
+
+\item{style_caps}{Which "Scales & axes" options the Style sheet offers for this
+plot: \code{list(limits = c("x","y"), trans = list(x = , y = ), breaks = , flip = , facet = )}. \code{NULL} (default) offers visible-range limits on both axes; \code{list()}
+offers none. Transforms are any of \code{"log10"}, \code{"sqrt"}, \code{"log1p"},
+\code{"pseudo_log"}, \code{"reverse"}.}
 }
 \value{
 Invisibly, \code{id}.

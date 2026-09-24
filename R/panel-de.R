@@ -31,9 +31,7 @@ de_ui <- function(id, data) {
         bslib::input_switch(ns("export_all"), "Export all genes (CSV)", FALSE)),
       .scroll_group("Volcano",
         sliderInput(ns("lfc"), "avg_log2FC cutoff", 0, 3, 1, 0.1),
-        numericInput(ns("padj"), "Adj. p cutoff", 0.05, min = 0, max = 1, step = 0.01),
-        sliderInput(ns("labeln"), "Label top", 0, 40, 15, 1),
-        .scroll_aspect_input(ns)),
+        numericInput(ns("padj"), "Adj. p cutoff", 0.05, min = 0, max = 1, step = 0.01)),
       # input_task_button (not actionButton) so the button itself shows a spinner +
       # "Computing..." and disables the instant it is clicked — immediate feedback
       # during the (blocking) DE compute, independent of the output-area spinner
@@ -50,7 +48,7 @@ de_ui <- function(id, data) {
                              else tableOutput(ns("table"))))),
           bslib::nav_panel("Volcano",
             div(class = "scroll-plot-bar",
-                .scroll_size_slider(ns),
+                .scroll_style_button(ns), .scroll_size_slider(ns),
                 .scroll_dl_button(ns("png"), "PNG"),
                 .scroll_dl_button(ns("pdf"), "PDF")),
             .scroll_spin(plotOutput(ns("plot"), height = .SCROLL_PLOT_H)))))
@@ -59,8 +57,15 @@ de_ui <- function(id, data) {
 
 .scroll_has_dt <- function() requireNamespace("DT", quietly = TRUE)
 
+# The volcano's look controls, shown in the panel's Style sheet (same input ids).
+de_style_ui <- function(id, data) {
+  ns <- NS(id)
+  tagList(sliderInput(ns("labeln"), "Label top genes", 0, 40, 15, 1),
+          .scroll_aspect_input(ns))
+}
+
 de_server <- function(id, data, cells_r = reactive(data$cells),
-                      view_r = reactive(NULL), theme_r = reactive(NULL)) {
+                      view_r = reactive(NULL), theme_r = reactive(NULL), style_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     assay <- reactive(input$assay %||% m$default_assay)
@@ -133,10 +138,10 @@ de_server <- function(id, data, cells_r = reactive(data$cells),
       output$table <- renderTable(table_rows())
 
     volcano_r <- reactive({
-      view_volcano(de_df(),
+      .scroll_apply_style(view_volcano(de_df(),
                    params = list(lfc = input$lfc, padj = input$padj, label_n = input$labeln,
                                  fc_col = "avg_log2FC", fc_label = "avg_log2FC"),
-                   state = list(aspect = input$aspect, theme = theme_r()))
+                   state = list(aspect = input$aspect, theme = theme_r())), style_r())
     })
     output$plot <- renderPlot(volcano_r())
     .scroll_plot_downloads(output, volcano_r, id)

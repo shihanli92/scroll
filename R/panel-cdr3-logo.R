@@ -77,8 +77,8 @@
         choices = function(input, data) .scroll_vdj_col_levels(input, data, "group")),
       scroll_input_choice("count", "Count", c("Clones (dedup)", "Cells")),
       scroll_input_choice("units", "Logo units", c("Bits", "Probability")),
-      .scroll_logo_colour_control(),
-      scroll_input_slider("aspect", "Aspect ratio", 0.4, 3, 1, 0.1)),
+      scroll_style_input(.scroll_logo_colour_control()),
+      scroll_style_input(scroll_input_slider("aspect", "Aspect ratio", 0.4, 3, 1, 0.1))),
     plot = function(cells, input, data) {
       if (!requireNamespace("ggseqlogo", quietly = TRUE))
         stop("Install the ggseqlogo package for CDR3 logos.")
@@ -123,5 +123,5 @@
       attr(p, "scroll_source") <- data.frame(group = as.character(d[[gcol]]),
                                              cdr3 = d$seq, stringsAsFactors = FALSE)
       p
-    }, csv = TRUE))
+    }, csv = TRUE, style_caps = list()))   # a sequence logo has no free axis ranges
 }

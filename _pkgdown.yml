@@ -57,6 +57,7 @@ reference:
   - register_panel
   - scroll_input
   - scroll_show_when
+  - scroll_style_input
   - scroll_helpers
   - scroll_render_plot
   - scroll_columns

@@ -32,28 +32,36 @@ signature_ui <- function(id, data) {
         sprintf("input['%s'] == 'umap'", ns("view")),
         .scroll_group("Embedding",
           selectInput(ns("reduction"), "Reduction", reds,
-                      selected = .scroll_default(data, "default_embedding", reds[[1]]))),
-        .scroll_group("Appearance",
-          selectInput(ns("palette"), "Palette", .scroll_continuous_palettes, selected = "grey-purple"),
-          sliderInput(ns("size"), "Point size", 0.1, 5, 0.7, 0.1),
-          sliderInput(ns("clip"), "Color quantiles (%)", 0, 100, c(0, 100), 1),
-          bslib::input_switch(ns("order"), "High-scoring cells on top", TRUE),
-          bslib::input_switch(ns("legend"), "Legend", TRUE),
-          bslib::input_switch(ns("raster"), "Rasterize (fast)", TRUE))),
+                      selected = .scroll_default(data, "default_embedding", reds[[1]])))),
       conditionalPanel(
         sprintf("input['%s'] == 'violin'", ns("view")),
         .scroll_group("Grouping",
           if (length(cats))
             selectInput(ns("group"), "Group by", stats::setNames(cats, cats), selected = cats[[1]])
-          else helpText("No categorical column available for a violin."))),
-      .scroll_group("Layout", .scroll_aspect_input(ns))
+          else helpText("No categorical column available for a violin.")))
     ),
     .scroll_plot_area(ns, csv = TRUE)
   )
 }
 
+# The look controls, shown in the panel's Style sheet (same input ids). The
+# scatter options apply to the Feature UMAP view only.
+signature_style_ui <- function(id, data) {
+  ns <- NS(id)
+  tagList(
+    conditionalPanel(
+      sprintf("input['%s'] == 'umap'", ns("view")),
+      selectInput(ns("palette"), "Palette", .scroll_continuous_palettes, selected = "grey-purple"),
+      sliderInput(ns("size"), "Point size", 0.1, 5, 0.7, 0.1),
+      sliderInput(ns("clip"), "Color quantiles (%)", 0, 100, c(0, 100), 1),
+      bslib::input_switch(ns("order"), "High-scoring cells on top", TRUE),
+      bslib::input_switch(ns("legend"), "Legend", TRUE),
+      bslib::input_switch(ns("raster"), "Rasterize (fast)", TRUE)),
+    .scroll_aspect_input(ns))
+}
+
 signature_server <- function(id, data, cells_r = reactive(data$cells),
-                             view_r = reactive(NULL), theme_r = reactive(NULL)) {
+                             view_r = reactive(NULL), theme_r = reactive(NULL), style_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     assay <- reactive(input$assay %||% m$default_assay)
@@ -107,8 +115,8 @@ signature_server <- function(id, data, cells_r = reactive(data$cells),
     plot_r <- .scroll_lazy_plot(input, function() {
       n <- if (isTRUE(input$compute > 0)) nrow(score_r()$cells) else 0L
       build(.scroll_use_raster(input$raster, n))
-    })
-    export_r <- reactive(build(FALSE))
+    }, style_r)
+    export_r <- reactive(.scroll_apply_style(build(FALSE), style_r()))
     output$plot <- renderPlot(plot_r())
     csv_r <- reactive({
       req(input$compute > 0)

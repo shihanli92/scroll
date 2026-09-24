@@ -126,7 +126,16 @@ scroll_bind_levels <- function(input, session, id, from, data, selected = 1,
 #' @return Invisibly, the plot reactive.
 #' @export
 scroll_render_plot <- function(output, id, fun, event = NULL, placeholder = NULL,
-                               lazy = FALSE, input = NULL) {
+                               lazy = FALSE, input = NULL)
+  .scroll_render_plot(output, id, fun, event, placeholder, lazy, input)
+
+# scroll_render_plot() plus an optional `post = function(p)` applied to the computed
+# plot OUTSIDE the (possibly Compute-gated) computation: the builder uses it for the
+# per-plot theme / aspect / labels, so restyling a Compute panel is live instead of
+# waiting for the next click (an eventReactive isolates everything it reads). The
+# returned reactive is the styled plot (`+` keeps attributes such as the CSV source).
+.scroll_render_plot <- function(output, id, fun, event = NULL, placeholder = NULL,
+                                lazy = FALSE, input = NULL, post = NULL) {
   safe <- function() {
     # On error, `fun()` yields the message string (validation gates included);
     # a legitimate plot fn never returns a character, so is.character = error.
@@ -142,16 +151,17 @@ scroll_render_plot <- function(output, id, fun, event = NULL, placeholder = NULL
   plot_r <- if (isTRUE(lazy) && is.null(event) && !is.null(input))
               .scroll_lazy_plot(input, safe)
             else if (is.null(event)) reactive(safe()) else eventReactive(event(), safe())
+  shown_r <- if (is.null(post)) plot_r else reactive(post(plot_r()))
   output$plot <- renderPlot({
     if (!is.null(event) && !is.null(placeholder)) {
       ev <- tryCatch(event(), error = function(e) NULL)
       computed <- !is.null(ev) && (!is.numeric(ev) || ev > 0)
       validate(need(computed, placeholder))
     }
-    plot_r()
+    shown_r()
   })
-  .scroll_plot_downloads(output, plot_r, id)
-  invisible(plot_r)
+  .scroll_plot_downloads(output, shown_r, id)
+  invisible(shown_r)
 }
 
 # ---- Layer 1: declarative control constructors ------------------------------
@@ -402,6 +412,33 @@ scroll_show_when <- function(control_spec, control, equals) {
   control_spec
 }
 
+#' Put a control in the plot's Style sheet
+#'
+#' Decorates a `scroll_input_*()` spec so the builder renders it in the panel's
+#' **Style sheet** (opened from the paintbrush button in the plot toolbar) instead
+#' of the control column. Use it for "how the plot looks" options -- palettes, point
+#' sizes, aspect ratio -- and keep "what to plot" in the column. The control keeps
+#' its id, so the `plot` function reads it from `input` exactly as before, and it
+#' can be combined with [scroll_show_when()].
+#'
+#' @param control_spec A control spec from a `scroll_input_*()` constructor.
+#' @return The decorated control spec.
+#' @examples
+#' \dontrun{
+#' register_plot_panel("my_panel",
+#'   controls = list(
+#'     scroll_input_column("group", "Group by", type = "categorical"),
+#'     scroll_style_input(scroll_input_slider("size", "Point size", 0.1, 3, 1, 0.1))),
+#'   plot = function(cells, input, data) ...)
+#' }
+#' @export
+scroll_style_input <- function(control_spec) {
+  if (!is.list(control_spec) || is.null(control_spec$ui))
+    stop("`control_spec` must be a scroll_input_*() spec.", call. = FALSE)
+  control_spec$sheet <- TRUE
+  control_spec
+}
+
 # ---- Layer 1: the builder ----------------------------------------------------
 
 # Call a control's bind, passing the optional `view_r` / `control_ids` / `output`
@@ -439,13 +476,17 @@ scroll_show_when <- function(control_spec, control, equals) {
 #' @param plot `function(cells, input, data)` returning a ggplot. `cells` is the
 #'   active (subset/view-filtered) cell table; `input` exposes each control by its
 #'   id; `data` is the handle (`data$query1`, `data$con`, `data$manifest`, …).
-#' @param controls A list of `scroll_input_*()` specs (see [scroll_input]).
+#' @param controls A list of `scroll_input_*()` specs (see [scroll_input]). Wrap a
+#'   look-only control in [scroll_style_input()] to place it in the plot's Style
+#'   sheet instead of the control column.
 #' @param label,title,desc,after,before As in [register_panel()].
 #' @param compute If `TRUE` (default), the plot recomputes on a Compute button;
 #'   `FALSE` makes it live (recompute on any control change).
 #' @param csv If `TRUE`, add a CSV button that exports the plot's source data. The
 #'   `plot` function opts in by attaching the table to its result, e.g.
 #'   `attr(p, "scroll_source") <- df; p`. Default `FALSE`.
+#' @param style_caps Scales & axes options for the plot's Style sheet, as in
+#'   [register_panel()].
 #' @return Invisibly, `id`.
 #' @examples
 #' \dontrun{
@@ -459,7 +500,7 @@ scroll_show_when <- function(control_spec, control, equals) {
 #' @export
 register_plot_panel <- function(id, plot, controls = list(), label = id, title = label,
                                 desc = NULL, after = NULL, before = NULL, compute = TRUE,
-                                csv = FALSE) {
+                                csv = FALSE, style_caps = NULL) {
   if (!is.function(plot)) stop("`plot` must be a function(cells, input, data).", call. = FALSE)
   if (!is.list(controls) || (length(controls) &&
         !all(vapply(controls, function(c) is.list(c) && !is.null(c$ui), logical(1)))))
@@ -467,7 +508,8 @@ register_plot_panel <- function(id, plot, controls = list(), label = id, title =
 
   us <- .scroll_plot_panel_uiserver(plot, controls, compute, csv = csv)
   register_panel(id, us$ui, us$server, label = label, title = title, desc = desc,
-                 after = after, before = before)
+                 after = after, before = before, style_ui = us$style_ui,
+                 style_caps = style_caps)
 }
 
 # Build the (ui, server) pair for a declarative plot panel from a plot function +
@@ -480,21 +522,27 @@ register_plot_panel <- function(id, plot, controls = list(), label = id, title =
 # rides on the object the plot reactive already returns (no re-computation). A plot
 # that attaches nothing yields an empty CSV.
 .scroll_plot_panel_uiserver <- function(plot, controls, compute = TRUE, csv = FALSE) {
+  # a control's UI, wrapped in its scroll_show_when() condition if any
+  ctl_ui <- function(ctl, ns, data) {
+    u <- ctl$ui(ns, data)
+    vw <- ctl$visible_when
+    if (is.null(vw)) return(u)
+    cond <- if (length(vw$equals) == 1)
+      sprintf("input['%s'] == '%s'", vw$control, vw$equals)
+    else
+      sprintf("[%s].indexOf(input['%s']) > -1",
+              paste(sprintf("'%s'", vw$equals), collapse = ","), vw$control)
+    shiny::conditionalPanel(cond, u, ns = ns)
+  }
+  # scroll_style_input() controls go to the Style sheet, the rest to the column
+  in_sheet <- vapply(controls, function(c) isTRUE(c$sheet), logical(1))
+  col_ctls <- controls[!in_sheet]; sheet_ctls <- controls[in_sheet]
+
   ui <- function(id, data) {
     ns <- NS(id)
     miss <- .scroll_panel_missing(controls, data)
     if (!is.null(miss)) return(.scroll_empty_panel(miss))
-    ctl_ui <- lapply(controls, function(ctl) {
-      u <- ctl$ui(ns, data)
-      vw <- ctl$visible_when
-      if (is.null(vw)) return(u)
-      cond <- if (length(vw$equals) == 1)
-        sprintf("input['%s'] == '%s'", vw$control, vw$equals)
-      else
-        sprintf("[%s].indexOf(input['%s']) > -1",
-                paste(sprintf("'%s'", vw$equals), collapse = ","), vw$control)
-      shiny::conditionalPanel(cond, u, ns = ns)
-    })
+    ctl_ui <- lapply(col_ctls, ctl_ui, ns = ns, data = data)
     go <- if (isTRUE(compute))
       actionButton(ns("scroll_compute"), "Compute", class = "btn-primary", width = "100%")
     bslib::layout_columns(
@@ -505,7 +553,7 @@ register_plot_panel <- function(id, plot, controls = list(), label = id, title =
   }
 
   server <- function(id, data, cells_r = reactive(data$cells), view_r = reactive(NULL),
-                     theme_r = reactive(NULL)) {
+                     theme_r = reactive(NULL), style_r = reactive(NULL)) {
     moduleServer(id, function(input, output, session) {
       control_ids <- vapply(controls, function(c) c$id, character(1))
       for (ctl in controls)
@@ -514,24 +562,27 @@ register_plot_panel <- function(id, plot, controls = list(), label = id, title =
       body <- function() {
         for (c in req_ctls)
           validate(need(length(input[[c$id]]) > 0, paste0("Select ", c$label, ".")))
-        p <- plot(cells_r(), input, data)
-        # apply the global theme controls to bare ggplots (not aplot/patchwork composites),
-        # then an optional per-panel aspect ratio (any panel with an `aspect` slider; 1 =
-        # unconstrained). `+` preserves the plot fn's scroll_source attr (used by CSV).
+        plot(cells_r(), input, data)
+      }
+      # the panel's theme (bare ggplots only, not aplot/patchwork composites), then an
+      # optional aspect ratio (any panel with an `aspect` slider; 1 = unconstrained),
+      # then its labels -- applied after the (possibly Compute-gated) plot so they
+      # stay live. `+` preserves the plot fn's scroll_source attr (used by CSV).
+      post <- function(p) {
         if (inherits(p, "ggplot")) {
           p <- p + .scroll_ggtheme(theme_r())
           a <- input$aspect
           if (is.numeric(a) && length(a) == 1 && abs(a - 1) > 1e-6)
             p <- p + ggplot2::theme(aspect.ratio = a)
         }
-        p
+        .scroll_apply_style(p, style_r())
       }
       event <- if (isTRUE(compute)) reactive(input$scroll_compute) else NULL
       placeholder <- if (isTRUE(compute)) "Set the controls, then click Compute." else NULL
       # live (non-Compute) declarative panels are lazy-gated: off-screen they don't
       # redraw on a View / filter change, so they don't stall the switch flush.
-      plot_r <- scroll_render_plot(output, id, body, event = event, placeholder = placeholder,
-                                   lazy = !isTRUE(compute), input = input)
+      plot_r <- .scroll_render_plot(output, id, body, event = event, placeholder = placeholder,
+                                    lazy = !isTRUE(compute), input = input, post = post)
       # Export the plot's source table (attached by the plot fn) when csv is on.
       if (isTRUE(csv))
         output$csv <- .scroll_csv_handler(
@@ -540,14 +591,22 @@ register_plot_panel <- function(id, plot, controls = list(), label = id, title =
     })
   }
 
-  list(ui = ui, server = server)
+  style_ui <- if (length(sheet_ctls)) function(id, data) {
+    if (!is.null(.scroll_panel_missing(controls, data))) return(NULL)
+    ns <- NS(id)
+    tagList(lapply(sheet_ctls, ctl_ui, ns = ns, data = data))
+  }
+
+  list(ui = ui, server = server, style_ui = style_ui)
 }
 
 # A built-in modality panel spec built from the declarative builder and gated on a
 # manifest predicate (see .scroll_assemble_panels). Used by the VDJ and ATAC panels;
 # the spatial panel is hand-written instead because it owns brush-zoom state.
-.scroll_gated_panel <- function(id, label, title, desc, when, controls, plot, csv = FALSE)
-  c(list(id = id, label = label, title = title, desc = desc, when = when),
+.scroll_gated_panel <- function(id, label, title, desc, when, controls, plot, csv = FALSE,
+                                style_caps = NULL)
+  c(list(id = id, label = label, title = title, desc = desc, when = when,
+         style_caps = style_caps),
     .scroll_plot_panel_uiserver(plot, controls, compute = FALSE, csv = csv))
 
 # ---- Reusable render helpers (parity with the built-in panels) ---------------

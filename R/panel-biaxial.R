@@ -37,23 +37,28 @@ biaxial_ui <- function(id, data) {
       .scroll_group("Colour",
         selectInput(ns("colorby"), "Colour by", stats::setNames(cats, cats),
                     selected = color_default)),
-      .scroll_group("Appearance",
-        selectInput(ns("palette"), "Palette", .scroll_cat_palettes()),
-        uiOutput(ns("manual")),
-        sliderInput(ns("size"), "Point size", 0.1, 3, 0.5, 0.1),
-        sliderInput(ns("alpha"), "Opacity", 0.1, 1, 0.6, 0.05),
-        bslib::input_switch(ns("legend"), "Legend", TRUE),
-        bslib::input_switch(ns("raster"), "Rasterize (fast)", TRUE)),
-      .scroll_group("Layout", .scroll_aspect_input(ns),
-        numericInput(ns("ncol"), "Facet columns (blank = auto)", value = NA, min = 1, step = 1),
-        numericInput(ns("nrow"), "Facet rows (blank = auto)", value = NA, min = 1, step = 1))
     ),
     .scroll_plot_area(ns, csv = TRUE)
   )
 }
 
+# The look controls, shown in the panel's Style sheet (same input ids).
+biaxial_style_ui <- function(id, data) {
+  ns <- NS(id)
+  tagList(
+    selectInput(ns("palette"), "Palette", .scroll_cat_palettes()),
+    uiOutput(ns("manual")),
+    sliderInput(ns("size"), "Point size", 0.1, 3, 0.5, 0.1),
+    sliderInput(ns("alpha"), "Opacity", 0.1, 1, 0.6, 0.05),
+    bslib::input_switch(ns("legend"), "Legend", TRUE),
+    bslib::input_switch(ns("raster"), "Rasterize (fast)", TRUE),
+    .scroll_aspect_input(ns),
+    numericInput(ns("ncol"), "Facet columns (blank = auto)", value = NA, min = 1, step = 1),
+    numericInput(ns("nrow"), "Facet rows (blank = auto)", value = NA, min = 1, step = 1))
+}
+
 biaxial_server <- function(id, data, cells_r = reactive(data$cells),
-                           view_r = reactive(NULL), theme_r = reactive(NULL),
+                           view_r = reactive(NULL), theme_r = reactive(NULL), style_r = reactive(NULL),
                            cache_key_r = reactive(NULL), cache = NULL) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
@@ -109,14 +114,15 @@ biaxial_server <- function(id, data, cells_r = reactive(data$cells),
       d <- data_r(); st <- cosmetic_r(); st$raster <- raster
       view_biaxial(NULL, d$params, st, df = d$df)
     }
-    plot_r   <- .scroll_lazy_plot(input, function() build(.scroll_use_raster(input$raster, nrow(data_r()$df))))
-    export_r <- reactive(build(FALSE))
+    plot_r   <- .scroll_lazy_plot(input, function() build(.scroll_use_raster(input$raster, nrow(data_r()$df))),
+                                 style_r)
+    export_r <- reactive(.scroll_apply_style(build(FALSE), style_r()))
     # cache key: active cells + axes/source/colour + raster + cosmetics (+ onscreen)
     key_r <- reactive(list(cache_key_r(), isTRUE(input$onscreen %||% TRUE),
                            input$source, input$features, input$genes, gassay(),
                            input$colorby,
                            .scroll_use_raster(input$raster, nrow(cells_r())),
-                           cosmetic_r()))
+                           cosmetic_r(), style_r()))
     .scroll_render_cached(output, plot_r, key_r, cache)
     csv_r <- reactive({ d <- data_r(); .scroll_biaxial_source(d$cells, d$params$features, d$params$color_by) })
     .scroll_plot_downloads(output, export_r, id, csv_r = csv_r)

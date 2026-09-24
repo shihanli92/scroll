@@ -281,8 +281,11 @@
 # rebuild only happens if `build`'s own dependencies (data/controls) changed while
 # it was away. While off screen the gate takes no dependency on `built`, so a
 # View/filter change does not invalidate an off-screen panel until it returns.
-.scroll_lazy_plot <- function(input, build) {
-  built <- reactive(build())            # memoized: reuses its value when unchanged
+#
+# `style_r` (optional) is the panel's Style-sheet value; its labels are applied to
+# whatever `build` returns (.scroll_apply_style), inside the memoized reactive.
+.scroll_lazy_plot <- function(input, build, style_r = NULL) {
+  built <- reactive(.scroll_apply_style(build(), if (!is.null(style_r)) style_r()))  # memoized
   last <- NULL
   reactive({
     if (isTRUE(input$onscreen %||% TRUE)) last <<- built()
@@ -330,6 +333,7 @@
 .scroll_plot_area <- function(ns, height = .SCROLL_PLOT_H, csv = FALSE)
   div(class = "scroll-plot",
       div(class = "scroll-plot-bar",
+          .scroll_style_button(ns),
           .scroll_size_slider(ns),
           .scroll_dl_button(ns("png"), "PNG"),
           .scroll_dl_button(ns("pdf"), "PDF"),

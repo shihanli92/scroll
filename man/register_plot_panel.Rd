@@ -14,7 +14,8 @@ register_plot_panel(
   after = NULL,
   before = NULL,
   compute = TRUE,
-  csv = FALSE
+  csv = FALSE,
+  style_caps = NULL
 )
 }
 \arguments{
@@ -24,7 +25,9 @@ register_plot_panel(
 active (subset/view-filtered) cell table; \code{input} exposes each control by its
 id; \code{data} is the handle (\code{data$query1}, \code{data$con}, \code{data$manifest}, …).}
 
-\item{controls}{A list of \verb{scroll_input_*()} specs (see \link{scroll_input}).}
+\item{controls}{A list of \verb{scroll_input_*()} specs (see \link{scroll_input}). Wrap a
+look-only control in \code{\link[=scroll_style_input]{scroll_style_input()}} to place it in the plot's Style
+sheet instead of the control column.}
 
 \item{label, title, desc, after, before}{As in \code{\link[=register_panel]{register_panel()}}.}
 
@@ -34,6 +37,9 @@ id; \code{data} is the handle (\code{data$query1}, \code{data$con}, \code{data$m
 \item{csv}{If \code{TRUE}, add a CSV button that exports the plot's source data. The
 \code{plot} function opts in by attaching the table to its result, e.g.
 \verb{attr(p, "scroll_source") <- df; p}. Default \code{FALSE}.}
+
+\item{style_caps}{Scales & axes options for the plot's Style sheet, as in
+\code{\link[=register_panel]{register_panel()}}.}
 }
 \value{
 Invisibly, \code{id}.

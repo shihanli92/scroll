@@ -19,31 +19,36 @@ dimplot_ui <- function(id, data) {
                        options = list(placeholder = "Pick column(s)"))),
       .scroll_group("Groups",
         selectizeInput(ns("highlight"), "Highlight", choices = NULL, multiple = TRUE,
-                       options = list(placeholder = "All groups")),
-        # background colour for non-highlighted cells (only relevant while highlighting)
-        conditionalPanel(
-          condition = sprintf("input['%s'] && input['%s'].length > 0",
-                              ns("highlight"), ns("highlight")),
-          colourpicker::colourInput(ns("bg_color"), "Background colour", value = "grey85"))),
-      .scroll_group("Appearance",
-        selectInput(ns("palette"), "Palette", names(.scroll_discrete_palettes)),
-        uiOutput(ns("manual")),
-        sliderInput(ns("size"), "Point size", 0.1, 5, 0.6, 0.1),
-        sliderInput(ns("alpha"), "Opacity", 0.1, 1, 0.85, 0.05),
-        bslib::input_switch(ns("labels"), "Cluster labels", TRUE),
-        bslib::input_switch(ns("legend"), "Legend", TRUE),
-        bslib::input_switch(ns("raster"), "Rasterize (fast)", TRUE)),
+                       options = list(placeholder = "All groups"))),
       .scroll_group("Layout",
         selectInput(ns("split"), "Split by",
-                    c("None" = "", stats::setNames(cats, cats))),
-        .scroll_aspect_input(ns))
+                    c("None" = "", stats::setNames(cats, cats))))
     ),
     .scroll_plot_area(ns, csv = TRUE)
   )
 }
 
+# The look controls, shown in the panel's Style sheet (same input ids, so the server
+# reads them unchanged).
+dimplot_style_ui <- function(id, data) {
+  ns <- NS(id)
+  tagList(
+    selectInput(ns("palette"), "Palette", names(.scroll_discrete_palettes)),
+    uiOutput(ns("manual")),
+    sliderInput(ns("size"), "Point size", 0.1, 5, 0.6, 0.1),
+    sliderInput(ns("alpha"), "Opacity", 0.1, 1, 0.85, 0.05),
+    bslib::input_switch(ns("labels"), "Cluster labels", TRUE),
+    bslib::input_switch(ns("legend"), "Legend", TRUE),
+    bslib::input_switch(ns("raster"), "Rasterize (fast)", TRUE),
+    # background colour for non-highlighted cells (only relevant while highlighting)
+    conditionalPanel(
+      condition = sprintf("input['%s'] && input['%s'].length > 0", ns("highlight"), ns("highlight")),
+      colourpicker::colourInput(ns("bg_color"), "Background colour", value = "grey85")),
+    .scroll_aspect_input(ns))
+}
+
 dimplot_server <- function(id, data, cells_r = reactive(data$cells),
-                           view_r = reactive(NULL), theme_r = reactive(NULL),
+                           view_r = reactive(NULL), theme_r = reactive(NULL), style_r = reactive(NULL),
                            cache_key_r = reactive(NULL), cache = NULL) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
@@ -145,14 +150,15 @@ dimplot_server <- function(id, data, cells_r = reactive(data$cells),
       d <- data_r(); st <- cosmetic_r(); st$raster <- raster
       view_umap_colorby(d$cells, list(embedding = d$embedding, color_by = d$color_by), st)
     }
-    plot_r   <- .scroll_lazy_plot(input, function() build(.scroll_use_raster(input$raster, data_r()$n)))  # rasterized on screen; recomputed only on-screen
-    export_r <- reactive(build(FALSE))                                         # vector for downloads
+    plot_r   <- .scroll_lazy_plot(input, function() build(.scroll_use_raster(input$raster, data_r()$n)),
+                                 style_r)                                  # rasterized on screen; recomputed only on-screen
+    export_r <- reactive(.scroll_apply_style(build(FALSE), style_r()))         # vector for downloads
     # cache key: active cells + effective reduction/colour + raster + all cosmetics
     # (+ onscreen, so an off-screen lazy render is never cached under a shown key)
     key_r <- reactive(list(cache_key_r(), isTRUE(input$onscreen %||% TRUE),
                            valid_red(), cb_rv(),
                            .scroll_use_raster(input$raster, nrow(cells_r())),
-                           cosmetic_r()))
+                           cosmetic_r(), style_r()))
     .scroll_render_cached(output, plot_r, key_r, cache)
     csv_r <- reactive({ d <- data_r(); .scroll_dimplot_source(d$cells, d$embedding, d$color_by) })
     .scroll_plot_downloads(output, export_r, id, csv_r = csv_r)

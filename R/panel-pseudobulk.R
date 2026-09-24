@@ -114,9 +114,7 @@ pseudobulk_de_ui <- function(id, data) {
         bslib::input_switch(ns("export_all"), "Export all genes (CSV)", FALSE)),
       .scroll_group("Volcano / stability",
         sliderInput(ns("lfc"), "logFC cutoff", 0, 3, 1, 0.1),
-        numericInput(ns("padj"), "Adj. p cutoff", 0.05, min = 0, max = 1, step = 0.01),
-        sliderInput(ns("labeln"), "Label top", 0, 40, 15, 1),
-        .scroll_aspect_input(ns)),
+        numericInput(ns("padj"), "Adj. p cutoff", 0.05, min = 0, max = 1, step = 0.01)),
       # input_task_button: the button shows a spinner + "Computing..." and disables
       # the instant it is clicked (immediate feedback during the blocking compute).
       bslib::input_task_button(ns("compute"), "Compute pseudobulk DE", type = "primary",
@@ -132,14 +130,21 @@ pseudobulk_de_ui <- function(id, data) {
                              else tableOutput(ns("table"))))),
           bslib::nav_panel("Plot",
             div(class = "scroll-plot-bar",
-                .scroll_size_slider(ns),
+                .scroll_style_button(ns), .scroll_size_slider(ns),
                 .scroll_dl_button(ns("png"), "PNG"), .scroll_dl_button(ns("pdf"), "PDF")),
             .scroll_spin(plotOutput(ns("plot"), height = .SCROLL_PLOT_H)))))
   )
 }
 
+# The volcano / stability plot's look controls, shown in the panel's Style sheet.
+pseudobulk_de_style_ui <- function(id, data) {
+  ns <- NS(id)
+  tagList(sliderInput(ns("labeln"), "Label top genes", 0, 40, 15, 1),
+          .scroll_aspect_input(ns))
+}
+
 pseudobulk_de_server <- function(id, data, cells_r = reactive(data$cells),
-                                 view_r = reactive(NULL), theme_r = reactive(NULL)) {
+                                 view_r = reactive(NULL), theme_r = reactive(NULL), style_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     assay <- reactive(input$assay %||% m$default_assay)
@@ -284,7 +289,8 @@ pseudobulk_de_server <- function(id, data, cells_r = reactive(data$cells),
     else
       output$table <- renderTable(table_rows())
 
-    plot_r <- reactive({
+    plot_r <- reactive(.scroll_apply_style(pb_plot_r(), style_r()))
+    pb_plot_r <- reactive({
       d <- de_df()
       if ("sel_freq" %in% names(d))
         view_stability(d, params = list(lfc = input$lfc, cut = input$stabcut,

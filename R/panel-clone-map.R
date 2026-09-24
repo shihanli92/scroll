@@ -78,6 +78,18 @@
 
 # ---- the panel --------------------------------------------------------------
 
+# The look controls, shown in the panel's Style sheet (same input ids).
+clone_map_style_ui <- function(id, data) {
+  ns <- shiny::NS(id)
+  if (is.null(data$manifest$vdj)) return(NULL)
+  shiny::tagList(
+    selectInput(ns("palette"), "Highlight palette", .scroll_cat_palettes()),
+    uiOutput(ns("palette_manual")),                    # per-clone pickers when "Manual"
+    sliderInput(ns("size"), "Point size", 0.2, 3, 0.8, 0.1),
+    checkboxInput(ns("connect"), "Connect cells (path)", FALSE),
+    sliderInput(ns("aspect"), "Aspect ratio", 0.4, 3, 1, 0.1))
+}
+
 clone_map_ui <- function(id, data) {
   ns <- shiny::NS(id)
   m <- data$manifest
@@ -89,11 +101,6 @@ clone_map_ui <- function(id, data) {
     selectInput(ns("embedding"), "Embedding", stats::setNames(embs0, embs0),
                 selected = .scroll_default(data, "default_embedding", embs0[[1]])),
     sliderInput(ns("minsize"), "Min clone size", 1, 50, 1, 1),
-    selectInput(ns("palette"), "Highlight palette", .scroll_cat_palettes()),
-    uiOutput(ns("palette_manual")),                    # per-clone pickers when "Manual"
-    sliderInput(ns("size"), "Point size", 0.2, 3, 0.8, 0.1),
-    checkboxInput(ns("connect"), "Connect cells (path)", FALSE),
-    sliderInput(ns("aspect"), "Aspect ratio", 0.4, 3, 1, 0.1),
     actionButton(ns("clear"), "Clear selection", class = "btn-sm btn-outline-secondary"),
     tags$p(class = "scroll-desc", "Select clones in the table to colour their cells."))
   # table (top) + greyed UMAP (below); selection in the table drives the highlight
@@ -108,14 +115,14 @@ clone_map_ui <- function(id, data) {
     div(class = "scroll-controls", do.call(.scroll_group, c(list("Controls"), ctl))),
     div(class = "scroll-plot",
         div(class = "scroll-table", table_ui),
-        div(class = "scroll-plot-bar", .scroll_size_slider(ns),
+        div(class = "scroll-plot-bar", .scroll_style_button(ns), .scroll_size_slider(ns),
             .scroll_dl_button(ns("png"), "PNG"), .scroll_dl_button(ns("pdf"), "PDF"),
             .scroll_dl_button(ns("csv"), "CSV")),
         .scroll_spin(plotOutput(ns("plot"), height = .SCROLL_PLOT_H))))
 }
 
 clone_map_server <- function(id, data, cells_r = shiny::reactive(data$cells),
-                             view_r = shiny::reactive(NULL), theme_r = shiny::reactive(NULL)) {
+                             view_r = shiny::reactive(NULL), theme_r = shiny::reactive(NULL), style_r = shiny::reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     segs <- m$vdj$segments
@@ -200,7 +207,7 @@ clone_map_server <- function(id, data, cells_r = shiny::reactive(data$cells),
                              input$size %||% 0.8, input$aspect %||% 1,
                              isTRUE(input$connect)) +
         .scroll_ggtheme(theme_r())
-    })
+    }, style_r)
     output$plot <- renderPlot(plot_r())
     .scroll_plot_downloads(output, plot_r, id)
     output$csv <- .scroll_csv_handler(reactive({
@@ -214,4 +221,6 @@ clone_map_server <- function(id, data, cells_r = shiny::reactive(data$cells),
   list(list(id = "clone_map", label = "Clone map", title = "Clones on the embedding",
             desc = "Pick clones in the table to highlight their cells on the greyed embedding.",
             when = function(m) !is.null(m$vdj),
-            ui = clone_map_ui, server = clone_map_server))
+            ui = clone_map_ui, style_ui = clone_map_style_ui,
+            style_caps = .SCROLL_CAPS_EMBEDDING,
+            server = clone_map_server))

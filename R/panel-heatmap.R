@@ -43,29 +43,34 @@ heatmap_ui <- function(id, data) {
           selectInput(ns("ordercol"), "Order by column",
                       stats::setNames(ordcols, ordcols), selected = ordcols[[1]]))),
       .scroll_group("Values",
-        bslib::input_switch(ns("scale"), "Scale per gene (z-score)", TRUE),
-        conditionalPanel("input['scale']", ns = ns,
-          sliderInput(ns("clip"), "Clip z at \u00b1", 0.5, 5, 2.5, 0.5))),
+        bslib::input_switch(ns("scale"), "Scale per gene (z-score)", TRUE)),
       .scroll_group("Labels",
         # gene rows are unlabelled past ~60 genes; mark a chosen subset with
         # side labels + leader lines (ComplexHeatmap anno_mark style)
         selectizeInput(ns("mark"), "Label genes", choices = NULL, multiple = TRUE,
                        options = list(placeholder = "Pick genes to label with leader lines",
                                       plugins = list("remove_button")))),
-      .scroll_group("Appearance",
-        selectInput(ns("palette"), "Palette", .scroll_continuous_palettes, selected = "RdBu"),
-        bslib::input_switch(ns("legend"), "Legend", TRUE)),
       .scroll_group("Layout",
         # cells are never clustered (O(n^2)); only the gene rows get a dendrogram
-        selectInput(ns("cluster"), "Cluster genes", c("Off" = "off", "Rows" = "rows")),
-        .scroll_aspect_input(ns))
+        selectInput(ns("cluster"), "Cluster genes", c("Off" = "off", "Rows" = "rows")))
     ),
     .scroll_plot_area(ns, csv = TRUE)
   )
 }
 
+# The look controls, shown in the panel's Style sheet (same input ids).
+heatmap_style_ui <- function(id, data) {
+  ns <- NS(id)
+  tagList(
+    selectInput(ns("palette"), "Palette", .scroll_continuous_palettes, selected = "RdBu"),
+    conditionalPanel("input['scale']", ns = ns,
+      sliderInput(ns("clip"), "Clip z at \u00b1", 0.5, 5, 2.5, 0.5)),
+    bslib::input_switch(ns("legend"), "Legend", TRUE),
+    .scroll_aspect_input(ns))
+}
+
 heatmap_server <- function(id, data, cells_r = reactive(data$cells),
-                           view_r = reactive(NULL), theme_r = reactive(NULL)) {
+                           view_r = reactive(NULL), theme_r = reactive(NULL), style_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
     # multi-select, view-aware group-by; optional (may stay empty for one block)
@@ -116,8 +121,8 @@ heatmap_server <- function(id, data, cells_r = reactive(data$cells),
     plot_r <- .scroll_lazy_plot(input, function() {
       d <- data_r()
       view_heatmap(d$cells, list(group_by = d$group_by, features = d$features),
-                   NULL, cosmetic_r(), assembly = d$assembly)
-    })
+                   NULL, c(cosmetic_r(), list(style = style_r())), assembly = d$assembly)
+    }, style_r)
     output$plot <- renderPlot(plot_r())
     csv_r <- reactive({ d <- data_r()
       .scroll_heatmap_source(d$cells, d$features, d$group_by, d$expr_long) })

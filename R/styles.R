@@ -125,16 +125,20 @@ body.scroll-warming{overflow:hidden;}
    state (text is set in JS on hover/focus, see scrollTip). Replaces the native title
    tooltip, which appears only after ~1s and is easy to miss. Anchored to the right
    edge because the cluster hugs the right side of the bar. */
-.scroll-appbar-actions [data-tip]{position:relative;}
-.scroll-appbar-actions [data-tip]::after{content:attr(data-tip); position:absolute;
+.scroll-appbar-actions [data-tip],.scroll-plot-bar [data-tip]{position:relative;}
+.scroll-appbar-actions [data-tip]::after,.scroll-plot-bar [data-tip]::after{content:attr(data-tip); position:absolute;
   top:calc(100% + 8px); right:0; z-index:1001; width:max-content; max-width:240px;
   padding:6px 9px; border-radius:6px; background:var(--sc-ink); color:var(--sc-card);
   font-size:12px; font-weight:500; line-height:1.35; letter-spacing:0; white-space:normal;
   text-align:left; box-shadow:0 4px 14px rgba(17,24,38,.18); pointer-events:none;
   opacity:0; transform:translateY(-3px); transition:opacity .12s ease, transform .12s ease;}
 .scroll-appbar-actions [data-tip]:hover::after,
-.scroll-appbar-actions [data-tip]:focus-visible::after{opacity:1; transform:none;
+.scroll-appbar-actions [data-tip]:focus-visible::after,
+.scroll-plot-bar [data-tip]:hover::after,
+.scroll-plot-bar [data-tip]:focus-visible::after{opacity:1; transform:none;
   transition-delay:.25s;}
+/* no hover label while the button's sheet is open (the sheet names itself) */
+.scroll-style-btn.is-open::after{display:none;}
 /* the info button's popover is open -> its label would sit on top of it */
 .scroll-info-toggle[aria-describedby]::after{display:none;}
 /* pressed / active: two-up on, rail collapsed, or the filters drawer open */
@@ -369,6 +373,46 @@ table.scroll-clone-dt thead th{padding-top:2px; padding-bottom:2px;}
 .scroll-dl.btn:hover{color:var(--sc-accent-deep); border-color:var(--sc-accent);
   background:var(--sc-wash);}
 .scroll-dl.btn .fa,.scroll-dl.btn svg{margin-right:5px; opacity:.7;}
+/* Style button: opens this plot's side sheet (R/style.R) */
+.scroll-style-btn{display:inline-flex; align-items:center; justify-content:center; width:28px;
+  height:26px; padding:0; font-size:12px; cursor:pointer; color:var(--sc-muted);
+  background:var(--sc-card); border:1px solid var(--sc-line); border-radius:8px;}
+.scroll-style-btn:hover,.scroll-style-btn.is-open{color:var(--sc-accent-deep);
+  border-color:var(--sc-accent); background:var(--sc-wash);}
+/* Per-plot Style sheet. Fixed to the right edge under the app bar, overlaying the
+   page (no reflow, so opening it never resizes -- and re-renders -- the plots).
+   Closed = translated off-screen + visibility:hidden (+ inert), NOT display:none, so
+   controls inside keep a real size (sliders measure their width at bind time). */
+.scroll-sheet{position:fixed; top:var(--sc-appbar-h,70px); right:0; z-index:1060;
+  width:min(360px,92vw); height:calc(100dvh - var(--sc-appbar-h,70px));
+  display:flex; flex-direction:column; background:var(--sc-card);
+  border-left:1px solid var(--sc-line); box-shadow:-14px 0 34px -18px rgba(17,24,38,.4);
+  transform:translateX(105%); visibility:hidden;
+  transition:transform .18s ease, visibility 0s linear .18s;}
+.scroll-sheet.is-open{transform:none; visibility:visible; transition:transform .18s ease;}
+.scroll-sheet-head{display:flex; align-items:center; gap:10px; padding:12px 16px;
+  border-bottom:1px solid var(--sc-line);}
+.scroll-sheet-titles{display:flex; flex-direction:column; min-width:0; flex:1;}
+.scroll-sheet-kicker{text-transform:uppercase; letter-spacing:.1em; font-size:11px;
+  font-weight:700; color:var(--sc-muted);}
+.scroll-sheet-title{font-size:16px; font-weight:800; letter-spacing:-.01em;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.scroll-sheet-close{flex:none; width:30px; height:30px; border:1px solid var(--sc-line);
+  border-radius:8px; background:var(--sc-card); color:var(--sc-muted); cursor:pointer;}
+.scroll-sheet-close:hover{color:var(--sc-ink); border-color:var(--sc-accent);}
+.scroll-sheet-body{flex:1; overflow-y:auto; overscroll-behavior:contain; padding:6px 16px 12px;}
+.scroll-sheet-foot{display:flex; align-items:center; gap:12px; padding:10px 16px;
+  border-top:1px solid var(--sc-line);}
+.scroll-sheet-foot a{font-size:12px; color:var(--sc-accent); text-decoration:none; margin-left:auto;}
+.scroll-sheet .form-select,.scroll-sheet .form-control{font-size:12px; padding:3px 8px;
+  min-height:0; height:28px;}
+.scroll-sheet .form-select{padding-right:24px;}
+/* the moved per-panel look controls (Plot section): compact, full width */
+.scroll-sheet .shiny-input-container{width:100%; margin-bottom:8px;}
+.scroll-sheet .control-label,.scroll-sheet .form-label{font-size:12px; font-weight:600;
+  margin-bottom:2px;}
+.scroll-sheet .bslib-input-switch{margin-bottom:6px; font-size:13px;}
+.scroll-sheet .irs{font-size:10px;}
 
 /* tighter app bar on smaller screens (padding follows the layout's 28/20/16 steps) */
 @media (max-width:1199.98px){.scroll-appbar{padding:10px 20px; column-gap:14px;}}
@@ -455,6 +499,7 @@ window.scrollToggleControls=function(btn){
   if(!lay) return;
   // filters live in a drawer below 1400, and also whenever two-up is on (any width)
   if(window.matchMedia('(max-width:1399.98px)').matches || lay.querySelector('.scroll-content.two-up')){
+    scrollCloseSheets();                                 // the drawer and a sheet share the right edge
     var open=lay.classList.toggle('filters-open');
     btn.classList.toggle('is-open', open);
     btn.setAttribute('aria-expanded', String(open));
@@ -473,9 +518,40 @@ window.scrollTogglePanelControls=function(btn){   // per-card controls collapse 
   var ctl=card.querySelector('.scroll-panel.bslib-grid>.bslib-grid-item');
   if(ctl && window.jQuery) jQuery(ctl).trigger(hidden?'hidden':'shown');  // suspend/resume any outputs inside
 };
-document.addEventListener('keydown',function(e){ if(e.key==='Escape') scrollCloseDrawers(); });
+// Per-plot Style sheets (R/style.R). One sheet open at a time; opening one closes
+// the filters drawer. The FIRST open tells the server to insert the sheet's
+// sections (seeded from the panel's current style). Sheets are non-modal and are
+// NOT closed by an outside click -- the point is to click around while editing.
+function scrollCloseSheets(){
+  document.querySelectorAll('.scroll-sheet.is-open').forEach(function(sh){
+    sh.classList.remove('is-open'); sh.setAttribute('inert','');
+  });
+  document.querySelectorAll('.scroll-style-btn.is-open').forEach(function(b){
+    b.classList.remove('is-open'); b.setAttribute('aria-expanded','false');
+  });
+}
+window.scrollCloseSheets=scrollCloseSheets;
+window.scrollToggleStyle=function(btn){
+  var sh=document.getElementById(btn.getAttribute('data-sheet')); if(!sh) return;
+  var wasOpen=sh.classList.contains('is-open');
+  scrollCloseSheets(); scrollCloseDrawers();
+  if(wasOpen) return;
+  sh.classList.add('is-open'); sh.removeAttribute('inert');
+  btn.classList.add('is-open'); btn.setAttribute('aria-expanded','true');
+  if(!sh.getAttribute('data-opened') && window.Shiny && Shiny.setInputValue){
+    sh.setAttribute('data-opened','1');
+    Shiny.setInputValue(btn.getAttribute('data-open'), Date.now(), {priority:'event'});
+  }
+  if(window.jQuery) jQuery(sh).trigger('shown');
+  // keep the plot being styled on screen (an off-screen card stops rendering live)
+  var card=btn.closest('.scroll-panel-card');
+  if(card) card.scrollIntoView({block:'nearest', behavior:'smooth'});
+};
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'){ scrollCloseDrawers(); scrollCloseSheets(); } });
 document.addEventListener('click',function(e){   // click outside the drawer (or its toggle) closes it
-  if(e.target.closest('.scroll-filters')||e.target.closest('.scroll-ctl-toggle')) return;
+  if(e.target.closest('.scroll-filters')||e.target.closest('.scroll-ctl-toggle')||
+     e.target.closest('.scroll-sheet')||e.target.closest('.scroll-style-btn')) return;
   scrollCloseDrawers();
 });
 /* Keep --sc-appbar-h in sync with the app bar's measured bottom, so sticky offsets
@@ -629,10 +705,11 @@ function scrollAdjustTables(){
   info         = "Dataset details: cells, genes, assays and reductions",
   two_on       = "Show two panels side by side",
   two_off      = "Back to one panel per row",
-  ctl_hide     = "Hide the filters & theme column (more room for plots)",
-  ctl_show     = "Show the filters & theme column",
-  drawer_open  = "Open the filters & theme panel",
-  drawer_close = "Close the filters & theme panel")
+  ctl_hide     = "Hide the filters column (more room for plots)",
+  ctl_show     = "Show the filters column",
+  drawer_open  = "Open the filters panel",
+  drawer_close = "Close the filters panel",
+  style        = "Style this plot: colours, theme, labels")
 
 .scroll_tips_js <- function() {
   kv <- vapply(names(.SCROLL_TIPS), function(k)
