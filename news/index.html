@@ -42,7 +42,7 @@
 <div class="section level3">
 <h3 id="fixes-0-2-22">Fixes<a class="anchor" aria-label="anchor" href="#fixes-0-2-22"></a></h3>
 <ul><li>
-<strong>Windows:</strong> <code><a href="../reference/scroll_update.html">scroll_update()</a></code>, <code><a href="../reference/scroll_add_meta.html">scroll_add_meta()</a></code> and appending to a streamed build failed with “cannot be performed on a file with a user-mapped section open”, because <code>cells.parquet</code> was still memory-mapped when rewritten in place. Those reads no longer memory-map the file.</li>
+<strong>Windows:</strong> <code><a href="../reference/scroll_update.html">scroll_update()</a></code>, <code><a href="../reference/scroll_add_meta.html">scroll_add_meta()</a></code> and appending to a streamed build failed with “cannot be performed on a file with a user-mapped section open”, because <code>cells.parquet</code> was still memory-mapped when rewritten in place. Those reads no longer memory-map the file, and if something else in the session still holds it mapped, the rewrite frees unused mappings and retries once before failing with an error saying what to close.</li>
 <li>R CMD check is clean on all CI platforms: non-ASCII characters removed from R code, arrow’s <code>cast()</code> binding used unqualified, and <code>Seurat</code> / <code>cachem</code> declared in Suggests (used by tests).</li>
 </ul></div>
 <div class="section level3">
