@@ -185,17 +185,20 @@ test_that("a Compute-gated builder panel restyles without re-computing", {
   })
 })
 
-test_that("an untouched colour picker is 'no override', never white", {
-  expect_true(scroll:::.scroll_is_no_colour("#FFFFFF00"))
-  expect_true(scroll:::.scroll_is_no_colour("transparent"))
-  expect_false(scroll:::.scroll_is_no_colour("#FFFFFF"))
-  x <- scroll:::.scroll_theme_compact(list(text_colour = "#FFFFFF00", border_colour = "#FF0000",
+test_that("theme colour pickers start at the plot's colours; the default = no override", {
+  expect_true(scroll:::.scroll_is_no_colour("#FFFFFF00"))            # legacy marker
+  x <- scroll:::.scroll_theme_compact(list(text_colour = "#000000", grid_colour = "#ffffff",
+                                           border_colour = "#FF0000", strip_bg = "#FFFFFF00",
                                            legend = "top"))
   expect_identical(x, list(legend = "top", border_colour = "#FF0000"))
-  expect_null(scroll:::.scroll_ggtheme(list(text_colour = "#FFFFFF00")))   # no white text
-  html <- as.character(scroll:::.scroll_theme_inputs(shiny::NS("p")))
+  expect_identical(scroll:::.scroll_theme_compact(list(text_colour = "#C7444400")),
+                   list(text_colour = "#C74444"))                     # opaque, not ignored
+  expect_null(scroll:::.scroll_ggtheme(list(text_colour = "#FFFFFF00")))   # never white text
   skip_if_not_installed("colourpicker")
-  expect_match(html, 'data-init-value="#FFFFFF00"', fixed = TRUE)
+  html <- as.character(scroll:::.scroll_theme_inputs(shiny::NS("p")))
+  expect_match(html, 'id="p-st_theme_text_colour"[^>]*data-init-value="#000000"')
+  expect_match(html, 'id="p-st_theme_grid_colour"[^>]*data-init-value="#FFFFFF"')
+  expect_false(grepl('data-allow-alpha="true"', html))                # opaque pickers
 })
 
 test_that("a field still being typed is not reset when another family syncs", {
@@ -335,4 +338,19 @@ test_that("scale inputs typed in the sheet reach the style", {
     session$elapse(700)
     expect_identical(rv()$scales, list(ymin = "0", ytrans = "sqrt"))
   })
+})
+
+test_that("a colour picked from the transparent default becomes opaque, not 'no change'", {
+  expect_null(scroll:::.scroll_colour_value("#FFFFFF00"))
+  expect_identical(scroll:::.scroll_colour_value("#C7444400"), "#C74444")
+  expect_identical(scroll:::.scroll_colour_value("#C74444"), "#C74444")
+  expect_identical(scroll:::.scroll_colour_value("#C7444480"), "#C7444480")   # real alpha kept
+})
+
+test_that("the text colour reaches axis, legend and strip text (not just the title)", {
+  p <- ggplot2::ggplot(mtcars, ggplot2::aes(wt, mpg, colour = factor(cyl))) + ggplot2::geom_point() +
+    scroll:::.scroll_base_theme() + scroll:::.scroll_ggtheme(list(text_colour = "#D62839"))
+  th <- p$theme
+  for (e in c("axis.text", "axis.title", "legend.text", "legend.title", "strip.text"))
+    expect_identical(ggplot2::calc_element(e, ggplot2::theme_grey() + th)$colour, "#D62839", info = e)
 })

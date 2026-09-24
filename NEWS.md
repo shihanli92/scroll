@@ -1,3 +1,17 @@
+# scroll 0.3.2
+
+## Fixes
+
+* **Style sheet colour pickers.** The Theme colour swatches started as a transparent
+  checkerboard and a colour picked from there stayed transparent, so no colour could
+  be chosen. They now start at the plot's own colours (black text / axes / border,
+  white gridlines / strip), are opaque, and a picker left at its starting colour
+  means "no change".
+* **Text colour** now recolours axis, legend and strip text, not only the title (the
+  base theme set those black explicitly).
+* Colour-picker popups in a Style sheet are nudged to stay inside the sheet instead
+  of being cut off at its right edge.
+
 # scroll 0.3.1
 
 ## Per-plot Style sheet

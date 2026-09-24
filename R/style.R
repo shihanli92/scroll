@@ -33,14 +33,30 @@
 
 .SCROLL_THEME_PREFIX <- "st_theme_"
 
-# "No colour override" for a theme colour picker. colourpicker (>= 1.3) reports an
-# empty picker as "#FFFFFF" -- which would silently paint text/lines white -- so the
-# pickers start at fully-transparent white instead (shown as a checkerboard swatch)
-# and any fully-transparent value reads back as "no override".
+# Theme colour pickers start at the colour the plots already use (scroll's base
+# theme: black text / lines / border, white gridlines / strip), and a picker left at
+# its default means "no override" -- so an untouched sheet changes nothing. (A
+# colourpicker cannot be empty: colourpicker >= 1.3 reports "" as "#FFFFFF", which
+# once silently painted text white.) The pickers are opaque (no alpha slider).
+.SCROLL_THEME_COLOUR_DEFAULTS <- c(text_colour = "#000000", axis_colour = "#000000",
+                                   grid_colour = "#FFFFFF", line_colour = "#000000",
+                                   border_colour = "#000000", strip_bg = "#FFFFFF")
+# Legacy "no override" markers (fully-transparent values from 0.3.1's pickers).
 .SCROLL_NO_COLOUR <- "#FFFFFF00"
 .scroll_is_no_colour <- function(v)
   is.character(v) && length(v) == 1L && !is.na(v) &&
-    (identical(tolower(v), "transparent") || grepl("^#[0-9A-Fa-f]{6}00$", v))
+    toupper(v) %in% c(.SCROLL_NO_COLOUR, "TRANSPARENT")
+# A picked colour as stored: NULL for a legacy no-override marker; a zero-alpha pick
+# (0.3.1 pickers kept the transparent default's alpha) is read as the opaque colour.
+.scroll_colour_value <- function(v) {
+  if (.scroll_is_no_colour(v)) return(NULL)
+  if (grepl("^#[0-9A-Fa-f]{6}00$", v)) substr(v, 1L, 7L) else v
+}
+# A theme colour key's value as stored: NULL when it is the key's default.
+.scroll_theme_colour <- function(k, v) {
+  v <- .scroll_colour_value(v)
+  if (is.null(v) || identical(toupper(v), .SCROLL_THEME_COLOUR_DEFAULTS[[k]])) NULL else v
+}
 
 # Snapshot the theme inputs into a named list over every key (NULL = no override),
 # the shape .scroll_ggtheme() reads.
@@ -65,8 +81,9 @@
   col <- function(k, label)
     div(class = "scroll-filter scroll-colour",
         if (requireNamespace("colourpicker", quietly = TRUE))
-          colourpicker::colourInput(id(k), label, value = .scroll_nz(v(k)) %||% .SCROLL_NO_COLOUR,
-                                    showColour = "background", allowTransparent = TRUE)
+          colourpicker::colourInput(id(k), label,
+                                    value = .scroll_nz(v(k)) %||% .SCROLL_THEME_COLOUR_DEFAULTS[[k]],
+                                    showColour = "background")
         else textInput(id(k), label, value = v(k), placeholder = "#hex or name"))
   sz <- function(s, m, l) c("Default" = "", "Small" = s, "Medium" = m, "Large" = l)
   showhide <- c("Default" = "", "Show" = "show", "Hide" = "hide")
@@ -207,7 +224,7 @@
                   if (!key %in% .scroll_theme_colour_keys()) updateSelectInput(session, id, selected = value)
                   else if (requireNamespace("colourpicker", quietly = TRUE))
                     colourpicker::updateColourInput(session, id,
-                                                    value = .scroll_nz(value) %||% .SCROLL_NO_COLOUR)
+                      value = .scroll_nz(value) %||% .SCROLL_THEME_COLOUR_DEFAULTS[[key]])
                   else updateTextInput(session, id, value = value)
                 }),
   scales = list(prefix = "st_scales_", keys = .scroll_scale_keys(caps), delay = 500,
@@ -227,8 +244,10 @@
     v <- x[[k]]
     if (is.null(v) || !length(v)) return(NULL)
     v <- as.character(v)[1]
-    if (is.na(v) || !nzchar(v) || .scroll_is_no_colour(v)) NULL
-    else substr(v, 1L, .SCROLL_LABEL_MAX)
+    if (is.na(v) || !nzchar(v)) return(NULL)
+    v <- if (k %in% names(.SCROLL_THEME_COLOUR_DEFAULTS)) .scroll_theme_colour(k, v)
+         else .scroll_colour_value(v)
+    if (is.null(v)) NULL else substr(v, 1L, .SCROLL_LABEL_MAX)
   })
   names(out) <- keys
   out[!vapply(out, is.null, logical(1))]
@@ -339,7 +358,8 @@
           if (identical(prev[[f]][[k]] %||% "", want)) next
           id <- paste0(fam$prefix, k)
           have <- shiny::isolate(input[[id]]) %||% ""
-          if (.scroll_is_no_colour(have)) have <- ""
+          if (k %in% names(.SCROLL_THEME_COLOUR_DEFAULTS))
+            have <- .scroll_theme_colour(k, have) %||% ""
           if (!identical(have, want)) fam$update(session, id, k, want)
         }
       }

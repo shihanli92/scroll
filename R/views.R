@@ -264,8 +264,11 @@
     colour = g("text_colour")))
   parts <- add(parts, "plot.title", etext(size = num("title_size"),
     face = switch(g("title_style") %||% "", bold = "bold", italic = "italic", plain = "plain", NULL)))
-  parts <- add(parts, "legend.text", etext(size = num("legend_text_size")))
-  parts <- add(parts, "strip.text",  etext(size = num("strip_text_size")))
+  # the base theme colours axis / legend / strip text black explicitly (so they don't
+  # inherit `text`), so the text colour is set on each of them too
+  tcol <- g("text_colour")
+  parts <- add(parts, "legend.text", etext(size = num("legend_text_size"), colour = tcol))
+  parts <- add(parts, "strip.text",  etext(size = num("strip_text_size"), colour = tcol))
 
   # --- base line element: thickness + colour (inherited by grid / axis lines / ticks) ---
   la <- Filter(Negate(is.null), list(
@@ -275,10 +278,10 @@
 
   # --- axes: text / titles / ticks / lines / angles ---
   if (identical(g("axes"), "hide")) parts$axis.text <- ggplot2::element_blank()
-  else parts <- add(parts, "axis.text", etext(size = num("axis_text_size")))
+  else parts <- add(parts, "axis.text", etext(size = num("axis_text_size"), colour = tcol))
   parts <- add(parts, "axis.title",
     if (identical(g("axis_titles"), "hide")) ggplot2::element_blank()
-    else etext(size = num("axis_title_size")))
+    else etext(size = num("axis_title_size"), colour = tcol))
   acol <- g("axis_colour")                                        # shared by axis line + ticks
   tk <- g("axis_ticks")
   if (identical(tk, "hide")) parts$axis.ticks <- ggplot2::element_blank()
@@ -303,7 +306,7 @@
   parts <- add(parts, "legend.direction", g("legend_dir"))       # horizontal/vertical
   lt <- g("legend_title")
   if (identical(lt, "hide")) parts$legend.title <- ggplot2::element_blank()
-  else if (identical(lt, "show")) parts$legend.title <- ggplot2::element_text()
+  else if (identical(lt, "show") || !is.null(tcol)) parts$legend.title <- ggplot2::element_text(colour = tcol)
   lk <- g("legend_key")
   if (!is.null(lk)) parts$legend.key <- ggplot2::element_rect(
     fill = switch(lk, white = "white", none = NA, "white"), colour = NA)

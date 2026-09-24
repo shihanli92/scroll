@@ -413,6 +413,11 @@ table.scroll-clone-dt thead th{padding-top:2px; padding-bottom:2px;}
   margin-bottom:2px;}
 .scroll-sheet .bslib-input-switch{margin-bottom:6px; font-size:13px;}
 .scroll-sheet .irs{font-size:10px;}
+/* theme colour rows span the sheet so the picker popup (anchored to the swatch at
+   the row's right end, opening leftwards) stays inside the sheet */
+.scroll-sheet .scroll-colour{grid-column:1/-1;}
+.scroll-sheet .scroll-colour .colourpicker{position:relative;}
+.scroll-sheet .scroll-colour .colourpicker-panel{left:auto; right:0;}
 
 /* tighter app bar on smaller screens (padding follows the layout's 28/20/16 steps) */
 @media (max-width:1199.98px){.scroll-appbar{padding:10px 20px; column-gap:14px;}}
@@ -547,6 +552,23 @@ window.scrollToggleStyle=function(btn){
   var card=btn.closest('.scroll-panel-card');
   if(card) card.scrollIntoView({block:'nearest', behavior:'smooth'});
 };
+// A colour picker's popup opens at its swatch and is clipped by the sheet's scroll
+// box; when one opens inside a sheet, nudge it horizontally back inside the sheet.
+function scrollFitPicker(inp){
+  var w=inp.closest('.colourpicker'), body=inp.closest('.scroll-sheet-body');
+  var p=w&&w.querySelector('.colourpicker-panel'); if(!p||!body) return;
+  p.style.left=''; p.style.right='';
+  var pr=p.getBoundingClientRect(); if(!pr.width) return;
+  var br=body.getBoundingClientRect(), lo=br.left+4, hi=br.left+body.clientWidth-4;
+  var shift=pr.right>hi ? hi-pr.right : (pr.left<lo ? lo-pr.left : 0);
+  if(shift){ p.style.right='auto'; p.style.left=(p.offsetLeft+shift)+'px'; }
+}
+['focusin','click'].forEach(function(ev){
+  document.addEventListener(ev, function(e){
+    var inp=e.target.closest&&e.target.closest('.scroll-sheet .colourpicker-input');
+    if(inp) requestAnimationFrame(function(){ scrollFitPicker(inp); });
+  });
+});
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){ scrollCloseDrawers(); scrollCloseSheets(); } });
 document.addEventListener('click',function(e){   // click outside the drawer (or its toggle) closes it
