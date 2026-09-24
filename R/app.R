@@ -546,7 +546,10 @@ scroll_reset_panels <- function() {
   # deferred filters: committed only on Apply (Reset clears). Each panel has its own
   # style value (theme, ...), edited live from its Style sheet.
   filt_rv  <- reactiveVal(list())
-  style_rvs <- stats::setNames(lapply(panels, function(s) reactiveVal(list())),
+  # each carries its Style sheet's layer catalog (the drawn plot's layers) as an attribute
+  style_rvs <- stats::setNames(lapply(panels, function(s) {
+                                 rv <- reactiveVal(list())
+                                 attr(rv, "scroll_catalog") <- reactiveVal(NULL); rv }),
                                vapply(panels, `[[`, "", "id"))
   active_cells <- .scroll_active_cells(input, data, active_view, filt_rv)
   # A cheap, faithful signature of the active cell set (view + ad-hoc subset +

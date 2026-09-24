@@ -35,7 +35,6 @@ featureplot_style_ui <- function(id, data) {
   ns <- NS(id)
   tagList(
     selectInput(ns("palette"), "Palette", .scroll_continuous_palettes, selected = "grey-purple"),
-    sliderInput(ns("size"), "Point size", 0.1, 5, 0.7, 0.1),
     sliderInput(ns("clip"), "Color quantiles (%)", 0, 100, c(0, 100), 1),
     bslib::input_switch(ns("order"), "Expressing cells on top", TRUE),
     bslib::input_switch(ns("legend"), "Legend", TRUE),

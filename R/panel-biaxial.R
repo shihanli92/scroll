@@ -48,8 +48,6 @@ biaxial_style_ui <- function(id, data) {
   tagList(
     selectInput(ns("palette"), "Palette", .scroll_cat_palettes()),
     uiOutput(ns("manual")),
-    sliderInput(ns("size"), "Point size", 0.1, 3, 0.5, 0.1),
-    sliderInput(ns("alpha"), "Opacity", 0.1, 1, 0.6, 0.05),
     bslib::input_switch(ns("legend"), "Legend", TRUE),
     bslib::input_switch(ns("raster"), "Rasterize (fast)", TRUE),
     .scroll_aspect_input(ns),

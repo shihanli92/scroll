@@ -235,12 +235,13 @@ test_that("the legend title only targets the aesthetics a plot maps", {
 test_that("look controls live in each built-in's Style sheet, not its column", {
   data <- scroll:::.scroll_load(test_project())
   on.exit(scroll_disconnect(data$con))
-  moved <- list(dimplot = c("palette", "size", "alpha", "labels", "legend", "raster", "aspect"),
-                featureplot = c("palette", "size", "clip", "order", "legend", "raster", "aspect"),
+  # (point size / opacity / widths / outlines are per-layer settings: see test-style-layers.R)
+  moved <- list(dimplot = c("palette", "labels", "legend", "raster", "aspect"),
+                featureplot = c("palette", "clip", "order", "legend", "raster", "aspect"),
                 dotplot = c("palette", "dotrange", "aspect"),
                 heatmap = c("palette", "legend", "aspect"),
-                violin = c("palette", "vwidth", "legend", "jitter", "aspect"),
-                proportions = c("palette", "barwidth", "outline", "labels", "horizontal", "aspect"))
+                violin = c("palette", "legend", "jitter", "aspect"),
+                proportions = c("palette", "labels", "horizontal", "aspect"))
   kept <- list(dimplot = c("reduction", "colorby", "highlight", "split"),
                featureplot = c("feature", "blend", "reduction", "split"),
                dotplot = c("markers", "group", "display", "scale", "cluster"),

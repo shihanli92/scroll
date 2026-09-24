@@ -140,12 +140,16 @@
 # geom_point. scattermore takes a pixel `pointsize`, not the mm `size` aesthetic,
 # so we approximate it from `size` (interactive-only; exports use vector points).
 .scroll_point_layer <- function(mapping = NULL, size = 0.6, alpha = 1,
-                                raster = FALSE, ...) {
-  if (isTRUE(raster) && requireNamespace("scattermore", quietly = TRUE))
+                                raster = FALSE, ..., role = NULL) {
+  l <- if (isTRUE(raster) && requireNamespace("scattermore", quietly = TRUE))
     scattermore::geom_scattermore(mapping = mapping,
                                   pointsize = max(1, round(size * 2)), alpha = alpha, ...)
   else
     ggplot2::geom_point(mapping = mapping, size = size, alpha = alpha, ...)
+  # the scattermore layer keeps the mm size too, so the Style sheet shows/edits it
+  if (inherits(l$geom, "GeomScattermore")) l$aes_params$size <- size
+  if (!is.null(role)) l <- .scroll_role(l, role)
+  l
 }
 
 # On-screen only: subsample a scatter's rows to the point cap so a large embedding
@@ -371,6 +375,9 @@
                            if (inherits(p, "ggplot") && !inherits(p, "patchwork"))
                              .scroll_legend_aes(p) else "colour")
   sc <- style$scales
+  ly <- style$layers
+  if (!length(la) && !length(sc) && !length(ly)) return(p)
+  if (length(ly)) p <- .scroll_apply_layers(p, ly)          # per-layer geom settings
   if (!length(la) && !length(sc)) return(p)
   if (inherits(p, "patchwork")) {
     ann <- la[intersect(names(la), c("title", "subtitle", "caption"))]
@@ -485,10 +492,10 @@
 .scroll_group_labels <- function(df, col) {
   agg <- stats::aggregate(cbind(.x, .y) ~ .g, data = transform(df, .g = df[[col]]),
                           FUN = stats::median)
-  ggplot2::geom_text(
+  .scroll_role(ggplot2::geom_text(
     data = agg, ggplot2::aes(x = .data$.x, y = .data$.y, label = .data$.g),
     inherit.aes = FALSE, size = 4, fontface = "bold"
-  )
+  ), "Cluster labels")
 }
 
 # --- scatter views ------------------------------------------------------------
@@ -548,7 +555,8 @@ view_umap_colorby <- function(cells, params, state = list()) {
   # numeric color-by (a single numeric column): a continuous gradient
   if (!composite && is.numeric(df$.col)) {
     p <- base +
-      .scroll_point_layer(ggplot2::aes(color = .data$.col), size = size, alpha = alpha, raster = raster) +
+      .scroll_point_layer(ggplot2::aes(color = .data$.col), size = size, alpha = alpha, raster = raster,
+                          role = "Cells") +
       .scroll_continuous_scale(.scroll_opt(params, state, "palette", "viridis"), lab) +
       ggplot2::labs(color = lab)
     return(.scroll_finish_scatter(p, df, state))
@@ -565,14 +573,17 @@ view_umap_colorby <- function(cells, params, state = list()) {
     bg <- df[!(df$.col %in% highlight), , drop = FALSE]
     fg <- df[df$.col %in% highlight, , drop = FALSE]
     p <- base +
-      .scroll_point_layer(data = bg, color = bg_color, size = size, alpha = alpha, raster = raster) +
-      .scroll_point_layer(ggplot2::aes(color = .data$.col), data = fg, size = size, alpha = alpha, raster = raster) +
+      .scroll_role(.scroll_point_layer(data = bg, color = bg_color, size = size, alpha = alpha,
+                                       raster = raster), "Background cells") +
+      .scroll_role(.scroll_point_layer(ggplot2::aes(color = .data$.col), data = fg, size = size,
+                                       alpha = alpha, raster = raster), "Cells") +
       ggplot2::scale_color_manual(values = cols, limits = highlight) +
       ggplot2::labs(color = lab)
     label_df <- fg
   } else {
     p <- base +
-      .scroll_point_layer(ggplot2::aes(color = .data$.col), size = size, alpha = alpha, raster = raster) +
+      .scroll_point_layer(ggplot2::aes(color = .data$.col), size = size, alpha = alpha, raster = raster,
+                          role = "Cells") +
       ggplot2::scale_color_manual(values = cols) +
       ggplot2::labs(color = lab)
     label_df <- df
@@ -710,7 +721,8 @@ view_feature_plot <- function(cells, params, values = NULL, state = list()) {
   size <- .scroll_opt(params, state, "point_size", 0.7)
   lims <- .scroll_expr_limits(df$.expr, .scroll_opt(params, state, "clip", NULL))
   p <- .scroll_base_scatter(df, embedding, .scroll_opt(params, state, "legend", TRUE)) +
-    .scroll_point_layer(ggplot2::aes(color = .data$.expr), size = size, raster = isTRUE(state$raster)) +
+    .scroll_point_layer(ggplot2::aes(color = .data$.expr), size = size, raster = isTRUE(state$raster),
+                        role = "Cells") +
     .scroll_continuous_scale(.scroll_opt(params, state, "palette", "grey-purple"),
                              params$feature %||% "expression", lims)
   .scroll_finish_scatter(p, df, state)
@@ -1315,11 +1327,12 @@ view_violin <- function(cells, params, values = NULL, state = list()) {
     dfp <- if (pfrac < 1 && nrow(df) > 1)                        # fixed seed => stable across redraws/export
              .scroll_with_seed(1L, df[sample.int(nrow(df), max(1L, round(nrow(df) * pfrac))), , drop = FALSE])
            else df
-    p <- p + if (has_split)
+    p <- p + .scroll_role(if (has_split)
       ggplot2::geom_point(data = dfp, position = ggplot2::position_jitterdodge(
         jitter.width = 0.15, dodge.width = 0.9), size = psize, alpha = palpha, show.legend = FALSE)
     else
-      ggplot2::geom_jitter(data = dfp, size = psize, alpha = palpha, width = 0.2, show.legend = FALSE)
+      ggplot2::geom_jitter(data = dfp, size = psize, alpha = palpha, width = 0.2, show.legend = FALSE),
+      "Points")
   }
   p <- p +
     ggplot2::scale_fill_manual(values = cols) +
@@ -1510,7 +1523,7 @@ view_biaxial <- function(cells, params, state = list(), df = NULL) {
   nc <- pos_int(state$ncol); nr <- pos_int(state$nrow)
   p <- ggplot2::ggplot(df, ggplot2::aes(.data$.x, .data$.y, color = .data$.col)) +
     .scroll_point_layer(size = state$point_size %||% 0.5, alpha = state$alpha %||% 0.6,
-                        raster = isTRUE(state$raster)) +
+                        raster = isTRUE(state$raster), role = "Cells") +
     ggplot2::facet_wrap(~ pair, scales = "free", ncol = nc, nrow = nr) +
     ggplot2::scale_color_manual(values = cols) +
     ggplot2::labs(x = NULL, y = NULL, color = params$color_by) +
@@ -1614,14 +1627,14 @@ view_proportions <- function(cells, params, state = list()) {
     thr <- .scroll_opt(params, state, "label_min", 0)
     if (thr > 0) tab$.lab[tab$pct * 100 < thr] <- ""
     if (identical(position, "dodge"))                # above each dodged bar
-      p <- p + ggplot2::geom_text(ggplot2::aes(label = .data$.lab), data = tab,
+      p <- p + .scroll_role(ggplot2::geom_text(ggplot2::aes(label = .data$.lab), data = tab,
                                   position = ggplot2::position_dodge(width = bw),
-                                  vjust = -0.3, size = lab_size, color = "grey15")
+                                  vjust = -0.3, size = lab_size, color = "grey15"), "Segment labels")
     else {                                           # centred in each segment
       lpos <- if (identical(position, "fill")) ggplot2::position_fill(vjust = 0.5)
               else ggplot2::position_stack(vjust = 0.5)
-      p <- p + ggplot2::geom_text(ggplot2::aes(label = .data$.lab), data = tab,
-                                  position = lpos, size = lab_size, color = "grey15")
+      p <- p + .scroll_role(ggplot2::geom_text(ggplot2::aes(label = .data$.lab), data = tab,
+                                  position = lpos, size = lab_size, color = "grey15"), "Segment labels")
     }
   }
   # per-group total above each bar (n cells)
@@ -1633,9 +1646,9 @@ view_proportions <- function(cells, params, state = list()) {
              else if (identical(position, "dodge"))
                as.numeric(tapply(tab$Freq, tab$x, max)[as.character(td$x)])
              else td$Freq
-    p <- p + ggplot2::geom_text(data = td, ggplot2::aes(x = .data$x, y = .data$.y,
+    p <- p + .scroll_role(ggplot2::geom_text(data = td, ggplot2::aes(x = .data$x, y = .data$.y,
                label = .data$.lab), inherit.aes = FALSE, vjust = -0.4,
-               size = lab_size, color = "grey30")
+               size = lab_size, color = "grey30"), "Totals")
   }
   if (isTRUE(.scroll_opt(params, state, "horizontal", FALSE)))
     p <- p + ggplot2::coord_flip()
@@ -1688,10 +1701,12 @@ view_volcano <- function(de, params = list(), state = list()) {
   cols <- c(down = "#2563A8", ns = "grey78", up = "#C4453B")
 
   p <- ggplot2::ggplot(d, ggplot2::aes(.data$.fc, .data$neglog, color = .data$sig)) +
-    ggplot2::geom_point(size = 1, alpha = 0.75) +
+    .scroll_role(ggplot2::geom_point(size = 1, alpha = 0.75), "Genes") +
     ggplot2::scale_color_manual(values = cols, guide = "none") +
-    ggplot2::geom_vline(xintercept = c(-lfc, lfc), linetype = "dashed", color = "grey60") +
-    ggplot2::geom_hline(yintercept = -log10(pcut), linetype = "dashed", color = "grey60") +
+    .scroll_role(ggplot2::geom_vline(xintercept = c(-lfc, lfc), linetype = "dashed", color = "grey60"),
+                 "Cutoff lines") +
+    .scroll_role(ggplot2::geom_hline(yintercept = -log10(pcut), linetype = "dashed", color = "grey60"),
+                 "Cutoff lines") +
     ggplot2::labs(x = fc_label, y = "-log10 adjusted p") +
     .scroll_base_theme(axis_text = TRUE)
 
@@ -1700,12 +1715,13 @@ view_volcano <- function(de, params = list(), state = list()) {
   lab <- utils::head(lab[order(-lab$neglog), , drop = FALSE], n)
   if (n > 0 && nrow(lab)) {
     aes_lab <- ggplot2::aes(x = .data$.fc, y = .data$neglog, label = .data$gene)
-    p <- p + if (requireNamespace("ggrepel", quietly = TRUE))
+    p <- p + .scroll_role(if (requireNamespace("ggrepel", quietly = TRUE))
       ggrepel::geom_text_repel(data = lab, mapping = aes_lab, inherit.aes = FALSE,
                                size = 3, color = "black", max.overlaps = 20)
     else
       ggplot2::geom_text(data = lab, mapping = aes_lab, inherit.aes = FALSE,
-                         size = 3, color = "black", vjust = -0.6)
+                         size = 3, color = "black", vjust = -0.6),
+      "Gene labels")
   }
   .scroll_apply_aspect(p, state$aspect %||% 1, state$theme)
 }
@@ -1731,11 +1747,13 @@ view_stability <- function(df, params = list(), state = list()) {
   df$consistent <- df$sel_freq >= cut & abs(df$median_logFC) >= lfc
   p <- ggplot2::ggplot(df, ggplot2::aes(.data$median_logFC, .data$sel_freq,
                                         color = .data$consistent)) +
-    ggplot2::geom_point(size = 1, alpha = 0.75) +
+    .scroll_role(ggplot2::geom_point(size = 1, alpha = 0.75), "Genes") +
     ggplot2::scale_color_manual(values = c(`FALSE` = "grey78", `TRUE` = "#C4453B"),
                                 guide = "none") +
-    ggplot2::geom_vline(xintercept = c(-lfc, lfc), linetype = "dashed", color = "grey60") +
-    ggplot2::geom_hline(yintercept = cut, linetype = "dashed", color = "grey60") +
+    .scroll_role(ggplot2::geom_vline(xintercept = c(-lfc, lfc), linetype = "dashed", color = "grey60"),
+                 "Cutoff lines") +
+    .scroll_role(ggplot2::geom_hline(yintercept = cut, linetype = "dashed", color = "grey60"),
+                 "Cutoff lines") +
     ggplot2::labs(x = "median logFC", y = "selection frequency") +
     ggplot2::coord_cartesian(ylim = c(0, 1)) +
     .scroll_base_theme(axis_text = TRUE)
@@ -1743,12 +1761,13 @@ view_stability <- function(df, params = list(), state = list()) {
   lab <- utils::head(lab[order(-lab$sel_freq, -abs(lab$median_logFC)), , drop = FALSE], n)
   if (n > 0 && nrow(lab)) {
     aes_lab <- ggplot2::aes(x = .data$median_logFC, y = .data$sel_freq, label = .data$gene)
-    p <- p + if (requireNamespace("ggrepel", quietly = TRUE))
+    p <- p + .scroll_role(if (requireNamespace("ggrepel", quietly = TRUE))
       ggrepel::geom_text_repel(data = lab, mapping = aes_lab, inherit.aes = FALSE,
                                size = 3, color = "black", max.overlaps = 20)
     else
       ggplot2::geom_text(data = lab, mapping = aes_lab, inherit.aes = FALSE,
-                         size = 3, color = "black", vjust = -0.6)
+                         size = 3, color = "black", vjust = -0.6),
+      "Gene labels")
   }
   .scroll_apply_aspect(p, state$aspect %||% 1, state$theme)
 }

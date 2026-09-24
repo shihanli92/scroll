@@ -575,7 +575,7 @@ register_plot_panel <- function(id, plot, controls = list(), label = id, title =
           if (is.numeric(a) && length(a) == 1 && abs(a - 1) > 1e-6)
             p <- p + ggplot2::theme(aspect.ratio = a)
         }
-        .scroll_apply_style(p, style_r())
+        .scroll_style_plot(p, style_r)
       }
       event <- if (isTRUE(compute)) reactive(input$scroll_compute) else NULL
       placeholder <- if (isTRUE(compute)) "Set the controls, then click Compute." else NULL

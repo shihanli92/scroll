@@ -47,13 +47,10 @@ violin_style_ui <- function(id, data) {
   tagList(
     selectInput(ns("palette"), "Palette", .scroll_cat_palettes()),
     uiOutput(ns("manual")),
-    sliderInput(ns("vwidth"), "Violin width", 0.3, 1.2, 0.9, 0.05),
     bslib::input_switch(ns("legend"), "Legend", FALSE),
     bslib::input_switch(ns("jitter"), "Show points", FALSE),
-    # point controls only apply when points are shown and not stacked
+    # (point size / opacity / shape are per-layer settings: Layers > Points)
     conditionalPanel("input['jitter'] == true && input['stack'] != true", ns = ns,
-      sliderInput(ns("psize"), "Point size", 0.1, 2, 0.3, 0.1),
-      sliderInput(ns("palpha"), "Point opacity", 0.05, 1, 0.3, 0.05),
       sliderInput(ns("pfrac"), "Subsample points (%)", 1, 100, 100, 1)),
     .scroll_aspect_input(ns))
 }

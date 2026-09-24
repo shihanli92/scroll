@@ -36,8 +36,6 @@ proportions_style_ui <- function(id, data) {
   tagList(
     selectInput(ns("palette"), "Palette", .scroll_cat_palettes()),
     uiOutput(ns("manual")),
-    sliderInput(ns("barwidth"), "Bar width", 0.3, 1, 0.8, 0.05),
-    sliderInput(ns("outline"), "Bar outline", 0, 1, 0.2, 0.1),
     bslib::input_switch(ns("legend"), "Legend", TRUE),
     bslib::input_switch(ns("horizontal"), "Horizontal bars", FALSE),
     selectInput(ns("xorder"), "Order groups",
@@ -50,8 +48,7 @@ proportions_style_ui <- function(id, data) {
     selectInput(ns("labels"), "Segment labels",
                 c("None" = "none", "Count" = "count", "Percent" = "percent")),
     conditionalPanel("input['labels'] != 'none'", ns = ns,
-      sliderInput(ns("labelmin"), "Hide labels below (%)", 0, 50, 0, 1),
-      sliderInput(ns("labelsize"), "Label size", 1.5, 6, 2.8, 0.1)),
+      sliderInput(ns("labelmin"), "Hide labels below (%)", 0, 50, 0, 1)),
     bslib::input_switch(ns("totals"), "Show group totals", FALSE),
     .scroll_aspect_input(ns))
 }

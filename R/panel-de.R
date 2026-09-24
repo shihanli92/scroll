@@ -138,10 +138,10 @@ de_server <- function(id, data, cells_r = reactive(data$cells),
       output$table <- renderTable(table_rows())
 
     volcano_r <- reactive({
-      .scroll_apply_style(view_volcano(de_df(),
+      .scroll_style_plot(view_volcano(de_df(),
                    params = list(lfc = input$lfc, padj = input$padj, label_n = input$labeln,
                                  fc_col = "avg_log2FC", fc_label = "avg_log2FC"),
-                   state = list(aspect = input$aspect, theme = theme_r())), style_r())
+                   state = list(aspect = input$aspect, theme = theme_r())), style_r)
     })
     output$plot <- renderPlot(volcano_r())
     .scroll_plot_downloads(output, volcano_r, id)

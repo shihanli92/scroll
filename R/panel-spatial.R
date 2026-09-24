@@ -31,7 +31,8 @@
     p <- p + ggplot2::annotation_raster(img$raster, xmin = 0, xmax = img$width,
                                         ymin = 0, ymax = img$height, interpolate = TRUE)
   p <- p + .scroll_point_layer(ggplot2::aes(color = .data$.col), size = size,
-                               raster = isTRUE(nrow(df) > .scroll_raster_threshold))
+                               raster = isTRUE(nrow(df) > .scroll_raster_threshold),
+                               role = "Spots")
   p <- p + if (is_num) .scroll_continuous_scale(cpalette %||% "viridis", name = lab)
            else ggplot2::scale_color_manual(
              values = .scroll_discrete_colors(df$.col, dpalette %||% "Tableau 10"), name = lab)
@@ -76,7 +77,6 @@ spatial_style_ui <- function(id, data) {
     selectInput(ns("cpalette"), "Palette (numeric)", .scroll_continuous_palettes, selected = "viridis"),
     conditionalPanel("input['mode'] == 'Metadata'", ns = ns,
       selectInput(ns("dpalette"), "Palette (categorical)", names(.scroll_discrete_palettes))),
-    sliderInput(ns("size"), "Spot size", 0.2, 4, 1.4, 0.2),
     if (length(m$images) > 0) checkboxInput(ns("image"), "Show tissue image", TRUE))  # any FOV/slide image
 }
 
@@ -141,7 +141,7 @@ spatial_server <- function(id, data, cells_r = shiny::reactive(data$cells),
                                 input$size %||% 1.4, fr$lab, zoom(),
                                 input$cpalette %||% "viridis", input$dpalette %||% "Tableau 10") +
         .scroll_ggtheme(theme_r())
-      .scroll_apply_style(p, style_r())
+      .scroll_style_plot(p, style_r)
     })
     output$plot <- renderPlot(plot_r())
     .scroll_plot_downloads(output, plot_r, id)

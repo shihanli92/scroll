@@ -289,7 +289,7 @@ pseudobulk_de_server <- function(id, data, cells_r = reactive(data$cells),
     else
       output$table <- renderTable(table_rows())
 
-    plot_r <- reactive(.scroll_apply_style(pb_plot_r(), style_r()))
+    plot_r <- reactive(.scroll_style_plot(pb_plot_r(), style_r))
     pb_plot_r <- reactive({
       d <- de_df()
       if ("sel_freq" %in% names(d))

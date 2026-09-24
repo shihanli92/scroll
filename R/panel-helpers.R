@@ -285,7 +285,7 @@
 # `style_r` (optional) is the panel's Style-sheet value; its labels are applied to
 # whatever `build` returns (.scroll_apply_style), inside the memoized reactive.
 .scroll_lazy_plot <- function(input, build, style_r = NULL) {
-  built <- reactive(.scroll_apply_style(build(), if (!is.null(style_r)) style_r()))  # memoized
+  built <- reactive(.scroll_style_plot(build(), style_r))   # memoized; reports the layers
   last <- NULL
   reactive({
     if (isTRUE(input$onscreen %||% TRUE)) last <<- built()

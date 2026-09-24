@@ -280,6 +280,9 @@
                     onclick = "scrollCloseSheets()", shiny::icon("xmark"))),
     div(class = "scroll-sheet-body",
         if (!is.null(geom)) .scroll_details("Plot", open = TRUE, geom),
+        # one sub-section per layer of the drawn plot (R/style-layers.R)
+        .scroll_details("Layers", open = FALSE,
+                        div(class = "scroll-sheet-layers", uiOutput(pns("layers_ui")))),
         # Theme (and later Labels / Scales) are inserted here on first open
         div(id = pns("style_body"), class = "scroll-sheet-sections")),
     div(class = "scroll-sheet-foot",
@@ -376,6 +379,37 @@
       shiny::showNotification("Theme applied to every plot.", duration = 3)
     })
 
-    shiny::observeEvent(input$style_reset, rv(list()))
+    # ---- Layers: per-layer geom settings (R/style-layers.R) ----
+    # The section is rebuilt only when the drawn plot's layer set changes (or on Reset),
+    # seeded from the stored overrides -- never on the user's own edits, so typing is
+    # never interrupted. Overrides for layers not drawn right now are kept (e.g. a
+    # highlight toggled off) and apply again when the layer returns.
+    reset_n <- shiny::reactiveVal(0L)
+    cat_rv <- attr(rv, "scroll_catalog")
+    if (is.function(cat_rv)) {
+      output$layers_ui <- shiny::renderUI({
+        reset_n()
+        .scroll_layers_ui(session$ns, cat_rv(), shiny::isolate(rv())$layers)
+      })
+      # it sits in a collapsed <details>: render it anyway, so it is ready on open
+      shiny::outputOptions(output, "layers_ui", suspendWhenHidden = FALSE)
+      lsnap <- shiny::debounce(shiny::reactive({
+        catalog <- cat_rv()
+        if (!length(catalog)) return(NULL)
+        .scroll_layers_snapshot(input, catalog)
+      }), 400)
+      shiny::observeEvent(lsnap(), {
+        snap <- lsnap(); cur <- shiny::isolate(rv())
+        shown <- vapply(shiny::isolate(cat_rv()), `[[`, "", "key")
+        new <- (cur$layers %||% list())[setdiff(names(cur$layers), shown)]
+        for (k in names(snap)) if (length(snap[[k]])) new[[k]] <- snap[[k]]
+        new <- .scroll_layers_norm(new)
+        if (identical(.scroll_layers_norm(cur$layers), new)) return()
+        cur$layers <- if (length(new)) new
+        rv(cur)
+      })
+    }
+
+    shiny::observeEvent(input$style_reset, { rv(list()); reset_n(reset_n() + 1L) })
   })
 }

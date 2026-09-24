@@ -29,21 +29,16 @@ dimplot_ui <- function(id, data) {
 }
 
 # The look controls, shown in the panel's Style sheet (same input ids, so the server
-# reads them unchanged).
+# reads them unchanged). Point size / opacity / the highlight background colour are
+# per-layer settings in the sheet's Layers section ("Cells", "Background cells").
 dimplot_style_ui <- function(id, data) {
   ns <- NS(id)
   tagList(
     selectInput(ns("palette"), "Palette", names(.scroll_discrete_palettes)),
     uiOutput(ns("manual")),
-    sliderInput(ns("size"), "Point size", 0.1, 5, 0.6, 0.1),
-    sliderInput(ns("alpha"), "Opacity", 0.1, 1, 0.85, 0.05),
     bslib::input_switch(ns("labels"), "Cluster labels", TRUE),
     bslib::input_switch(ns("legend"), "Legend", TRUE),
     bslib::input_switch(ns("raster"), "Rasterize (fast)", TRUE),
-    # background colour for non-highlighted cells (only relevant while highlighting)
-    conditionalPanel(
-      condition = sprintf("input['%s'] && input['%s'].length > 0", ns("highlight"), ns("highlight")),
-      colourpicker::colourInput(ns("bg_color"), "Background colour", value = "grey85")),
     .scroll_aspect_input(ns))
 }
 

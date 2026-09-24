@@ -49,19 +49,19 @@
   hi   <- df[!is.na(df$.hl), , drop = FALSE]
   p <- ggplot2::ggplot(df, ggplot2::aes(.data$.x, .data$.y)) +
     .scroll_point_layer(data = base, size = size, colour = "grey85",
-                        raster = nrow(base) > .scroll_raster_threshold)
+                        raster = nrow(base) > .scroll_raster_threshold, role = "Other cells")
   if (nrow(hi)) {
     if (is.null(cols)) cols <- .scroll_discrete_colors(sel, "Tableau 10")
     hi$.hl <- factor(hi$.hl, levels = sel)
     if (isTRUE(connect)) {                              # a path per clone (under the points)
       pathdf <- do.call(rbind, lapply(split(hi, hi$.hl, drop = TRUE), function(g)
         g[order(atan2(g$.y - mean(g$.y), g$.x - mean(g$.x))), , drop = FALSE]))
-      p <- p + ggplot2::geom_path(data = pathdf,
+      p <- p + .scroll_role(ggplot2::geom_path(data = pathdf,
         ggplot2::aes(group = .data$.hl, colour = .data$.hl),
-        linewidth = 0.4, alpha = 0.6, show.legend = FALSE)
+        linewidth = 0.4, alpha = 0.6, show.legend = FALSE), "Clone paths")
     }
-    p <- p + ggplot2::geom_point(data = hi, ggplot2::aes(colour = .data$.hl),
-                                 size = size + 0.7) +
+    p <- p + .scroll_role(ggplot2::geom_point(data = hi, ggplot2::aes(colour = .data$.hl),
+                                 size = size + 0.7), "Clone cells") +
       ggplot2::scale_colour_manual(values = cols, name = "Clone",
                                    guide = if (length(sel) > 24) "none" else "legend")
   }
@@ -85,7 +85,6 @@ clone_map_style_ui <- function(id, data) {
   shiny::tagList(
     selectInput(ns("palette"), "Highlight palette", .scroll_cat_palettes()),
     uiOutput(ns("palette_manual")),                    # per-clone pickers when "Manual"
-    sliderInput(ns("size"), "Point size", 0.2, 3, 0.8, 0.1),
     checkboxInput(ns("connect"), "Connect cells (path)", FALSE),
     sliderInput(ns("aspect"), "Aspect ratio", 0.4, 3, 1, 0.1))
 }
