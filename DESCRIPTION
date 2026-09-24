@@ -57,6 +57,6 @@ Suggests:
     SeuratData
 Remotes:
     immunogenomics/presto,
-    satijalab/seurat-data
+    SeuratData=satijalab/seurat-data
 VignetteBuilder: knitr
 Config/testthat/edition: 3
