@@ -563,8 +563,10 @@ scroll_reset_panels <- function() {
   .scroll_bind_subset_control(input, session, data)
   .scroll_bind_filters(input, session, data, filt_rv)
   .scroll_render_ncells(output, data$manifest, active_cells, active_view)
+  # saved plot styles (style.yaml, R/style-save.R): read once per session
+  style_ctx <- .scroll_style_ctx(data)
   .scroll_mount_panels(data, panels, active_cells, active_view, style_rvs,
-                       cache_key_r = cache_key_r, cache = cache)
+                       cache_key_r = cache_key_r, cache = cache, style_ctx = style_ctx)
   # optional startup warm-up: cycle the subset views once so their (cached) scatters
   # pre-render, making the first visit to each view instant too. Only meaningful when
   # caching is on and gated by config `prewarm_views` (0/absent = off). Callers pass
@@ -684,10 +686,11 @@ scroll_reset_panels <- function() {
 # theme family, for servers written before per-plot styling), and the plot cache.
 # Every panel also gets its Style sheet server.
 .scroll_mount_panels <- function(data, panels, active_cells, active_view, style_rvs = list(),
-                                 cache_key_r = reactive(NULL), cache = NULL) {
+                                 cache_key_r = reactive(NULL), cache = NULL, style_ctx = NULL) {
   for (sec in panels) {
     rv <- style_rvs[[sec$id]] %||% reactiveVal(list())
-    .scroll_style_server(sec$id, data, rv, all = style_rvs, caps = .scroll_style_caps(sec))
+    .scroll_style_server(sec$id, data, rv, all = style_rvs, caps = .scroll_style_caps(sec),
+                         ctx = style_ctx, plot_ids = .scroll_style_plot_ids(sec, data))
     fmls <- names(formals(sec$server))
     args <- list(sec$id, data, cells_r = active_cells)      # named so formal order can vary
     if ("view_r" %in% fmls)      args$view_r      <- active_view

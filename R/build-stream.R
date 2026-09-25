@@ -67,8 +67,10 @@ scroll_build_stream <- function(outdir, sources, reader, assays = NULL,
   if (is.null(meta_cols)) stop("`meta_cols` must be given for a streaming build.", call. = FALSE)
   sources <- as.list(sources)
 
+  kept_style <- if (dir.exists(outdir) && isTRUE(overwrite)) .scroll_keep_style(outdir)
   if (dir.exists(outdir) && isTRUE(overwrite)) unlink(outdir, recursive = TRUE)
   dir.create(file.path(outdir, "expr"), recursive = TRUE, showWarnings = FALSE)
+  .scroll_restore_style(outdir, kept_style)       # saved plot styles survive a rebuild
   tmp_root <- file.path(outdir, ".stream_tmp")
   srcfile  <- file.path(outdir, ".stream_sources.txt")
 

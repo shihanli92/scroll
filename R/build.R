@@ -117,13 +117,18 @@ scroll_build <- function(object, outdir,
   .scroll_check_inputs(object, assays, embeddings, meta_cols)
   subsets <- .scroll_normalize_subsets(subsets, embeddings, meta_cols)
 
+  kept_style <- NULL
   if (dir.exists(outdir)) {
-    if (overwrite) unlink(outdir, recursive = TRUE)
+    if (overwrite) {
+      kept_style <- .scroll_keep_style(outdir)    # saved plot styles survive a rebuild
+      unlink(outdir, recursive = TRUE)
+    }
     else if (length(list.files(outdir)) > 0)
       stop("outdir '", outdir, "' exists and is not empty; use overwrite = TRUE.",
            call. = FALSE)
   }
   dir.create(file.path(outdir, "expr"), recursive = TRUE, showWarnings = FALSE)
+  .scroll_restore_style(outdir, kept_style)
   if (counts) dir.create(file.path(outdir, "counts"), showWarnings = FALSE)
 
   # --- cells.parquet: metadata + all embeddings, the only globally-loaded file

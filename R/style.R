@@ -289,6 +289,10 @@
         if (!isFALSE(data$config$theme_controls))
           actionButton(pns("style_all"), "Apply theme to all plots",
                        class = "btn-sm btn-outline-primary"),
+        if (.scroll_style_save_on(data))
+          actionButton(pns("style_save"), "Save", icon = shiny::icon("floppy-disk"),
+                       class = "btn-sm btn-primary",
+                       title = "Save every plot's style to style.yaml; it loads whenever the app starts"),
         actionLink(pns("style_reset"), "Reset")))
 }
 
@@ -308,16 +312,54 @@
 }
 
 # Wire one panel's sheet. `rv` is this panel's style value; `all` is every panel's
-# (for "apply to all"). Runs inside the panel's module namespace.
-.scroll_style_server <- function(id, data, rv, all = list(rv), caps = .SCROLL_DEFAULT_CAPS) {
-  force(rv); force(all); force(caps)   # called in a loop: bind this panel's values now
+# (for "apply to all"). `ctx` is the dataset's saved-style state (R/style-save.R; NULL
+# = no saving) and `plot_ids` the input ids of the panel's own look controls.
+# Runs inside the panel's module namespace.
+.scroll_style_server <- function(id, data, rv, all = list(rv), caps = .SCROLL_DEFAULT_CAPS,
+                                 ctx = NULL, plot_ids = character(0)) {
+  force(rv); force(all); force(caps); force(ctx); force(plot_ids)   # called in a loop
   shiny::moduleServer(id, function(input, output, session) {
     fams <- .scroll_sheet_families(data, caps)
     inserted <- shiny::reactiveVal(FALSE)
 
+    # ---- saved style (style.yaml): seed this session from it ----
+    saved <- if (!is.null(ctx)) ctx$saved[[id]]
+    # The look controls' "defaults" (for Save and Reset). They sit in the sheet, so the
+    # user can only change them once it is open: the baseline is their value at first
+    # open (after any server-side population, e.g. a select filled from the data) --
+    # except a control restored from style.yaml, whose baseline is its UI-built value.
+    read_plot <- function() shiny::isolate(lapply(stats::setNames(plot_ids, plot_ids),
+                                                  function(i) input[[i]]))
+    plot_start <- read_plot()
+    plot_defaults <- NULL                                 # set on first open
+    restored <- character(0)
+    manual_base <- saved$manual                           # Manual colours kept for Save
+    send_plot <- function(vals)
+      for (k in names(vals)) session$sendInputMessage(k, list(value = vals[[k]]))
+    if (length(saved)) {
+      st <- list()
+      for (f in names(fams)) {
+        v <- .scroll_family_compact(saved[[f]], fams[[f]]$keys)
+        if (length(v)) st[[f]] <- v
+      }
+      if (length(saved$layers)) st$layers <- saved$layers
+      rv(st)
+      for (p in names(saved$manual))
+        session$userData$scroll_manual_saved[[session$ns(p)]] <- saved$manual[[p]]
+      # the look controls: pushed once, after the first flush's own updates (a panel
+      # resetting e.g. its palette for the initial colour column), so the saved value wins
+      restore <- saved$plot[intersect(names(saved$plot), plot_ids)]
+      restored <- names(restore)
+      if (length(restore)) {
+        once <- NULL
+        once <- shiny::observe({ once$destroy(); send_plot(restore) }, priority = -1000)
+      }
+    }
+
     # first open: insert the sections, seeded from the current style
     shiny::observeEvent(input$style_open, {
       if (isTRUE(shiny::isolate(inserted()))) return()
+      plot_defaults <<- utils::modifyList(read_plot(), plot_start[restored], keep.null = TRUE)
       st <- shiny::isolate(rv())
       ui <- lapply(names(fams), function(f) fams[[f]]$ui(session$ns, st[[f]]))
       shiny::insertUI(paste0("#", session$ns("style_body")), "beforeEnd",
@@ -376,7 +418,8 @@
         cur$theme <- if (length(th)) th
         other(cur)
       }
-      shiny::showNotification("Theme applied to every plot.", duration = 3)
+      shiny::showNotification(paste0("Theme applied to every plot.",
+                                     if (!is.null(ctx)) " Press Save to keep it."), duration = 3)
     })
 
     # ---- Layers: per-layer geom settings (R/style-layers.R) ----
@@ -410,6 +453,86 @@
       })
     }
 
-    shiny::observeEvent(input$style_reset, { rv(list()); reset_n(reset_n() + 1L) })
+    # Reset: back to the package defaults -- the sheet families, the look controls and
+    # any saved Manual colours. It becomes permanent only when saved.
+    shiny::observeEvent(input$style_reset, {
+      rv(list()); reset_n(reset_n() + 1L)
+      if (!is.null(plot_defaults))
+        send_plot(plot_defaults[!vapply(names(plot_defaults), function(i)
+          is.null(plot_defaults[[i]]) || identical(input[[i]], plot_defaults[[i]]), logical(1))])
+      # Manual colours too: forget the saved ones and the pickers now on record (a
+      # hidden picker keeps its last value), so they re-render at the defaults
+      mine <- function(x) startsWith(as.character(names(x)), session$ns(""))
+      ud <- session$userData
+      for (k in c("scroll_manual_saved", "scroll_manual_levels"))
+        if (length(ud[[k]])) ud[[k]] <- ud[[k]][!mine(ud[[k]])]
+      manual_base <<- NULL
+    })
+
+    # ---- Save: every plot whose style differs from style.yaml ----
+    if (!is.null(ctx)) {
+      ctx$snap[[id]] <- function() {
+        snap <- .scroll_style_snapshot(shiny::isolate(rv()), fams, input, session,
+                                       if (!is.null(plot_defaults)) plot_ids, plot_defaults,
+                                       manual_base)
+        manual_base <<- snap$manual
+        # sheet never opened: its look controls can't have been changed -- keep as saved
+        if (is.null(plot_defaults) && length(ctx$saved[[id]]$plot)) snap$plot <- ctx$saved[[id]]$plot
+        snap
+      }
+      shiny::observeEvent(input$style_save, {
+        res <- tryCatch(.scroll_save_styles(data, ctx), error = function(e) e)
+        err <- inherits(res, "error")
+        shiny::showNotification(
+          if (err) paste("Couldn't save:", conditionMessage(res))
+          else if (!length(res)) "No unsaved style changes."
+          else sprintf("Saved %s to style.yaml.",
+                       if (length(res) == 1L) "this plot's style"
+                       else paste(length(res), "plots' styles")),
+          type = if (err) "error" else "message", duration = if (err) 8 else 3)
+      })
+    }
   })
+}
+
+# One panel's style as saved: the sheet families (canonical), layer overrides, the
+# look controls that differ from their UI defaults, and Manual-palette colours by level.
+.scroll_style_snapshot <- function(st, fams, input, session, plot_ids = character(0),
+                                   plot_defaults = list(), saved_manual = NULL) {
+  out <- list()
+  for (f in names(fams)) {
+    v <- .scroll_family_compact(st[[f]], fams[[f]]$keys)
+    if (length(v)) out[[f]] <- v
+  }
+  ly <- .scroll_layers_norm(st$layers)
+  if (length(ly)) out$layers <- ly
+  pl <- list()
+  for (i in plot_ids) {
+    v <- shiny::isolate(input[[i]])
+    if (is.null(v) || !is.atomic(v) || !length(v) || identical(v, plot_defaults[[i]])) next
+    pl[[i]] <- v
+  }
+  if (length(pl)) out$plot <- pl
+  mn <- .scroll_manual_snapshot(input, session, saved_manual)
+  if (length(mn)) out$manual <- mn
+  out
+}
+
+# Manual colours for a panel, by level name: the saved ones, updated with the pickers
+# currently known (see .scroll_manual_ui); a colour left at its default is dropped.
+.scroll_manual_snapshot <- function(input, session, saved = NULL) {
+  out <- saved %||% list()
+  reg <- session$userData$scroll_manual_levels
+  pre <- session$ns("")
+  for (key in Filter(function(k) startsWith(k, pre), as.character(names(reg)))) {
+    p <- substring(key, nchar(pre) + 1L); r <- reg[[key]]
+    cols <- shiny::isolate(.scroll_manual_colors(input, r$levels, p))
+    if (is.null(cols)) next
+    base <- out[[p]] %||% character(0)
+    base <- base[setdiff(names(base), names(cols))]
+    changed <- cols[toupper(cols) != toupper(r$defaults[names(cols)])]
+    base <- c(base, changed)
+    out[[p]] <- if (length(base)) base[order(names(base))]
+  }
+  out[!vapply(out, is.null, logical(1))]
 }

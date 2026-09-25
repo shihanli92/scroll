@@ -230,6 +230,16 @@
                   sprintf("Manual colours are unavailable for %d-level columns - pick a palette instead.",
                           length(levels))))
   defaults <- defaults %||% .scroll_discrete_colors(levels, "Tableau 10")
+  # Rendered from a server (renderUI): register the level set so the Style sheet can
+  # save these colours by level name, and seed from colours saved in style.yaml.
+  sess <- shiny::getDefaultReactiveDomain()
+  if (!is.null(sess)) {
+    key <- ns(prefix)
+    sess$userData$scroll_manual_levels[[key]] <- list(levels = levels, defaults = defaults)
+    seed <- sess$userData$scroll_manual_saved[[key]]
+    hit <- intersect(names(seed), levels)
+    if (length(hit)) defaults[hit] <- seed[hit]
+  }
   # compact circular swatches that wrap into rows (rather than tall full-width
   # inputs), so many levels stay manageable; the level name is a caption + title.
   div(class = "scroll-manual-grid",

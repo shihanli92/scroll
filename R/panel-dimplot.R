@@ -97,14 +97,20 @@ dimplot_server <- function(id, data, cells_r = reactive(data$cells),
       else .scroll_meta_levels(data, cb) })
     .scroll_bind_view_cats(input, session, view_r, m, "split", prepend = c("None" = ""))
 
+    # the palette list follows the colour column's type; a palette still valid for the
+    # new column is kept (so a saved or picked palette survives a colour-by change)
     observeEvent(input$colorby, {
+      keep <- function(choices, fallback) {
+        cur <- isolate(input$palette)
+        if (!is.null(cur) && cur %in% unlist(choices)) cur else fallback
+      }
       if (is_cat()) {
-        updateSelectInput(session, "palette",
-                          choices = c(names(.scroll_discrete_palettes), "Manual"), selected = "Tableau 10")
+        pals <- c(names(.scroll_discrete_palettes), "Manual")
+        updateSelectInput(session, "palette", choices = pals, selected = keep(pals, "Tableau 10"))
         updateSelectizeInput(session, "highlight", choices = levels_of(), selected = character(0))
       } else {
-        updateSelectInput(session, "palette",
-                          choices = .scroll_continuous_palettes, selected = "viridis")
+        updateSelectInput(session, "palette", choices = .scroll_continuous_palettes,
+                          selected = keep(.scroll_continuous_palettes, "viridis"))
         updateSelectizeInput(session, "highlight", choices = character(0), selected = character(0))
       }
     })
