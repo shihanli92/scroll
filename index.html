@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="index.html">scroll</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -182,7 +182,10 @@ Install from a local checkout instead
 <strong>Theme</strong>: text sizes and font, legend position, axes, gridlines, border, strips and margin. “Apply theme to all plots” copies one plot’s theme to every panel.</li>
 <li>
 <strong>Scales &amp; axes</strong> (where they make sense for the panel): visible axis ranges, log / sqrt / reversed scales, break counts, flipped coordinates, free facet scales.</li>
+<li>
+<strong>Layers</strong>: every layer the plot draws, with its fixed settings (size, colour, shape, line type, width, …); anything mapped in <code>aes()</code> stays data-driven.</li>
 </ul>
+<p><strong>Save</strong> writes every plot’s style to <code>style.yaml</code> in the project folder, and each new session starts from it, so a styled figure looks the same next time (and for everyone using a deployed app). The file is plain YAML and safe to hand-edit; delete a panel’s entry to restore its default look. It survives <code>scroll_build(overwrite = TRUE)</code>. Set <code>style_save: false</code> in <code>config.yaml</code> to hide Save, e.g. on a shared server. If the app can’t write to the project folder, Save says so instead of failing.</p>
 <p>Categorical colors are assigned <strong>deterministically by level name</strong>, so a cell type keeps its color across every panel. Each plot exports to <strong>PNG</strong> (raster) or <strong>PDF</strong> (vector, for figures/slides) from its toolbar; the DE table also exports to <strong>CSV</strong>. Custom panels get the sheet too: wrap a look-only control in <code><a href="reference/scroll_style_input.html">scroll_style_input()</a></code> to place it there.</p>
 <p>Live DE is the one memory-heavy operation: <code><a href="https://rdrr.io/pkg/presto/man/wilcoxauc.html" class="external-link">presto::wilcoxauc</a></code> needs an in-memory matrix, so a run reconstructs the contrast’s expression matrix from the store (on-demand, behind a Compute button).</p>
 <p><strong>Pseudobulk DE</strong> needs raw counts (edgeR/limma-voom are count-based), which are not in the default quantized store. Build with <code>counts = TRUE</code> to also export a <code>counts/&lt;assay&gt;.parquet</code> store; the Pseudobulk DE panel then sums counts per pseudobulk sample <strong>in arrow’s engine</strong> (RAM stays flat) and runs limma-voom:</p>

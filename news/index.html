@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">scroll</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,6 +32,22 @@
       <small>Source: <a href="https://github.com/shihanli92/scroll/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.3.5" id="scroll-035">scroll 0.3.5<a class="anchor" aria-label="anchor" href="#scroll-035"></a></h2>
+<div class="section level3">
+<h3 id="style-sheet-saved-styles-0-3-5">Style sheet: saved styles<a class="anchor" aria-label="anchor" href="#style-sheet-saved-styles-0-3-5"></a></h3>
+<ul><li>
+<strong>Save.</strong> A Save button in every Style sheet writes each plot whose style has changed to <code>style.yaml</code> in the project folder, one entry per panel: its theme, labels, scales, layer settings, look controls (palette, aspect, …) and Manual colours (kept by level name). Every session reads the file when it starts, so a saved look persists across sessions and for every viewer. Saving merges with the file on disk, so two people saving different plots don’t overwrite each other.</li>
+<li>The file is read defensively: YAML expressions are never evaluated, unknown keys are dropped, and a malformed file is ignored with a warning.</li>
+<li>
+<code>style_save: false</code> in <code>config.yaml</code> hides Save (e.g. on a shared deployment); an app that can’t write to its folder reports that instead of failing.</li>
+<li>
+<code>scroll_build(overwrite = TRUE)</code> and <code>scroll_build_stream(overwrite = TRUE)</code> keep an existing <code>style.yaml</code>.</li>
+<li>
+<strong>Reset</strong> now returns the look controls and Manual colours to their defaults too (it becomes permanent once saved).</li>
+<li>DimPlot keeps the chosen palette when the new colour column is the same type (categorical or numeric) instead of resetting it.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.3.4" id="scroll-034">scroll 0.3.4<a class="anchor" aria-label="anchor" href="#scroll-034"></a></h2>
 <div class="section level3">

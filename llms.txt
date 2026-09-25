@@ -204,6 +204,18 @@ toolbar. The sheet updates the plot live and holds:
 - **Scales & axes** (where they make sense for the panel): visible axis
   ranges, log / sqrt / reversed scales, break counts, flipped
   coordinates, free facet scales.
+- **Layers**: every layer the plot draws, with its fixed settings (size,
+  colour, shape, line type, width, …); anything mapped in `aes()` stays
+  data-driven.
+
+**Save** writes every plot’s style to `style.yaml` in the project
+folder, and each new session starts from it, so a styled figure looks
+the same next time (and for everyone using a deployed app). The file is
+plain YAML and safe to hand-edit; delete a panel’s entry to restore its
+default look. It survives `scroll_build(overwrite = TRUE)`. Set
+`style_save: false` in `config.yaml` to hide Save, e.g. on a shared
+server. If the app can’t write to the project folder, Save says so
+instead of failing.
 
 Categorical colors are assigned **deterministically by level name**, so
 a cell type keeps its color across every panel. Each plot exports to

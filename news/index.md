@@ -1,5 +1,29 @@
 # Changelog
 
+## scroll 0.3.5
+
+### Style sheet: saved styles
+
+- **Save.** A Save button in every Style sheet writes each plot whose
+  style has changed to `style.yaml` in the project folder, one entry per
+  panel: its theme, labels, scales, layer settings, look controls
+  (palette, aspect, …) and Manual colours (kept by level name). Every
+  session reads the file when it starts, so a saved look persists across
+  sessions and for every viewer. Saving merges with the file on disk, so
+  two people saving different plots don’t overwrite each other.
+- The file is read defensively: YAML expressions are never evaluated,
+  unknown keys are dropped, and a malformed file is ignored with a
+  warning.
+- `style_save: false` in `config.yaml` hides Save (e.g. on a shared
+  deployment); an app that can’t write to its folder reports that
+  instead of failing.
+- `scroll_build(overwrite = TRUE)` and
+  `scroll_build_stream(overwrite = TRUE)` keep an existing `style.yaml`.
+- **Reset** now returns the look controls and Manual colours to their
+  defaults too (it becomes permanent once saved).
+- DimPlot keeps the chosen palette when the new colour column is the
+  same type (categorical or numeric) instead of resetting it.
+
 ## scroll 0.3.4
 
 ### Style sheet: per-layer settings
