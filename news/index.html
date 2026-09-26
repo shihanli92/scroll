@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">scroll</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.7</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,6 +32,28 @@
       <small>Source: <a href="https://github.com/shihanli92/scroll/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.3.7" id="scroll-037">scroll 0.3.7<a class="anchor" aria-label="anchor" href="#scroll-037"></a></h2>
+<div class="section level3">
+<h3 id="signature-panel-0-3-7">Signature panel<a class="anchor" aria-label="anchor" href="#signature-panel-0-3-7"></a></h3>
+<ul><li>
+<strong>AddModuleScore matches Seurat exactly.</strong> The control genes are drawn exactly as <code><a href="https://satijalab.org/seurat/reference/AddModuleScore.html" class="external-link">Seurat::AddModuleScore</a></code> draws them (the same binning, jitter and random draw) from gene means saved at build time from the original matrix. On an unquantized build scores agree to float precision. Projects built before this release keep the earlier, near-identical estimate and say so under the Calculate button.</li>
+<li>
+<strong>UCell and AUCell-style scores.</strong> Two rank-based methods, computed natively (no new dependencies), for projects built with <code>ranks = TRUE</code>: UCell matches <code><a href="https://rdrr.io/pkg/UCell/man/ScoreSignatures_UCell.html" class="external-link">UCell::ScoreSignatures_UCell</a></code> exactly, and AUCell-style reproduces AUCell’s normalized recovery-curve area with ties averaged instead of broken at random. Each method’s parameters (bins / controls / seed, max rank) sit under “Method settings”.</li>
+<li>
+<strong>Add as column.</strong> A computed score, optionally with high / low groups at a chosen cutoff, becomes a column the other panels can use for the rest of the session: colour DimPlot by it, plot it in FeaturePlot, Violin and Biaxial, or group by it in DE, DotPlot, Proportions and Pseudobulk. Nothing is written to disk.</li>
+<li>Signature and control means are now summed per cell inside arrow, so a large control set no longer loads every control gene into memory.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="build-0-3-7">Build<a class="anchor" aria-label="anchor" href="#build-0-3-7"></a></h3>
+<ul><li>
+<code><a href="../reference/scroll_build.html">scroll_build()</a></code> and <code><a href="../reference/scroll_build_stream.html">scroll_build_stream()</a></code> save per-gene means and per-cell detected counts (<code>stats/&lt;assay&gt;/</code>, a few MB). With <code>ranks = TRUE</code> they also save each value’s rank within its cell (a <code>rank2</code> column), which UCell / AUCell need; it is off by default because ranks barely compress (about +45% expression storage on a 238k-cell project). The Signature panel lists the rank-based methods only for projects built with ranks.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="fixes-0-3-7">Fixes<a class="anchor" aria-label="anchor" href="#fixes-0-3-7"></a></h3>
+<ul><li>A plot that can’t draw yet (e.g. “click Calculate”) was built twice per render before showing its message; it is now built once.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.3.6" id="scroll-036">scroll 0.3.6<a class="anchor" aria-label="anchor" href="#scroll-036"></a></h2>
 <p>Cleanup release.</p>

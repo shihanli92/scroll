@@ -23,6 +23,7 @@ scroll_build_stream(
   counts = FALSE,
   id_of = as.character,
   overwrite = FALSE,
+  ranks = NULL,
   verbose = interactive()
 )
 ```
@@ -77,6 +78,13 @@ scroll_build_stream(
 - overwrite:
 
   If `TRUE`, wipe `outdir` first (a fresh build).
+
+- ranks:
+
+  Store within-cell ranks for the rank-based signature scores (see
+  [`scroll_build()`](https://shihanli92.github.io/scroll/reference/scroll_build.md)).
+  `NULL` (default) keeps an existing project's setting, and is `FALSE`
+  for a new one; an append run must match the original setting.
 
 - verbose:
 

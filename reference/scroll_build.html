@@ -15,7 +15,7 @@ store of expression (expr/&amp;lt;assay&amp;gt;/), a manifest.yaml, and app scaf
 
     <a class="navbar-brand me-2" href="../index.html">scroll</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.7</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -66,6 +66,7 @@ store of expression (<code>expr/&lt;assay&gt;/</code>), a <code>manifest.yaml</c
 <span>  panels <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  exclude_panels <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  max_levels <span class="op">=</span> <span class="va">.SCROLL_MAX_LEVELS</span>,</span>
+<span>  ranks <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  overwrite <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/interactive.html" class="external-link">interactive</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -161,6 +162,13 @@ clone id or barcode with thousands of values) still export normally and stay
 fully usable — the manifest just records their <code>n_levels</code> count and the app
 recomputes the level set from <code>cells.parquet</code> when a control needs it. Keeps
 the manifest small and hand-editable. Defaults to 200.</p></dd>
+
+
+<dt id="arg-ranks">ranks<a class="anchor" aria-label="anchor" href="#arg-ranks"></a></dt>
+<dd><p>If <code>TRUE</code>, also store each value's rank within its cell, which the
+Signature panel's rank-based scores (UCell, AUCell) need. Off by default: ranks
+barely compress, so they add roughly 40-50% to the expression store. Per-gene
+means for an exact AddModuleScore are always stored (<code>stats/&lt;assay&gt;/</code>).</p></dd>
 
 
 <dt id="arg-overwrite">overwrite<a class="anchor" aria-label="anchor" href="#arg-overwrite"></a></dt>

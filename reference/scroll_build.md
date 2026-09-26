@@ -25,6 +25,7 @@ scroll_build(
   panels = NULL,
   exclude_panels = NULL,
   max_levels = .SCROLL_MAX_LEVELS,
+  ranks = FALSE,
   overwrite = FALSE,
   verbose = interactive()
 )
@@ -133,6 +134,14 @@ scroll_build(
   count and the app recomputes the level set from `cells.parquet` when a
   control needs it. Keeps the manifest small and hand-editable. Defaults
   to 200.
+
+- ranks:
+
+  If `TRUE`, also store each value's rank within its cell, which the
+  Signature panel's rank-based scores (UCell, AUCell) need. Off by
+  default: ranks barely compress, so they add roughly 40-50% to the
+  expression store. Per-gene means for an exact AddModuleScore are
+  always stored (`stats/<assay>/`).
 
 - overwrite:
 

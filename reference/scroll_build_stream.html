@@ -17,7 +17,7 @@ cell index, and the manifest written once at the end. The store is compacted
 
     <a class="navbar-brand me-2" href="../index.html">scroll</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.7</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -65,6 +65,7 @@ cell index, and the manifest written once at the end. The store is <strong>compa
 <span>  counts <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  id_of <span class="op">=</span> <span class="va">as.character</span>,</span>
 <span>  overwrite <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  ranks <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/interactive.html" class="external-link">interactive</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -117,6 +118,12 @@ part-file tags (default <code>as.character</code>).</p></dd>
 
 <dt id="arg-overwrite">overwrite<a class="anchor" aria-label="anchor" href="#arg-overwrite"></a></dt>
 <dd><p>If <code>TRUE</code>, wipe <code>outdir</code> first (a fresh build).</p></dd>
+
+
+<dt id="arg-ranks">ranks<a class="anchor" aria-label="anchor" href="#arg-ranks"></a></dt>
+<dd><p>Store within-cell ranks for the rank-based signature scores (see
+<code><a href="scroll_build.html">scroll_build()</a></code>). <code>NULL</code> (default) keeps an existing project's setting, and is
+<code>FALSE</code> for a new one; an append run must match the original setting.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
