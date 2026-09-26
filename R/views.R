@@ -513,24 +513,14 @@
   cols
 }
 
-# Replacement hint for the six view_* cores being retired from the public API.
-.SCROLL_VIEW_DEP <- paste(
-  "Use the built-in panels, or build the plot with ggplot2 plus",
-  "scroll_point_layer() / scroll_discrete_colors() / scroll_continuous_scale().")
-
 #' Embedding colored by a metadata column
 #'
 #' @param cells The globally-loaded cells data.frame.
 #' @param params List with `embedding` and `color_by`.
 #' @param state Optional toggle state (`embedding`, `split_by`, `show_labels`).
 #' @return A ggplot.
-#' @section Deprecated:
-#' This plot core is internal to the built-in panels and will no longer be
-#' exported from scroll 0.3.0.
-#' @keywords internal
-#' @export
+#' @noRd
 view_umap_colorby <- function(cells, params, state = list()) {
-  .scroll_soft_deprecate("view_umap_colorby", .SCROLL_VIEW_DEP, parent.frame())
   embedding <- .scroll_eff_embedding(params, state)
   df <- .scroll_embedding_xy(cells, embedding)
   color_by <- params$color_by
@@ -704,13 +694,8 @@ view_contrast_medoids <- function(cells, embedding, sample, group, subtitle = NU
 #' @param values A data.frame(cell, value) in normalized units, or `NULL`.
 #' @param state Optional toggle state.
 #' @return A ggplot.
-#' @section Deprecated:
-#' This plot core is internal to the built-in panels and will no longer be
-#' exported from scroll 0.3.0.
-#' @keywords internal
-#' @export
+#' @noRd
 view_feature_plot <- function(cells, params, values = NULL, state = list()) {
-  .scroll_soft_deprecate("view_feature_plot", .SCROLL_VIEW_DEP, parent.frame())
   embedding <- .scroll_eff_embedding(params, state)
   df <- .scroll_embedding_xy(cells, embedding)
   df$.expr <- .scroll_expr_vector(df, values)
@@ -956,13 +941,8 @@ view_feature_blend <- function(cells, params, values1, values2, state = list()) 
 #'   clustering step; when supplied (as the Shiny app does), `cells`/`expr_long`
 #'   are ignored for assembly and only cosmetics are applied.
 #' @return A ggplot.
-#' @section Deprecated:
-#' This plot core is internal to the built-in panels and will no longer be
-#' exported from scroll 0.3.0.
-#' @keywords internal
-#' @export
+#' @noRd
 view_dotplot <- function(cells, params, expr_long, state = list(), assembly = NULL) {
-  .scroll_soft_deprecate("view_dotplot", .SCROLL_VIEW_DEP, parent.frame())
   if (is.null(assembly)) {
     group_by <- .scroll_group_col(params, state)
     if (!length(group_by) || !all(group_by %in% names(cells)))
@@ -1145,13 +1125,8 @@ view_dotplot <- function(cells, params, expr_long, state = list(), assembly = NU
 #'   `palette`, `cell_cap`, `aspect`, `theme`).
 #' @param assembly Optional precomputed assembly (as the Shiny app supplies).
 #' @return A ggplot, or an aplot composite when dendrograms are attached.
-#' @section Deprecated:
-#' This plot core is internal to the built-in panels and will no longer be
-#' exported from scroll 0.3.0.
-#' @keywords internal
-#' @export
+#' @noRd
 view_heatmap <- function(cells, params, expr_long, state = list(), assembly = NULL) {
-  .scroll_soft_deprecate("view_heatmap", .SCROLL_VIEW_DEP, parent.frame())
   if (is.null(assembly)) {
     group_by <- .scroll_group_col(params, state)
     feats <- unlist(params$features)
@@ -1297,13 +1272,8 @@ view_heatmap <- function(cells, params, expr_long, state = list(), assembly = NU
 #' @param state Optional toggle state (`palette`, `jitter`, `legend`;
 #'   `split_by` overrides `group_by`).
 #' @return A ggplot.
-#' @section Deprecated:
-#' This plot core is internal to the built-in panels and will no longer be
-#' exported from scroll 0.3.0.
-#' @keywords internal
-#' @export
+#' @noRd
 view_violin <- function(cells, params, values = NULL, state = list()) {
-  .scroll_soft_deprecate("view_violin", .SCROLL_VIEW_DEP, parent.frame())
   # group_by may name >1 column (use their "a | b" interaction, like DimPlot);
   # split_by (optional) draws side-by-side coloured violins within each group.
   # group_by may name >1 column (use their "a | b" interaction, like DimPlot);
@@ -1540,13 +1510,8 @@ view_biaxial <- function(cells, params, state = list(), df = NULL) {
 #' @param params List with `group_by` (x axis) and `fill_by` (composition).
 #' @param state Optional toggle state (`palette`, `normalize`, `legend`).
 #' @return A ggplot.
-#' @section Deprecated:
-#' This plot core is internal to the built-in panels and will no longer be
-#' exported from scroll 0.3.0.
-#' @keywords internal
-#' @export
+#' @noRd
 view_proportions <- function(cells, params, state = list()) {
-  .scroll_soft_deprecate("view_proportions", .SCROLL_VIEW_DEP, parent.frame())
   x <- params$group_by
   fill <- params$fill_by
   if (!length(x) || !length(fill) || !all(c(x, fill) %in% names(cells)))

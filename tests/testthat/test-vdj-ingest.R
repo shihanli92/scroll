@@ -43,7 +43,8 @@ test_that("resolver auto-detects AIRR / Platypus by column presence; explicit ma
 
   # an explicit segments= is never overwritten by a preset
   s <- vdj_spec("TCR", group_col = "celltype", segments = c(TRBV = "v_call_VDJ"))
-  r4 <- scroll:::.scroll_vdj_resolve_spec(s, airr[[]])
+  expect_message(r4 <- scroll:::.scroll_vdj_resolve_spec(s, airr[[]]),
+                 "matched clonotype = clone_id")         # the auto-match is reported
   expect_true(r4$spec$segments_explicit)
   expect_equal(unname(r4$spec$segments), "v_call_VDJ")
 })

@@ -118,15 +118,8 @@ scroll_query_features <- function(con, assay, features) {
 #'   gene names become cheap integer ops — a large speedup when reconstructing a
 #'   DE contrast's matrix. The factor's levels are the store's own feature names.
 #' @return A data.frame with columns `feature`, `cell`, `value`.
-#' @section Deprecated:
-#' This is an internal step of [scroll_de()] and will no longer be exported from
-#' scroll 0.3.0.
-#' @keywords internal
-#' @export
+#' @noRd
 scroll_query_cells <- function(con, assay, cells, dict = FALSE) {
-  .scroll_soft_deprecate("scroll_query_cells", paste(
-    "Use scroll_de() for differential expression, or scroll_query_features()",
-    "for specific genes."), parent.frame())
   if (length(cells) == 0)
     return(data.frame(feature = if (dict) factor() else character(),
                       cell = character(), value = numeric()))
@@ -166,13 +159,8 @@ scroll_query_cells <- function(con, assay, cells, dict = FALSE) {
 #' @param mapping A data.frame with columns `cell` and `psample` (a cell may map
 #'   to several pseudobulk samples, e.g. overlapping pseudo-replicates).
 #' @return A data.frame with columns `feature`, `psample`, `count` (summed).
-#' @section Deprecated:
-#' This is an internal step of [scroll_pseudobulk_de()] and will no longer be
-#' exported from scroll 0.3.0.
-#' @keywords internal
-#' @export
+#' @noRd
 scroll_aggregate_counts <- function(con, assay, mapping) {
-  .scroll_soft_deprecate("scroll_aggregate_counts", "Use scroll_pseudobulk_de().", parent.frame())
   stopifnot(all(c("cell", "psample") %in% names(mapping)))
   path <- .scroll_counts_path(con$dir, assay)
   if (!file.exists(path))

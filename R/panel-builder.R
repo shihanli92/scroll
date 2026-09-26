@@ -65,15 +65,9 @@ scroll_features <- function(data, assay = NULL)
 #'   that names neither a metadata column nor another control (a common typo);
 #'   the builder passes this automatically.
 #' @return Invisibly, `NULL`.
-#' @section Deprecated:
-#' Superseded by [scroll_input_levels()] (`from = `), which wires this for you; it
-#' will no longer be exported from scroll 0.3.0.
-#' @keywords internal
-#' @export
+#' @noRd
 scroll_bind_levels <- function(input, session, id, from, data, selected = 1,
                                control_ids = character()) {
-  .scroll_soft_deprecate("scroll_bind_levels",
-                         "Use scroll_input_levels(from = ) instead.", parent.frame())
   levs <- function(col) .scroll_meta_levels(data, col)
   pick <- function(lv) {
     if (identical(selected, "none") || !length(lv)) character(0)

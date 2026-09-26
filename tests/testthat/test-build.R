@@ -70,10 +70,24 @@ test_that("quantization floors sub-max/510 values to zero; quantize=FALSE keeps 
   expect_true(any(low_f$value > 0))                  # preserved at full precision
 })
 
-test_that("unsafe feature names (path separators) warn", {
-  expect_warning(scroll:::.scroll_warn_unsafe_features(c("OK", "BAD/NAME")),
-                 "path separators")
-  expect_silent(scroll:::.scroll_warn_unsafe_features(c("CD3D", "MS4A1")))
+test_that("feature names with path separators build and query like any other", {
+  # a feature name is only ever a value in the one-file-per-assay store (never a path)
+  set.seed(2); n <- 40
+  genes <- c("HLA-A/B", "TR\\AV1", "CD3D", "G1")
+  cm <- matrix(rpois(length(genes) * n, 2), nrow = length(genes),
+               dimnames = list(genes, paste0("c", 1:n)))
+  obj <- SeuratObject::CreateSeuratObject(counts = Matrix::Matrix(cm, sparse = TRUE))
+  obj <- SeuratObject::SetAssayData(obj, layer = "data",
+                                    new.data = Matrix::Matrix(log1p(cm), sparse = TRUE))
+  emb <- matrix(rnorm(n * 2), ncol = 2, dimnames = list(colnames(obj), c("UMAP_1", "UMAP_2")))
+  obj[["umap"]] <- SeuratObject::CreateDimReducObject(embeddings = emb, key = "UMAP_", assay = "RNA")
+  dir <- tempfile("slash")
+  expect_no_warning(suppressMessages(
+    scroll_build(obj, dir, quantize = FALSE, verbose = FALSE)))
+  con <- scroll_connect(dir); on.exit(scroll_disconnect(con))
+  for (g in rownames(obj)[1:2])
+    expect_identical(nrow(scroll_query_feature(con, "RNA", g)), sum(cm[g, ] > 0))
+  expect_identical(list.files(file.path(dir, "expr"), recursive = TRUE), "RNA/part-0.parquet")
 })
 
 test_that("building into a non-empty dir without overwrite errors", {
@@ -110,10 +124,9 @@ test_that("manifest caps cached levels for high-cardinality columns", {
   skip_if_not_installed("SeuratObject")
   obj <- .highcard_object()
   dir <- file.path(tempdir(), "scroll-levels-cap")
-  expect_message(
-    scroll_build(obj, dir, assays = "RNA", meta_cols = c("clone", "grp"),
-                 overwrite = TRUE),
-    "high-cardinality")
+  msgs <- testthat::capture_messages(
+    scroll_build(obj, dir, assays = "RNA", meta_cols = c("clone", "grp"), overwrite = TRUE))
+  expect_true(any(grepl("high-cardinality", msgs)))
   man <- scroll_manifest(dir)
   # high-cardinality column: type + n_levels recorded, cached levels omitted
   expect_equal(man$meta$clone$type, "categorical")

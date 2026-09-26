@@ -331,7 +331,6 @@ scroll_build <- function(object, outdir,
   .scroll_check_cell_order(mat, cell_ids, assay)   # int cell-index <-> cells.parquet row order
 
   feats <- rownames(mat)
-  .scroll_warn_unsafe_features(feats)
   nfeat <- length(feats)
   .scroll_step(verbose, sprintf("Exporting assay '%s' (%s features)...",
                                 assay, format(nfeat, big.mark = ",")))
@@ -644,12 +643,4 @@ scroll_add_subset <- function(object, sub_object, name, embeddings = "auto",
     else identical(as.character(a), as.character(b))
   }, logical(1))
   c(setdiff(names(cm), names(pm)), shared[!same])
-}
-
-.scroll_warn_unsafe_features <- function(feats) {
-  unsafe <- grep("[/\\\\]", feats, value = TRUE)
-  if (length(unsafe))
-    warning("Some feature names contain path separators and may break ",
-            "partitioning: ", paste(utils::head(unsafe, 5), collapse = ", "),
-            call. = FALSE)
 }

@@ -283,11 +283,6 @@ test_that("scroll_pseudobulk_de(runs > 1) returns per-gene stability over runs",
   expect_equal(attr(st, "runs"), 6)
   expect_true(all(st$sel_freq >= 0 & st$sel_freq <= 1))
 
-  # the deprecated wrapper returns the identical table (seeds 1..runs are fixed)
-  old <- scroll_pseudobulk_stability(data, "RNA", aggregate_cols = "celltype",
-                                     ident1 = "T", ident2 = "B", replicate_col = "no_replicate",
-                                     runs = 6, n_pseudo = 3, cells_per_pseudo = 15, min_cells = 5)
-  expect_equal(old, st)
 })
 
 test_that("pseudobulk panel gates off without a counts store", {

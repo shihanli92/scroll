@@ -507,7 +507,10 @@
       } else {
         lv <- .scroll_vdj_level_set(input, data, "group", "group_levels")
         p <- ggplot2::ggplot(f, ggplot2::aes(.data$gene, .data$freq)) +
-          ggplot2::geom_line(ggplot2::aes(group = .data$gene), colour = "grey70", linewidth = 0.3) +
+          # a line joins one gene's groups: only for genes seen in 2+ groups (a lone point
+          # has nothing to join, and ggplot would message on every render)
+          ggplot2::geom_line(ggplot2::aes(group = .data$gene), colour = "grey70", linewidth = 0.3,
+                             data = function(d) d[d$gene %in% d$gene[duplicated(d$gene)], , drop = FALSE]) +
           ggplot2::geom_point(ggplot2::aes(fill = .data[[gcol]]), shape = 21, size = 2.5) +
           ggplot2::scale_fill_manual(values = .scroll_vdj_colours(input, lv), name = grp) +
           ggplot2::scale_y_continuous(expand = .scroll_expand0()) +

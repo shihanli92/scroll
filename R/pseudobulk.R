@@ -373,24 +373,3 @@ scroll_pseudobulk_de <- function(data, assay, aggregate_cols, ident1, ident2 = N
   res
 }
 
-#' Stability of pseudobulk DE across random pseudo-replicate draws
-#'
-#' Deprecated: use `scroll_pseudobulk_de(..., runs = )`, which returns the same
-#' stability table when `runs > 1`. This wrapper will be removed in scroll 0.3.0.
-#'
-#' @inheritParams scroll_pseudobulk_de
-#' @param runs Number of random re-runs.
-#' @return See [scroll_pseudobulk_de()] (`runs > 1`).
-#' @keywords internal
-#' @export
-scroll_pseudobulk_stability <- function(data, assay, aggregate_cols, ident1, ident2 = NULL,
-                                        replicate_col = "no_replicate", min_cells = 10,
-                                        n_pseudo = 3, cells_per_pseudo = 50, cells = NULL,
-                                        runs = 25, lfc = 1, padj = 0.05) {
-  .scroll_soft_deprecate("scroll_pseudobulk_stability",
-                         "Use scroll_pseudobulk_de(runs = ) instead.", parent.frame())
-  scroll_pseudobulk_de(data, assay, aggregate_cols, ident1, ident2,
-                       replicate_col = replicate_col, min_cells = min_cells,
-                       n_pseudo = n_pseudo, cells_per_pseudo = cells_per_pseudo,
-                       cells = cells, runs = max(2L, runs), lfc = lfc, padj = padj)
-}

@@ -1,3 +1,27 @@
+# scroll 0.3.6
+
+Cleanup release.
+
+## Breaking: retired exports removed
+
+* The ten functions deprecated in 0.2.19 are no longer exported (they remain
+  internal, used by the built-in panels): `view_umap_colorby()`, `view_feature_plot()`,
+  `view_dotplot()`, `view_heatmap()`, `view_violin()`, `view_proportions()`,
+  `scroll_bind_levels()`, `scroll_query_cells()` and `scroll_aggregate_counts()`.
+  Use the built-in panels (or ggplot2 with `scroll_point_layer()`,
+  `scroll_discrete_colors()`, `scroll_continuous_scale()`), `scroll_input_levels(from = )`,
+  `scroll_de()` / `scroll_query_features()`, and `scroll_pseudobulk_de()` instead.
+* `scroll_pseudobulk_stability()` is removed: `scroll_pseudobulk_de(..., runs = )`
+  returns the same stability table.
+
+## Fixes
+
+* Feature names containing `/` or `\` no longer trigger a build warning: since
+  0.2.6 a feature name is a value in the per-assay file, never a path, and such
+  names build and query normally.
+* Gene usage (VDJ): the lines joining a gene's groups are drawn only for genes seen
+  in two or more groups, which stops a ggplot message on every render.
+
 # scroll 0.3.5
 
 ## Style sheet: saved styles

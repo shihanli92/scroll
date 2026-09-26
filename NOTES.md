@@ -27,27 +27,20 @@ top-3 blockers + documented the quantization caveat). Items below were
   `render_view()` grammar, so it stays as public API rather than dead code.
 - **Priority:** low (a future precomputed-DE source could reuse it).
 
-### 3. `logFC` labeling is a mean-difference, not literal log2FC
-- **Where:** `scroll_de()` output column `logFC`; `view_volcano()` axis label and
-  default cutoff `1`.
-- **What:** presto's `logFC` = difference of group means of the (lognorm) input
-  — the standard presto/Seurat convention, **not a bug**, but the label + the
-  cutoff-of-1 are scale-dependent and slightly imprecise.
-- **Options:** relabel (e.g. "avg log-expr diff"), or convert to log2 and label
-  `avg_log2FC`; document the cutoff units.
-- **Priority:** low.
+### 3. `logFC` labeling -- RESOLVED
+- `scroll_de()` returns both presto's `logFC` (natural-log mean-of-log difference,
+  documented as such) and a Seurat-matching `avg_log2FC`; the DE panel's volcano and
+  its cutoff use `avg_log2FC`.
 
 ### 4. Assay name interpolated into the glob path — RESOLVED
 - `scroll_query_feature/features/cells` now build the glob via
   `.scroll_assay_glob()`, which rejects any `assay` that is not a plain path
   segment (no separators, no `..`, non-empty). Covered by test-multiassay.R.
 
-### 5. Feature names with path separators are warned, not rejected
-- **Where:** `.scroll_warn_unsafe_features()` (`build.R`) warns on `/`/`\` in
-  feature names but does not reject/sanitize; such a name would break arrow's
-  hive partitioning at build.
-- **Fix:** sanitize or stop on unsafe feature names.
-- **Priority:** low (gene symbols are normally safe).
+### 5. Feature names with path separators -- RESOLVED (0.3.6)
+- Since 0.2.6 the store is one file per assay, so a feature name is only ever a
+  value, never a path: `/` and `\\` build and query like any other character. The
+  stale build warning was removed; test-build.R pins the round-trip.
 
 ### 6. Unused Suggests — RESOLVED
 - `shinycssloaders` is now wired via `.scroll_spin()` (guarded `requireNamespace`)
@@ -64,8 +57,7 @@ top-3 blockers + documented the quantization caveat). Items below were
 - ~~**Two-group DE** end-to-end~~ — DONE (ADT `T` vs `B` in test-multiassay.R).
 - **Quantization floor on `pct`**: a test pinning the near-zero drop behavior so
   the tradeoff is captured in tests.
-- **`.scroll_warn_unsafe_features`** and the `overwrite = FALSE` non-empty-dir
-  stop path.
+- The `overwrite = FALSE` non-empty-dir stop path.
 - **App-level connection cleanup**: assert `scroll_app()` registers the `onStop`
   (hard to introspect cleanly; currently only manually verified).
 - **Browser/Shiny-UI layout**: `testServer` covers module logic well but not the
