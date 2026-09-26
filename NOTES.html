@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">scroll</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -40,7 +40,7 @@
 <div class="section level3">
 <h3 id="id_1-live-de-is-unbounded-in-the-gene-dimension">1. Live DE is unbounded in the gene dimension<a class="anchor" aria-label="anchor" href="#id_1-live-de-is-unbounded-in-the-gene-dimension"></a></h3>
 <ul><li>
-<strong>Where:</strong> <code><a href="reference/scroll_de.html">scroll_de()</a></code> (<code>R/de.R</code>) → <code><a href="reference/scroll_query_cells.html">scroll_query_cells()</a></code> (<code>R/query.R</code>).</li>
+<strong>Where:</strong> <code><a href="reference/scroll_de.html">scroll_de()</a></code> (<code>R/de.R</code>) → <code>scroll_query_cells()</code> (<code>R/query.R</code>).</li>
 <li>
 <strong>What:</strong> A DE run reconstructs an <em>all-genes × contrast-cells</em> sparse matrix in memory for presto. Bounded by the contrast’s cell count and gated by the Compute button + a ≥3-cell floor, but there is <strong>no upper cap</strong>. A one-vs-rest on a large cluster in a 500k-cell dataset builds a big in-RAM matrix — the one intentional exception to the flat-RAM invariant, currently unguarded on size.</li>
 <li>
@@ -60,15 +60,9 @@
 <strong>Priority:</strong> low (a future precomputed-DE source could reuse it).</li>
 </ul></div>
 <div class="section level3">
-<h3 id="id_3-logfc-labeling-is-a-mean-difference-not-literal-log2fc">3. <code>logFC</code> labeling is a mean-difference, not literal log2FC<a class="anchor" aria-label="anchor" href="#id_3-logfc-labeling-is-a-mean-difference-not-literal-log2fc"></a></h3>
+<h3 id="id_3-logfc-labeling--resolved">3. <code>logFC</code> labeling – RESOLVED<a class="anchor" aria-label="anchor" href="#id_3-logfc-labeling--resolved"></a></h3>
 <ul><li>
-<strong>Where:</strong> <code><a href="reference/scroll_de.html">scroll_de()</a></code> output column <code>logFC</code>; <code>view_volcano()</code> axis label and default cutoff <code>1</code>.</li>
-<li>
-<strong>What:</strong> presto’s <code>logFC</code> = difference of group means of the (lognorm) input — the standard presto/Seurat convention, <strong>not a bug</strong>, but the label + the cutoff-of-1 are scale-dependent and slightly imprecise.</li>
-<li>
-<strong>Options:</strong> relabel (e.g. “avg log-expr diff”), or convert to log2 and label <code>avg_log2FC</code>; document the cutoff units.</li>
-<li>
-<strong>Priority:</strong> low.</li>
+<code><a href="reference/scroll_de.html">scroll_de()</a></code> returns both presto’s <code>logFC</code> (natural-log mean-of-log difference, documented as such) and a Seurat-matching <code>avg_log2FC</code>; the DE panel’s volcano and its cutoff use <code>avg_log2FC</code>.</li>
 </ul></div>
 <div class="section level3">
 <h3 id="id_4-assay-name-interpolated-into-the-glob-path--resolved">4. Assay name interpolated into the glob path — RESOLVED<a class="anchor" aria-label="anchor" href="#id_4-assay-name-interpolated-into-the-glob-path--resolved"></a></h3>
@@ -76,13 +70,8 @@
 <code>scroll_query_feature/features/cells</code> now build the glob via <code>.scroll_assay_glob()</code>, which rejects any <code>assay</code> that is not a plain path segment (no separators, no <code>..</code>, non-empty). Covered by test-multiassay.R.</li>
 </ul></div>
 <div class="section level3">
-<h3 id="id_5-feature-names-with-path-separators-are-warned-not-rejected">5. Feature names with path separators are warned, not rejected<a class="anchor" aria-label="anchor" href="#id_5-feature-names-with-path-separators-are-warned-not-rejected"></a></h3>
-<ul><li>
-<strong>Where:</strong> <code>.scroll_warn_unsafe_features()</code> (<code>build.R</code>) warns on <code>/</code>/<code>\</code> in feature names but does not reject/sanitize; such a name would break arrow’s hive partitioning at build.</li>
-<li>
-<strong>Fix:</strong> sanitize or stop on unsafe feature names.</li>
-<li>
-<strong>Priority:</strong> low (gene symbols are normally safe).</li>
+<h3 id="id_5-feature-names-with-path-separators--resolved-036">5. Feature names with path separators – RESOLVED (0.3.6)<a class="anchor" aria-label="anchor" href="#id_5-feature-names-with-path-separators--resolved-036"></a></h3>
+<ul><li>Since 0.2.6 the store is one file per assay, so a feature name is only ever a value, never a path: <code>/</code> and <code>\\</code> build and query like any other character. The stale build warning was removed; test-build.R pins the round-trip.</li>
 </ul></div>
 <div class="section level3">
 <h3 id="id_6-unused-suggests--resolved">6. Unused Suggests — RESOLVED<a class="anchor" aria-label="anchor" href="#id_6-unused-suggests--resolved"></a></h3>
@@ -100,8 +89,7 @@
 <del><strong>Two-group DE</strong> end-to-end</del> — DONE (ADT <code>T</code> vs <code>B</code> in test-multiassay.R).</li>
 <li>
 <strong>Quantization floor on <code>pct</code></strong>: a test pinning the near-zero drop behavior so the tradeoff is captured in tests.</li>
-<li>
-<strong><code>.scroll_warn_unsafe_features</code></strong> and the <code>overwrite = FALSE</code> non-empty-dir stop path.</li>
+<li>The <code>overwrite = FALSE</code> non-empty-dir stop path.</li>
 <li>
 <strong>App-level connection cleanup</strong>: assert <code><a href="reference/scroll_app.html">scroll_app()</a></code> registers the <code>onStop</code> (hard to introspect cleanly; currently only manually verified).</li>
 <li>

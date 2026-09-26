@@ -1,5 +1,39 @@
 # Changelog
 
+## scroll 0.3.6
+
+Cleanup release.
+
+### Breaking: retired exports removed
+
+- The ten functions deprecated in 0.2.19 are no longer exported (they
+  remain internal, used by the built-in panels): `view_umap_colorby()`,
+  `view_feature_plot()`, `view_dotplot()`, `view_heatmap()`,
+  `view_violin()`, `view_proportions()`, `scroll_bind_levels()`,
+  `scroll_query_cells()` and `scroll_aggregate_counts()`. Use the
+  built-in panels (or ggplot2 with
+  [`scroll_point_layer()`](https://shihanli92.github.io/scroll/reference/scroll_helpers.md),
+  [`scroll_discrete_colors()`](https://shihanli92.github.io/scroll/reference/scroll_helpers.md),
+  [`scroll_continuous_scale()`](https://shihanli92.github.io/scroll/reference/scroll_helpers.md)),
+  `scroll_input_levels(from = )`,
+  [`scroll_de()`](https://shihanli92.github.io/scroll/reference/scroll_de.md)
+  /
+  [`scroll_query_features()`](https://shihanli92.github.io/scroll/reference/scroll_query_features.md),
+  and
+  [`scroll_pseudobulk_de()`](https://shihanli92.github.io/scroll/reference/scroll_pseudobulk_de.md)
+  instead.
+- `scroll_pseudobulk_stability()` is removed:
+  `scroll_pseudobulk_de(..., runs = )` returns the same stability table.
+
+### Fixes
+
+- Feature names containing `/` or `\` no longer trigger a build warning:
+  since 0.2.6 a feature name is a value in the per-assay file, never a
+  path, and such names build and query normally.
+- Gene usage (VDJ): the lines joining a gene’s groups are drawn only for
+  genes seen in two or more groups, which stops a ggplot message on
+  every render.
+
 ## scroll 0.3.5
 
 ### Style sheet: saved styles
@@ -232,36 +266,29 @@ custom-panel extension API.
 - **Deprecated, removed from the export list in 0.3.0.** Calling these
   from your own code now warns once per session; the built-in panels are
   unaffected:
-  - [`view_umap_colorby()`](https://shihanli92.github.io/scroll/reference/view_umap_colorby.md),
-    [`view_feature_plot()`](https://shihanli92.github.io/scroll/reference/view_feature_plot.md),
-    [`view_dotplot()`](https://shihanli92.github.io/scroll/reference/view_dotplot.md),
-    [`view_heatmap()`](https://shihanli92.github.io/scroll/reference/view_heatmap.md),
-    [`view_violin()`](https://shihanli92.github.io/scroll/reference/view_violin.md),
-    [`view_proportions()`](https://shihanli92.github.io/scroll/reference/view_proportions.md):
-    use the built-in panels, or build the plot with ggplot2 plus
+  - `view_umap_colorby()`, `view_feature_plot()`, `view_dotplot()`,
+    `view_heatmap()`, `view_violin()`, `view_proportions()`: use the
+    built-in panels, or build the plot with ggplot2 plus
     [`scroll_point_layer()`](https://shihanli92.github.io/scroll/reference/scroll_helpers.md)
     /
     [`scroll_discrete_colors()`](https://shihanli92.github.io/scroll/reference/scroll_helpers.md)
     /
     [`scroll_continuous_scale()`](https://shihanli92.github.io/scroll/reference/scroll_helpers.md).
-  - [`scroll_bind_levels()`](https://shihanli92.github.io/scroll/reference/scroll_bind_levels.md):
-    use `scroll_input_levels(from = )`.
-  - [`scroll_query_cells()`](https://shihanli92.github.io/scroll/reference/scroll_query_cells.md):
-    use
+  - `scroll_bind_levels()`: use `scroll_input_levels(from = )`.
+  - `scroll_query_cells()`: use
     [`scroll_de()`](https://shihanli92.github.io/scroll/reference/scroll_de.md),
     or
     [`scroll_query_features()`](https://shihanli92.github.io/scroll/reference/scroll_query_features.md)
     for specific genes. (Its `cells` doc now correctly describes the v2
     int32 cell key.)
-  - [`scroll_aggregate_counts()`](https://shihanli92.github.io/scroll/reference/scroll_aggregate_counts.md):
-    use
+  - `scroll_aggregate_counts()`: use
     [`scroll_pseudobulk_de()`](https://shihanli92.github.io/scroll/reference/scroll_pseudobulk_de.md).
-- **[`scroll_pseudobulk_stability()`](https://shihanli92.github.io/scroll/reference/scroll_pseudobulk_stability.md)
-  merged into `scroll_pseudobulk_de(runs = )`.** With `runs > 1` it
-  returns the per-gene stability table (`sel_freq`, `median_logFC`,
-  `sign_agree`, …), matching the Pseudobulk panel’s stability mode; new
-  `lfc` / `padj` arguments set the per-run hit cutoffs. The old name is
-  a deprecated wrapper returning the identical table.
+- **`scroll_pseudobulk_stability()` merged into
+  `scroll_pseudobulk_de(runs = )`.** With `runs > 1` it returns the
+  per-gene stability table (`sel_freq`, `median_logFC`, `sign_agree`,
+  …), matching the Pseudobulk panel’s stability mode; new `lfc` / `padj`
+  arguments set the per-run hit cutoffs. The old name is a deprecated
+  wrapper returning the identical table.
 - Fixes the pkgdown reference build, which failed on four exported
   `view_*` topics missing from `_pkgdown.yml`.
 
@@ -536,10 +563,8 @@ bars, bar outline – landed under 0.2.11.)
 - **Composition: fill by multiple columns.** The Proportions panel’s
   “Fill by” is now a multi-select that fills by the `a | b` interaction
   of the chosen categorical columns – the same pattern as DimPlot’s
-  colour-by.
-  [`view_proportions()`](https://shihanli92.github.io/scroll/reference/view_proportions.md)
-  and its CSV export build the interaction; Manual colours use the
-  observed interaction levels.
+  colour-by. `view_proportions()` and its CSV export build the
+  interaction; Manual colours use the observed interaction levels.
 
 ## scroll 0.2.9
 
@@ -1035,10 +1060,9 @@ polished, flat-RAM interactive single-cell explorer.
   argument, default `1L`) and restores the caller’s `.Random.seed`,
   mirroring
   [`scroll_de()`](https://shihanli92.github.io/scroll/reference/scroll_de.md)’s
-  cap.
-  [`scroll_pseudobulk_stability()`](https://shihanli92.github.io/scroll/reference/scroll_pseudobulk_stability.md)
-  still varies the draw per run (distinct per-run seeds), so it stays
-  reproducible as a whole without perturbing the session.
+  cap. `scroll_pseudobulk_stability()` still varies the draw per run
+  (distinct per-run seeds), so it stays reproducible as a whole without
+  perturbing the session.
 - **[`scroll_build_stream()`](https://shihanli92.github.io/scroll/reference/scroll_build_stream.md)
   validates each source up front.** A source missing a declared assay /
   embedding / metadata column now errors with the offending source
@@ -1392,7 +1416,7 @@ Each built-in analysis panel carries its own fine-grained controls:
   inline error messages, PNG/PDF export, and subset/view awareness. The
   lower-level helpers
   ([`scroll_render_plot()`](https://shihanli92.github.io/scroll/reference/scroll_render_plot.md),
-  [`scroll_bind_levels()`](https://shihanli92.github.io/scroll/reference/scroll_bind_levels.md),
+  `scroll_bind_levels()`,
   [`scroll_columns()`](https://shihanli92.github.io/scroll/reference/scroll_columns.md))
   are exported for hand-written panels too.
 - **Richer declarative controls** for

@@ -11,9 +11,7 @@ caveat). Items below were **consciously deferred**, not forgotten.
 
 - **Where:**
   [`scroll_de()`](https://shihanli92.github.io/scroll/reference/scroll_de.md)
-  (`R/de.R`) →
-  [`scroll_query_cells()`](https://shihanli92.github.io/scroll/reference/scroll_query_cells.md)
-  (`R/query.R`).
+  (`R/de.R`) → `scroll_query_cells()` (`R/query.R`).
 - **What:** A DE run reconstructs an *all-genes × contrast-cells* sparse
   matrix in memory for presto. Bounded by the contrast’s cell count and
   gated by the Compute button + a ≥3-cell floor, but there is **no upper
@@ -37,19 +35,12 @@ caveat). Items below were **consciously deferred**, not forgotten.
   rather than dead code.
 - **Priority:** low (a future precomputed-DE source could reuse it).
 
-### 3. `logFC` labeling is a mean-difference, not literal log2FC
+### 3. `logFC` labeling – RESOLVED
 
-- **Where:**
-  [`scroll_de()`](https://shihanli92.github.io/scroll/reference/scroll_de.md)
-  output column `logFC`; `view_volcano()` axis label and default cutoff
-  `1`.
-- **What:** presto’s `logFC` = difference of group means of the
-  (lognorm) input — the standard presto/Seurat convention, **not a
-  bug**, but the label + the cutoff-of-1 are scale-dependent and
-  slightly imprecise.
-- **Options:** relabel (e.g. “avg log-expr diff”), or convert to log2
-  and label `avg_log2FC`; document the cutoff units.
-- **Priority:** low.
+- [`scroll_de()`](https://shihanli92.github.io/scroll/reference/scroll_de.md)
+  returns both presto’s `logFC` (natural-log mean-of-log difference,
+  documented as such) and a Seurat-matching `avg_log2FC`; the DE panel’s
+  volcano and its cutoff use `avg_log2FC`.
 
 ### 4. Assay name interpolated into the glob path — RESOLVED
 
@@ -58,13 +49,12 @@ caveat). Items below were **consciously deferred**, not forgotten.
   path segment (no separators, no `..`, non-empty). Covered by
   test-multiassay.R.
 
-### 5. Feature names with path separators are warned, not rejected
+### 5. Feature names with path separators – RESOLVED (0.3.6)
 
-- **Where:** `.scroll_warn_unsafe_features()` (`build.R`) warns on
-  `/`/`\` in feature names but does not reject/sanitize; such a name
-  would break arrow’s hive partitioning at build.
-- **Fix:** sanitize or stop on unsafe feature names.
-- **Priority:** low (gene symbols are normally safe).
+- Since 0.2.6 the store is one file per assay, so a feature name is only
+  ever a value, never a path: `/` and `\\` build and query like any
+  other character. The stale build warning was removed; test-build.R
+  pins the round-trip.
 
 ### 6. Unused Suggests — RESOLVED
 
@@ -84,8 +74,7 @@ caveat). Items below were **consciously deferred**, not forgotten.
   test-multiassay.R).
 - **Quantization floor on `pct`**: a test pinning the near-zero drop
   behavior so the tradeoff is captured in tests.
-- **`.scroll_warn_unsafe_features`** and the `overwrite = FALSE`
-  non-empty-dir stop path.
+- The `overwrite = FALSE` non-empty-dir stop path.
 - **App-level connection cleanup**: assert
   [`scroll_app()`](https://shihanli92.github.io/scroll/reference/scroll_app.md)
   registers the `onStop` (hard to introspect cleanly; currently only

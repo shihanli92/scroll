@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">scroll</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,6 +32,21 @@
       <small>Source: <a href="https://github.com/shihanli92/scroll/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.3.6" id="scroll-036">scroll 0.3.6<a class="anchor" aria-label="anchor" href="#scroll-036"></a></h2>
+<p>Cleanup release.</p>
+<div class="section level3">
+<h3 id="breaking-retired-exports-removed-0-3-6">Breaking: retired exports removed<a class="anchor" aria-label="anchor" href="#breaking-retired-exports-removed-0-3-6"></a></h3>
+<ul><li>The ten functions deprecated in 0.2.19 are no longer exported (they remain internal, used by the built-in panels): <code>view_umap_colorby()</code>, <code>view_feature_plot()</code>, <code>view_dotplot()</code>, <code>view_heatmap()</code>, <code>view_violin()</code>, <code>view_proportions()</code>, <code>scroll_bind_levels()</code>, <code>scroll_query_cells()</code> and <code>scroll_aggregate_counts()</code>. Use the built-in panels (or ggplot2 with <code><a href="../reference/scroll_helpers.html">scroll_point_layer()</a></code>, <code><a href="../reference/scroll_helpers.html">scroll_discrete_colors()</a></code>, <code><a href="../reference/scroll_helpers.html">scroll_continuous_scale()</a></code>), <code>scroll_input_levels(from = )</code>, <code><a href="../reference/scroll_de.html">scroll_de()</a></code> / <code><a href="../reference/scroll_query_features.html">scroll_query_features()</a></code>, and <code><a href="../reference/scroll_pseudobulk_de.html">scroll_pseudobulk_de()</a></code> instead.</li>
+<li>
+<code>scroll_pseudobulk_stability()</code> is removed: <code>scroll_pseudobulk_de(..., runs = )</code> returns the same stability table.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="fixes-0-3-6">Fixes<a class="anchor" aria-label="anchor" href="#fixes-0-3-6"></a></h3>
+<ul><li>Feature names containing <code>/</code> or <code>\</code> no longer trigger a build warning: since 0.2.6 a feature name is a value in the per-assay file, never a path, and such names build and query normally.</li>
+<li>Gene usage (VDJ): the lines joining a gene’s groups are drawn only for genes seen in two or more groups, which stops a ggplot message on every render.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.3.5" id="scroll-035">scroll 0.3.5<a class="anchor" aria-label="anchor" href="#scroll-035"></a></h2>
 <div class="section level3">
@@ -156,16 +171,16 @@
 <li>
 <strong>Deprecated, removed from the export list in 0.3.0.</strong> Calling these from your own code now warns once per session; the built-in panels are unaffected:
 <ul><li>
-<code><a href="../reference/view_umap_colorby.html">view_umap_colorby()</a></code>, <code><a href="../reference/view_feature_plot.html">view_feature_plot()</a></code>, <code><a href="../reference/view_dotplot.html">view_dotplot()</a></code>, <code><a href="../reference/view_heatmap.html">view_heatmap()</a></code>, <code><a href="../reference/view_violin.html">view_violin()</a></code>, <code><a href="../reference/view_proportions.html">view_proportions()</a></code>: use the built-in panels, or build the plot with ggplot2 plus <code><a href="../reference/scroll_helpers.html">scroll_point_layer()</a></code> / <code><a href="../reference/scroll_helpers.html">scroll_discrete_colors()</a></code> / <code><a href="../reference/scroll_helpers.html">scroll_continuous_scale()</a></code>.</li>
+<code>view_umap_colorby()</code>, <code>view_feature_plot()</code>, <code>view_dotplot()</code>, <code>view_heatmap()</code>, <code>view_violin()</code>, <code>view_proportions()</code>: use the built-in panels, or build the plot with ggplot2 plus <code><a href="../reference/scroll_helpers.html">scroll_point_layer()</a></code> / <code><a href="../reference/scroll_helpers.html">scroll_discrete_colors()</a></code> / <code><a href="../reference/scroll_helpers.html">scroll_continuous_scale()</a></code>.</li>
 <li>
-<code><a href="../reference/scroll_bind_levels.html">scroll_bind_levels()</a></code>: use <code>scroll_input_levels(from = )</code>.</li>
+<code>scroll_bind_levels()</code>: use <code>scroll_input_levels(from = )</code>.</li>
 <li>
-<code><a href="../reference/scroll_query_cells.html">scroll_query_cells()</a></code>: use <code><a href="../reference/scroll_de.html">scroll_de()</a></code>, or <code><a href="../reference/scroll_query_features.html">scroll_query_features()</a></code> for specific genes. (Its <code>cells</code> doc now correctly describes the v2 int32 cell key.)</li>
+<code>scroll_query_cells()</code>: use <code><a href="../reference/scroll_de.html">scroll_de()</a></code>, or <code><a href="../reference/scroll_query_features.html">scroll_query_features()</a></code> for specific genes. (Its <code>cells</code> doc now correctly describes the v2 int32 cell key.)</li>
 <li>
-<code><a href="../reference/scroll_aggregate_counts.html">scroll_aggregate_counts()</a></code>: use <code><a href="../reference/scroll_pseudobulk_de.html">scroll_pseudobulk_de()</a></code>.</li>
+<code>scroll_aggregate_counts()</code>: use <code><a href="../reference/scroll_pseudobulk_de.html">scroll_pseudobulk_de()</a></code>.</li>
 </ul></li>
 <li>
-<strong><code><a href="../reference/scroll_pseudobulk_stability.html">scroll_pseudobulk_stability()</a></code> merged into <code>scroll_pseudobulk_de(runs = )</code>.</strong> With <code>runs &gt; 1</code> it returns the per-gene stability table (<code>sel_freq</code>, <code>median_logFC</code>, <code>sign_agree</code>, …), matching the Pseudobulk panel’s stability mode; new <code>lfc</code> / <code>padj</code> arguments set the per-run hit cutoffs. The old name is a deprecated wrapper returning the identical table.</li>
+<strong><code>scroll_pseudobulk_stability()</code> merged into <code>scroll_pseudobulk_de(runs = )</code>.</strong> With <code>runs &gt; 1</code> it returns the per-gene stability table (<code>sel_freq</code>, <code>median_logFC</code>, <code>sign_agree</code>, …), matching the Pseudobulk panel’s stability mode; new <code>lfc</code> / <code>padj</code> arguments set the per-run hit cutoffs. The old name is a deprecated wrapper returning the identical table.</li>
 <li>Fixes the pkgdown reference build, which failed on four exported <code>view_*</code> topics missing from <code>_pkgdown.yml</code>.</li>
 </ul></div>
 </div>
@@ -329,7 +344,7 @@
 <ul><li>
 <strong>Volcano plots the Seurat-style fold change.</strong> The DE (Wilcoxon) volcano now uses <code>avg_log2FC</code> (log2 fold change) on the x-axis and for the up/down threshold, instead of presto’s natural-log <code>logFC</code> – more interpretable and consistent with the DE table. The Pseudobulk volcano is unchanged (its <code>logFC</code> is already log2). <code>view_volcano()</code> gained <code>fc_col</code>/<code>fc_label</code> params (default <code>logFC</code>); non-finite fold changes are dropped.</li>
 <li>
-<strong>Composition: fill by multiple columns.</strong> The Proportions panel’s “Fill by” is now a multi-select that fills by the <code>a | b</code> interaction of the chosen categorical columns – the same pattern as DimPlot’s colour-by. <code><a href="../reference/view_proportions.html">view_proportions()</a></code> and its CSV export build the interaction; Manual colours use the observed interaction levels.</li>
+<strong>Composition: fill by multiple columns.</strong> The Proportions panel’s “Fill by” is now a multi-select that fills by the <code>a | b</code> interaction of the chosen categorical columns – the same pattern as DimPlot’s colour-by. <code>view_proportions()</code> and its CSV export build the interaction; Manual colours use the observed interaction levels.</li>
 </ul></div>
 </div>
     <div class="section level2">
@@ -536,7 +551,7 @@
 <ul><li>
 <strong><code><a href="../reference/scroll_update.html">scroll_update()</a></code> no longer re-escapes non-ASCII feature names.</strong> It rewrites the manifest, but wrote it without <code>unicode = TRUE</code> (unlike <code><a href="../reference/scroll_build.html">scroll_build()</a></code>), so an update on a project with a non-ASCII feature (e.g. an antibody <code>FcεRIa</code>) re-mangled the name to <code>&lt;U+XXXX&gt;</code> and broke its query/label match. Now consistent with the build path.</li>
 <li>
-<strong>Pseudobulk DE is RNG-neutral and reproducible.</strong> <code><a href="../reference/scroll_pseudobulk_de.html">scroll_pseudobulk_de()</a></code>’s random pseudo-replicate draw used the session’s global RNG as a side effect and was non-reproducible. It now seeds the draw (new <code>seed =</code> argument, default <code>1L</code>) and restores the caller’s <code>.Random.seed</code>, mirroring <code><a href="../reference/scroll_de.html">scroll_de()</a></code>’s cap. <code><a href="../reference/scroll_pseudobulk_stability.html">scroll_pseudobulk_stability()</a></code> still varies the draw per run (distinct per-run seeds), so it stays reproducible as a whole without perturbing the session.</li>
+<strong>Pseudobulk DE is RNG-neutral and reproducible.</strong> <code><a href="../reference/scroll_pseudobulk_de.html">scroll_pseudobulk_de()</a></code>’s random pseudo-replicate draw used the session’s global RNG as a side effect and was non-reproducible. It now seeds the draw (new <code>seed =</code> argument, default <code>1L</code>) and restores the caller’s <code>.Random.seed</code>, mirroring <code><a href="../reference/scroll_de.html">scroll_de()</a></code>’s cap. <code>scroll_pseudobulk_stability()</code> still varies the draw per run (distinct per-run seeds), so it stays reproducible as a whole without perturbing the session.</li>
 <li>
 <strong><code><a href="../reference/scroll_build_stream.html">scroll_build_stream()</a></code> validates each source up front.</strong> A source missing a declared assay / embedding / metadata column now errors with the offending source named, instead of failing deep in the final cells-frame merge.</li>
 <li>
@@ -673,7 +688,7 @@
 <ul><li>
 <code>register_panel(id, ui, server, ...)</code> adds a panel to every app built afterwards, using the same module contract as the built-ins; <code><a href="../reference/scroll_reset_panels.html">scroll_reset_panels()</a></code> clears custom registrations.</li>
 <li>
-<code>register_plot_panel(id, plot, controls, ...)</code> is a declarative wrapper: describe the controls (<code><a href="../reference/scroll_input.html">scroll_input_column()</a></code>, <code><a href="../reference/scroll_input.html">scroll_input_levels()</a></code>, <code><a href="../reference/scroll_input.html">scroll_input_gene()</a></code>, …) and a single <code>plot(cells, input, data)</code> function, and scroll generates the whole module — UI, control population, a Compute gate, inline error messages, PNG/PDF export, and subset/view awareness. The lower-level helpers (<code><a href="../reference/scroll_render_plot.html">scroll_render_plot()</a></code>, <code><a href="../reference/scroll_bind_levels.html">scroll_bind_levels()</a></code>, <code><a href="../reference/scroll_columns.html">scroll_columns()</a></code>) are exported for hand-written panels too.</li>
+<code>register_plot_panel(id, plot, controls, ...)</code> is a declarative wrapper: describe the controls (<code><a href="../reference/scroll_input.html">scroll_input_column()</a></code>, <code><a href="../reference/scroll_input.html">scroll_input_levels()</a></code>, <code><a href="../reference/scroll_input.html">scroll_input_gene()</a></code>, …) and a single <code>plot(cells, input, data)</code> function, and scroll generates the whole module — UI, control population, a Compute gate, inline error messages, PNG/PDF export, and subset/view awareness. The lower-level helpers (<code><a href="../reference/scroll_render_plot.html">scroll_render_plot()</a></code>, <code>scroll_bind_levels()</code>, <code><a href="../reference/scroll_columns.html">scroll_columns()</a></code>) are exported for hand-written panels too.</li>
 <li>
 <strong>Richer declarative controls</strong> for <code><a href="../reference/register_plot_panel.html">register_plot_panel()</a></code>: <code><a href="../reference/scroll_input.html">scroll_input_assay()</a></code> (auto-hidden on single-assay data), <code><a href="../reference/scroll_input.html">scroll_input_embedding()</a></code> and view-aware <code>scroll_input_column(view_aware=)</code> (narrow to the active subset view), <code><a href="../reference/scroll_input.html">scroll_input_custom()</a></code> (wrap your own <code>ui</code>/<code>bind</code>), and <code><a href="../reference/scroll_show_when.html">scroll_show_when()</a></code> for conditional visibility.</li>
 <li>

@@ -16,9 +16,7 @@
 <url><loc>https://shihanli92.github.io/scroll/reference/scroll-package.html</loc></url>
 <url><loc>https://shihanli92.github.io/scroll/reference/scroll_add_meta.html</loc></url>
 <url><loc>https://shihanli92.github.io/scroll/reference/scroll_add_subset.html</loc></url>
-<url><loc>https://shihanli92.github.io/scroll/reference/scroll_aggregate_counts.html</loc></url>
 <url><loc>https://shihanli92.github.io/scroll/reference/scroll_app.html</loc></url>
-<url><loc>https://shihanli92.github.io/scroll/reference/scroll_bind_levels.html</loc></url>
 <url><loc>https://shihanli92.github.io/scroll/reference/scroll_build.html</loc></url>
 <url><loc>https://shihanli92.github.io/scroll/reference/scroll_build_stream.html</loc></url>
 <url><loc>https://shihanli92.github.io/scroll/reference/scroll_columns.html</loc></url>
@@ -34,8 +32,6 @@
 <url><loc>https://shihanli92.github.io/scroll/reference/scroll_multi_app.html</loc></url>
 <url><loc>https://shihanli92.github.io/scroll/reference/scroll_preview_panel.html</loc></url>
 <url><loc>https://shihanli92.github.io/scroll/reference/scroll_pseudobulk_de.html</loc></url>
-<url><loc>https://shihanli92.github.io/scroll/reference/scroll_pseudobulk_stability.html</loc></url>
-<url><loc>https://shihanli92.github.io/scroll/reference/scroll_query_cells.html</loc></url>
 <url><loc>https://shihanli92.github.io/scroll/reference/scroll_query_feature.html</loc></url>
 <url><loc>https://shihanli92.github.io/scroll/reference/scroll_query_features.html</loc></url>
 <url><loc>https://shihanli92.github.io/scroll/reference/scroll_render_plot.html</loc></url>
@@ -46,11 +42,5 @@
 <url><loc>https://shihanli92.github.io/scroll/reference/scroll_update.html</loc></url>
 <url><loc>https://shihanli92.github.io/scroll/reference/spatial_spec.html</loc></url>
 <url><loc>https://shihanli92.github.io/scroll/reference/vdj_spec.html</loc></url>
-<url><loc>https://shihanli92.github.io/scroll/reference/view_dotplot.html</loc></url>
-<url><loc>https://shihanli92.github.io/scroll/reference/view_feature_plot.html</loc></url>
-<url><loc>https://shihanli92.github.io/scroll/reference/view_heatmap.html</loc></url>
-<url><loc>https://shihanli92.github.io/scroll/reference/view_proportions.html</loc></url>
-<url><loc>https://shihanli92.github.io/scroll/reference/view_umap_colorby.html</loc></url>
-<url><loc>https://shihanli92.github.io/scroll/reference/view_violin.html</loc></url>
 </urlset>
 
