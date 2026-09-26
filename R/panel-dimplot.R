@@ -75,6 +75,13 @@ dimplot_server <- function(id, data, cells_r = reactive(data$cells),
       updateSelectizeInput(session, "colorby", choices = cb, selected = sel_cb)
     }, ignoreNULL = FALSE, priority = 100)
     observeEvent(input$reduction, red_rv(input$reduction), ignoreInit = TRUE)
+    # a column added this session (e.g. a signature score) joins the Color-by choices
+    observeEvent(.scroll_derived_version(m), {
+      cb <- .scroll_colorby_choices(m, view_r()); flat <- unlist(cb, use.names = FALSE)
+      cur <- cb_rv(); if (!(length(cur) && all(cur %in% flat))) cur <- flat[[1]]
+      cb_rv(cur)
+      updateSelectizeInput(session, "colorby", choices = cb, selected = cur)
+    }, ignoreInit = TRUE)
     # View-consistent reduction: on a view switch `cells_r` changes at once but
     # `red_rv` can hold the previous view's embedding for a beat -- rendering that
     # (view, stale-embedding) pair is a full cache-MISS draw. Snap a stale value to
@@ -89,7 +96,7 @@ dimplot_server <- function(id, data, cells_r = reactive(data$cells),
                  ignoreInit = TRUE, ignoreNULL = FALSE)
     # composite (>1 column) is categorical; a single column follows its manifest type
     is_cat <- reactive({ cb <- cb_rv()
-      length(cb) > 1L || identical(m$meta[[cb]]$type, "categorical") })
+      length(cb) > 1L || identical(.scroll_with_derived(m)$meta[[cb]]$type, "categorical") })
     levels_of <- reactive({ cb <- cb_rv()
       if (!is_cat()) character(0)
       else if (length(cb) > 1L)                          # composite levels: computed on active cells

@@ -15,6 +15,7 @@ scroll_build_stream(
   counts = FALSE,
   id_of = as.character,
   overwrite = FALSE,
+  ranks = NULL,
   verbose = interactive()
 )
 }
@@ -46,6 +47,10 @@ the project was first built with.}
 part-file tags (default \code{as.character}).}
 
 \item{overwrite}{If \code{TRUE}, wipe \code{outdir} first (a fresh build).}
+
+\item{ranks}{Store within-cell ranks for the rank-based signature scores (see
+\code{\link[=scroll_build]{scroll_build()}}). \code{NULL} (default) keeps an existing project's setting, and is
+\code{FALSE} for a new one; an append run must match the original setting.}
 
 \item{verbose}{Print per-source progress.}
 }

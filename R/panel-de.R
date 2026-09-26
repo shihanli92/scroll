@@ -73,7 +73,7 @@ de_server <- function(id, data, cells_r = reactive(data$cells),
     # Group-by may combine several categorical columns into interaction levels
     # (e.g. "genotype | timepoint"); the idents then pick which combos form each
     # side. The column choices track the active subset view (scoped columns).
-    observeEvent(view_r(), {
+    observeEvent(.scroll_cols_event(view_r, m), {   # + session columns
       cats <- .scroll_cat_cols(m, view_r())
       sel <- intersect(input$group, cats); if (!length(sel)) sel <- cats[[1]]
       updateSelectizeInput(session, "group", choices = stats::setNames(cats, cats), selected = sel)

@@ -116,7 +116,7 @@ spatial_server <- function(id, data, cells_r = shiny::reactive(data$cells),
     updateSelectizeInput(session, "gene", server = TRUE,
                          choices = .scroll_features_of(m, m$default_assay))
     # scope the metadata choices to the active subset view (scoped module scores etc.)
-    observeEvent(view_r(), {
+    observeEvent(.scroll_cols_event(view_r, m), {   # + session columns
       cols <- c(.scroll_cat_cols(m, view_r()), .scroll_num_cols(m, view_r()))
       cur <- input$meta
       updateSelectInput(session, "meta", choices = cols,

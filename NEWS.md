@@ -1,3 +1,38 @@
+# scroll 0.3.7
+
+## Signature panel
+
+* **AddModuleScore matches Seurat exactly.** The control genes are drawn exactly as
+  `Seurat::AddModuleScore` draws them (the same binning, jitter and random draw) from
+  gene means saved at build time from the original matrix. On an unquantized build
+  scores agree to float precision. Projects built before this release keep the
+  earlier, near-identical estimate and say so under the Calculate button.
+* **UCell and AUCell-style scores.** Two rank-based methods, computed natively (no
+  new dependencies), for projects built with `ranks = TRUE`: UCell matches `UCell::ScoreSignatures_UCell` exactly, and
+  AUCell-style reproduces AUCell's normalized recovery-curve area with ties averaged
+  instead of broken at random. Each method's parameters (bins / controls / seed, max
+  rank) sit under "Method settings".
+* **Add as column.** A computed score, optionally with high / low groups at a
+  chosen cutoff, becomes a column the other panels can use for the rest of the
+  session: colour DimPlot by it, plot it in FeaturePlot, Violin and Biaxial, or group
+  by it in DE, DotPlot, Proportions and Pseudobulk. Nothing is written to disk.
+* Signature and control means are now summed per cell inside arrow, so a large
+  control set no longer loads every control gene into memory.
+
+## Build
+
+* `scroll_build()` and `scroll_build_stream()` save per-gene means and per-cell
+  detected counts (`stats/<assay>/`, a few MB). With `ranks = TRUE` they also save
+  each value's rank within its cell (a `rank2` column), which UCell / AUCell need;
+  it is off by default because ranks barely compress (about +45% expression storage
+  on a 238k-cell project). The Signature panel lists the rank-based methods only for
+  projects built with ranks.
+
+## Fixes
+
+* A plot that can't draw yet (e.g. "click Calculate") was built twice per render
+  before showing its message; it is now built once.
+
 # scroll 0.3.6
 
 Cleanup release.

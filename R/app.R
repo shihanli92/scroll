@@ -542,6 +542,11 @@ scroll_reset_panels <- function() {
 # `input`/`output`/`session` carry the right namespace in both.
 .scroll_wire <- function(input, output, session, data, panels, cache = NULL,
                          prewarm = TRUE) {
+  # this session's added columns (e.g. signature scores), on its own copy of `data`
+  # and the manifest, so other sessions of the same dataset never see them
+  derived <- reactiveVal(list(cols = list(), version = 0L))
+  data$derived <- derived
+  attr(data$manifest, "scroll_derived") <- derived
   active_view <- reactive(.scroll_nz(input$scroll_view))
   # deferred filters: committed only on Apply (Reset clears). Each panel has its own
   # style value (theme, ...), edited live from its Style sheet.
@@ -559,7 +564,8 @@ scroll_reset_panels <- function() {
   ns <- session$ns("")
   cache_key_r <- reactive(list(ns, active_view() %||% "",
                                .scroll_nz(input$scroll_subset_col),
-                               input$scroll_subset_val, filt_rv()))
+                               input$scroll_subset_val, filt_rv(),
+                               derived()$version))       # a re-scored added column is new data
   .scroll_bind_subset_control(input, session, data)
   .scroll_bind_filters(input, session, data, filt_rv)
   .scroll_render_ncells(output, data$manifest, active_cells, active_view)
@@ -578,6 +584,8 @@ scroll_reset_panels <- function() {
     labels <- vapply(subs, function(s) data$manifest$subsets[[s]]$label %||% s, "")
     .scroll_prewarm(input, session, subs, labels)
   }
+  # the session's reactive state, for tests
+  invisible(list(derived = derived, cells = active_cells, cache_key = cache_key_r))
 }
 
 # Cycle the app-bar View selector through each subset view (then back to
@@ -642,7 +650,10 @@ scroll_reset_panels <- function() {
 .scroll_active_cells <- function(input, data, active_view, filt_rv) {
   m <- data$manifest
   reactive({
-    base <- .scroll_view_cells(data$cells, m, active_view())
+    cells <- data$cells
+    if (is.function(data$derived))                    # + this session's added columns
+      cells <- .scroll_cells_with_derived(cells, data$derived()$cols)
+    base <- .scroll_view_cells(cells, m, active_view())
     base <- .scroll_subset_cells(base, .scroll_nz(input$scroll_subset_col),
                                  input$scroll_subset_val)
     .scroll_filter_cells(base, data, filt_rv())      # applied on the filter Apply button
@@ -698,6 +709,7 @@ scroll_reset_panels <- function() {
     if ("theme_r" %in% fmls)     args$theme_r     <- local({ r <- rv; reactive(r()$theme) })
     if ("cache_key_r" %in% fmls) args$cache_key_r <- cache_key_r
     if ("cache" %in% fmls)       args$cache       <- cache
+    if ("derived_rv" %in% fmls)  args$derived_rv  <- data$derived
     do.call(sec$server, args)
   }
 }

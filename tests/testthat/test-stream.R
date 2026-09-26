@@ -81,3 +81,26 @@ test_that("an append run must keep the project's counts setting", {
       c(args, list(sources = list(1:60, 61:120), counts = FALSE)))),
     "built with counts = TRUE")
 })
+
+test_that("a streamed build's ranks and gene means match a single build's", {
+  obj <- make_test_object()
+  single <- tempfile("single"); streamed <- tempfile("streamed")
+  suppressMessages(scroll_build(obj, single, assays = "RNA", embeddings = "umap",
+                                meta_cols = "celltype", quantize = FALSE, ranks = TRUE,
+                                verbose = FALSE))
+  halves <- list(obj[, 1:60], obj[, 61:120])
+  suppressMessages(scroll_build_stream(streamed, 1:2, reader = function(i) halves[[i]],
+                                       assays = "RNA", embeddings = "umap",
+                                       meta_cols = "celltype", ranks = TRUE, verbose = FALSE))
+  rd <- function(d, f) as.data.frame(arrow::read_parquet(file.path(d, f)))
+  a <- rd(single, "expr/RNA/part-0.parquet"); b <- rd(streamed, "expr/RNA/part-0.parquet")
+  expect_identical(a$rank2[order(a$feature, a$cell)], b$rank2[order(b$feature, b$cell)])
+  expect_equal(rd(streamed, "stats/RNA/genes.parquet")$mean, rd(single, "stats/RNA/genes.parquet")$mean)
+  expect_identical(rd(streamed, "stats/RNA/cells.parquet"), rd(single, "stats/RNA/cells.parquet"))
+  expect_true(isTRUE(scroll_manifest(streamed)$assays$RNA$ranks))
+  # an append must keep the original ranks setting
+  expect_error(suppressMessages(scroll_build_stream(streamed, 3, reader = function(i) halves[[1]],
+                                                    assays = "RNA", meta_cols = "celltype",
+                                                    ranks = FALSE, verbose = FALSE)),
+               "ranks = TRUE")
+})

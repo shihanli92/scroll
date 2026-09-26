@@ -153,7 +153,7 @@ pseudobulk_de_server <- function(id, data, cells_r = reactive(data$cells),
     # columns (e.g. a subset's own clustering resolutions) surface only in their
     # view, and global columns stay available everywhere. The UI builds these from
     # the whole-dataset columns; refresh them when the view changes.
-    observeEvent(view_r(), {
+    observeEvent(.scroll_cols_event(view_r, m), {   # + session columns
       cats_v <- .scroll_cat_cols(m, view_r())
       cur_agg <- intersect(isolate(input$aggregate_by), cats_v)
       if (!length(cur_agg) && length(cats_v)) cur_agg <- cats_v[[1]]

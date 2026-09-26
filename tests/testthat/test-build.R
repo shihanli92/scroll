@@ -167,3 +167,36 @@ test_that("a standard build passes the cell-order assertion", {
   expect_no_error(suppressMessages(
     scroll_build(obj, dir, assays = "RNA", counts = TRUE, overwrite = TRUE)))
 })
+
+test_that("the build bakes within-cell ranks and gene / cell statistics", {
+  obj <- make_test_object()
+  dir <- tempfile("ranks")
+  suppressMessages(scroll_build(obj, dir, quantize = TRUE, ranks = TRUE, verbose = FALSE))
+  m <- scroll_manifest(dir)
+  expect_true(isTRUE(m$assays$RNA$ranks)); expect_true(isTRUE(m$assays$RNA$stats))
+  dat <- as.matrix(SeuratObject::GetAssayData(obj, layer = "data"))
+  e <- as.data.frame(arrow::read_parquet(file.path(dir, "expr/RNA/part-0.parquet")))
+  R <- apply(dat, 2, function(v) rank(-v, ties.method = "average"))
+  expect_identical(e$rank2, as.integer(2 * R[cbind(match(e$feature, rownames(dat)), e$cell)]))
+  g <- as.data.frame(arrow::read_parquet(file.path(dir, "stats/RNA/genes.parquet")))
+  expect_identical(g$feature, rownames(dat))                 # the assay's row order
+  expect_identical(g$mean, unname(Matrix::rowMeans(SeuratObject::GetAssayData(obj, layer = "data"))))
+  cs <- as.data.frame(arrow::read_parquet(file.path(dir, "stats/RNA/cells.parquet")))
+  expect_identical(cs$n_pos, as.integer(colSums(dat > 0)))
+  # no ranks by default (they add ~40-50% to the store); gene stats always
+  dir2 <- tempfile("noranks")
+  suppressMessages(scroll_build(obj, dir2, verbose = FALSE))
+  expect_null(scroll_manifest(dir2)$assays$RNA$ranks)
+  expect_true(isTRUE(scroll_manifest(dir2)$assays$RNA$stats))
+  expect_false("rank2" %in% names(arrow::read_parquet(file.path(dir2, "expr/RNA/part-0.parquet"))))
+})
+
+test_that("cell ranks handle ties, explicit zeros and negative values", {
+  m <- cbind(c(3, 1, 1, 0, 0, -2), c(0, 0, 0, 0, 0, 0), c(-1, -1, 2, 0, 5, 0))
+  sp <- Matrix::drop0(Matrix::Matrix(m, sparse = TRUE))
+  sp@x[1] <- sp@x[1]                                   # keep structure
+  tr <- Matrix::summary(sp)
+  r2 <- scroll:::.scroll_cell_ranks2(tr$j, tr$x, nrow(m), block = 2)
+  ref <- apply(m, 2, function(v) rank(-v, ties.method = "average"))
+  expect_identical(r2, as.integer(2 * ref[cbind(tr$i, tr$j)]))
+})

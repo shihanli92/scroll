@@ -53,6 +53,10 @@
 #'   and also hand-editable there. `NULL` (default) keeps the automatic behaviour.
 #' @param exclude_panels Optional character vector of panel ids to hide (e.g.
 #'   `c("de", "pseudobulk")`); applied after gating / the `panels` allowlist.
+#' @param ranks If `TRUE`, also store each value's rank within its cell, which the
+#'   Signature panel's rank-based scores (UCell, AUCell) need. Off by default: ranks
+#'   barely compress, so they add roughly 40-50% to the expression store. Per-gene
+#'   means for an exact AddModuleScore are always stored (`stats/<assay>/`).
 #' @param overwrite If `TRUE`, an existing `outdir` is removed first.
 #' @param verbose If `TRUE`, report progress: a step message per phase and a
 #'   progress bar over each assay's feature-partition export (the slow step).
@@ -66,7 +70,7 @@ scroll_build <- function(object, outdir,
                          quantize = TRUE, counts = FALSE, subsets = NULL,
                          vdj = NULL, spatial = NULL, atac = NULL,
                          panels = NULL, exclude_panels = NULL,
-                         max_levels = .SCROLL_MAX_LEVELS,
+                         max_levels = .SCROLL_MAX_LEVELS, ranks = FALSE,
                          overwrite = FALSE, verbose = interactive()) {
   if (!is.null(panels) && !is.character(panels))
     stop("`panels` must be a character vector of panel ids, or NULL.", call. = FALSE)
@@ -141,7 +145,8 @@ scroll_build <- function(object, outdir,
   assay_info <- list()
   for (a in assays) {
     assay_info[[a]] <- .scroll_export_assay(object, a, outdir, quantize, verbose = verbose,
-                                            cell_ids = cells$cell)
+                                            cell_ids = cells$cell, ranks = ranks)
+    .scroll_write_stats(outdir, a, assay_info[[a]]$stats)
     if (counts) {
       .scroll_step(verbose, sprintf("Exporting raw counts for '%s'...", a))
       .scroll_export_counts(object, a, outdir, cell_ids = cells$cell)
@@ -319,7 +324,7 @@ scroll_build <- function(object, outdir,
 # bounded. Each feature lands in exactly one batch, so every partition holds one
 # part file, identical in content to a single write.
 .scroll_export_assay <- function(object, assay, outdir, quantize, verbose = FALSE,
-                                 offset = 0L, cell_ids = NULL) {
+                                 offset = 0L, cell_ids = NULL, ranks = TRUE) {
   # `offset` shifts the (1-based) local cell index onto a GLOBAL row index so a
   # streaming builder can append one source at a time into a shared store
   # (scroll_build uses offset = 0: local index == global index).
@@ -341,9 +346,22 @@ scroll_build <- function(object, outdir,
   if (quantize) {
     value <- as.integer(pmin(pmax(round(value / max_a * 255), 0L), 255L))
   }
+  # Per-gene means + per-cell detected counts, from the ORIGINAL (unquantized,
+  # double) values -- the means are exactly what Seurat's AddModuleScore bins on
+  # (R/signature.R); the counts fix an unexpressed gene's rank for UCell / AUCell.
+  stats <- list(
+    genes = data.frame(feature = feats, sum = Matrix::rowSums(mat), mean = Matrix::rowMeans(mat),
+                       stringsAsFactors = FALSE),
+    cells = data.frame(cell = offset + seq_len(ncol(mat)),
+                       n_pos = tabulate(trip$j[trip$x > 0], nbins = ncol(mat)),
+                       n_neg = tabulate(trip$j[trip$x < 0], nbins = ncol(mat))))
+  # Within-cell rank of each stored value (see .scroll_cell_ranks2), also from the
+  # original values, so it is exact under quantization.
+  rk2 <- if (ranks) .scroll_cell_ranks2(trip$j, trip$x, nrow(mat))
   # Group nonzeros by feature (contiguous blocks), so a feature batch is a slice.
   o <- order(trip$i)
   fi <- trip$i[o]; cj <- trip$j[o]; vv <- value[o]
+  if (ranks) rk2 <- rk2[o]
   bnd <- c(0L, cumsum(tabulate(fi, nbins = nfeat)))   # feature f rows: (bnd[f]+1):bnd[f+1]
 
   dest  <- file.path(outdir, "expr", assay)
@@ -358,7 +376,7 @@ scroll_build <- function(object, outdir,
   # `feature` is large_utf8 (int64 offsets): one gene name per nonzero can exceed
   # 2 GB of string bytes on a large assay, which overflows plain utf8's int32
   # offsets ("Failed casting from large_string to string: input array too large").
-  sch   <- arrow::schema(feature = arrow::large_utf8(), cell = arrow::int32(), value = vtype)
+  sch   <- .scroll_expr_schema(quantize, ranks)
 
   ford <- order(feats)                                 # features alphabetical by name
   # gather each feature's contiguous nonzero rows, in sorted-feature order
@@ -366,16 +384,91 @@ scroll_build <- function(object, outdir,
     if (bnd[f + 1L] > bnd[f]) (bnd[f] + 1L):bnd[f + 1L] else integer(0)),
     use.names = FALSE)
   if (length(idx)) {
-    tbl <- arrow::as_arrow_table(data.frame(
-      feature = feats[fi[idx]], cell = offset + cj[idx], value = vv[idx],   # global cell index
-      stringsAsFactors = FALSE))$cast(sch)
+    df <- data.frame(feature = feats[fi[idx]], cell = offset + cj[idx], value = vv[idx],
+                     stringsAsFactors = FALSE)                          # global cell index
+    if (ranks) df$rank2 <- rk2[idx]
+    tbl <- arrow::as_arrow_table(df)$cast(sch)
     dir.create(dest, recursive = TRUE, showWarnings = FALSE)
     # part name carries the source offset so a streaming builder's per-source parts
     # coexist in one dir (compacted into a single file at the end of the run).
     arrow::write_parquet(tbl, file.path(dest, sprintf("part-%d.parquet", offset)),
                          compression = "zstd")
   }
-  list(features = feats, max = max_a, n_features = nfeat)
+  list(features = feats, max = max_a, n_features = nfeat, stats = stats, ranks = isTRUE(ranks))
+}
+
+# The expr store's schema: `rank2` (uint16) only when within-cell ranks are baked.
+.scroll_expr_schema <- function(quantize, ranks = FALSE) {
+  vtype <- if (quantize) arrow::uint8() else arrow::float32()
+  f <- list(feature = arrow::large_utf8(), cell = arrow::int32(), value = vtype)
+  if (isTRUE(ranks)) f$rank2 <- arrow::uint16()
+  do.call(arrow::schema, f)
+}
+
+# Within-cell ranks for the stored (sparse) values of a genes x cells matrix: each
+# value's rank among ALL `n_genes` genes of its cell, by descending expression with
+# ties averaged (UCell's `ties.method = "average"`), stored doubled so a half rank is
+# an integer (`rank2` = 2 x rank), capped at 65535 ("beyond": ranks up to 32767 are
+# exact). Unstored genes are the cell's zeros, so a positive value ranks among the
+# positives, an explicit 0 takes the zero-tie rank, and a negative value (e.g. CLR
+# protein data) ranks below every zero. Vectorized (one sort + run-length ties per
+# block), in blocks of whole cells so the temporaries stay bounded on a large assay.
+.SCROLL_RANK_BLOCK <- 5e6
+.scroll_cell_ranks2 <- function(j, x, n_genes, block = .SCROLL_RANK_BLOCK) {
+  n <- length(x)
+  if (!n) return(integer(0))
+  if (is.unsorted(j)) {                                  # Matrix::summary is column-sorted
+    o <- order(j); r <- .scroll_cell_ranks2(j[o], x[o], n_genes, block)
+    out <- integer(n); out[o] <- r; return(out)
+  }
+  ncell <- max(j)
+  n_pos <- tabulate(j[x > 0], nbins = ncell)
+  n_neg <- tabulate(j[x < 0], nbins = ncell)
+  n_zero <- as.integer(n_genes) - n_pos - n_neg          # stored + implicit zeros
+  # descending rank within one block's positives (or negatives), ties averaged
+  within <- function(jj, xx) {
+    m <- length(xx)
+    if (!m) return(integer(0))
+    o <- order(jj, -xx)
+    js <- jj[o]; xs <- xx[o]
+    pos <- seq_len(m) - match(js, js) + 1L               # 1-based position in the cell
+    brk <- c(TRUE, js[-1L] != js[-m] | xs[-1L] != xs[-m])
+    run <- cumsum(brk)
+    first <- pos[brk]; len <- tabulate(run, nbins = length(first))
+    r2 <- integer(m); r2[o] <- (2L * first + len - 1L)[run]   # first + last = 2 x mean rank
+    r2
+  }
+  out <- integer(n)
+  ends <- cumsum(tabulate(j, nbins = ncell))             # last entry of each cell
+  blk <- ceiling(ends / block)                           # whole cells per block
+  from <- 1L
+  for (b in unique(blk[ends > 0])) {
+    to <- max(ends[blk == b])
+    if (to < from) next
+    ix <- from:to; jj <- j[ix]; xx <- x[ix]
+    p <- xx > 0; z <- xx == 0; ng <- xx < 0
+    r <- integer(length(ix))
+    if (any(p)) r[p] <- within(jj[p], xx[p])
+    if (any(z)) r[z] <- 2L * n_pos[jj[z]] + n_zero[jj[z]] + 1L
+    if (any(ng)) r[ng] <- within(jj[ng], xx[ng]) + 2L * (n_pos[jj[ng]] + n_zero[jj[ng]])
+    out[ix] <- r
+    from <- to + 1L
+  }
+  pmin(out, 65535L)
+}
+
+# Write an assay's gene / cell statistics (stats/<assay>/): `genes.parquet`
+# (feature in the assay's row order, sum, mean) and `cells.parquet` (global cell
+# index, n_pos, n_neg). Outside expr/ on purpose: open_dataset(expr/<assay>) reads
+# every parquet in that folder.
+.scroll_write_stats <- function(outdir, assay, stats) {
+  dest <- file.path(outdir, "stats", assay)
+  dir.create(dest, recursive = TRUE, showWarnings = FALSE)
+  arrow::write_parquet(stats$genes, file.path(dest, "genes.parquet"), compression = "zstd")
+  cells <- stats$cells
+  cells[] <- lapply(cells, as.integer)
+  arrow::write_parquet(cells, file.path(dest, "cells.parquet"), compression = "zstd")
+  invisible(dest)
 }
 
 # Export one assay's raw `counts` layer as a single long Parquet
@@ -409,14 +502,13 @@ scroll_build <- function(object, outdir,
 # a time (flat memory). No-op for assays already holding a single file (the common
 # single-object build, which .scroll_export_assay writes pre-sorted).
 .scroll_compact_store <- function(outdir, quantize) {
-  vtype <- if (quantize) arrow::uint8() else arrow::float32()
-  sch <- arrow::schema(feature = arrow::large_utf8(), cell = arrow::int32(), value = vtype)
   root <- file.path(outdir, "expr")
   for (adir in list.dirs(root, recursive = FALSE)) {     # expr/<assay> dirs
     parts <- list.files(adir, pattern = "\\.parquet$", full.names = TRUE)
     if (length(parts) <= 1L) next
-    tab <- dplyr::collect(arrow::open_dataset(adir))      # (feature, cell, value) in RAM
+    tab <- dplyr::collect(arrow::open_dataset(adir))      # (feature, cell, value[, rank2]) in RAM
     tab <- tab[order(tab$feature), , drop = FALSE]        # re-sort so row-group stats prune
+    sch <- .scroll_expr_schema(quantize, "rank2" %in% names(tab))
     unlink(parts)
     arrow::write_parquet(arrow::as_arrow_table(tab)$cast(sch),
                          file.path(adir, "part-0.parquet"), compression = "zstd")

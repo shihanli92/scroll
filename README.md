@@ -159,6 +159,7 @@ scroll_multi_app(c("PBMC 3k" = "pbmc3k", "CITE-seq" = "cite"))
 |-------|----------|
 | **DimPlot** | reduction · color-by (metadata, categorical or numeric) · palette · point size · opacity · cluster labels · split-by |
 | **FeaturePlot** | gene (server-side search over ~all genes) **or a numeric metadata column** (QC / hashtag-CLR / ADT) · assay · reduction · palette · point size · **colour-quantile clipping** · expressing-on-top · split-by |
+| **Signature** | score a typed or pasted gene list per cell: Mean, Scaled, **AddModuleScore** (matches `Seurat::AddModuleScore` exactly), **UCell** and **AUCell-style** (rank-based) · show on the embedding or as a violin · **Add as column** hands the score (and optional high / low groups) to every other panel for the session |
 | **Biaxial** | pairwise scatters of numeric metadata columns (e.g. hashtag / ADT / QC pairs), coloured by a categorical selection · point size · opacity · palette |
 | **DotPlot** | marker genes (ordered multi-select) · group-by · assay · z-score scaling · palette · dot-size range · hclust rows/cols with dendrograms |
 | **Violin** | gene · group-by · palette · jitter points |

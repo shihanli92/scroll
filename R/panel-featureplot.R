@@ -72,6 +72,12 @@ featureplot_server <- function(id, data, cells_r = reactive(data$cells),
                         selected = intersect(cur, nums))
     }, ignoreNULL = FALSE, priority = 100)
     observeEvent(input$reduction, red_rv(input$reduction), ignoreInit = TRUE)
+    # a column added this session (e.g. a signature score) joins the numeric choices
+    observeEvent(.scroll_derived_version(m), {
+      nums <- .scroll_num_cols(m, view_r())
+      updateSelectInput(session, "metacol", choices = stats::setNames(nums, nums),
+                        selected = intersect(input$metacol, nums))
+    }, ignoreInit = TRUE)
     .scroll_bind_view_cats(input, session, view_r, m, "split", prepend = c("None" = ""))
     .scroll_bind_gene_box(input, session, m, assay, "feature")   # assay-aware gene list
     # DATA reactive: cells + the (cached) expression query. Cosmetic drags do not

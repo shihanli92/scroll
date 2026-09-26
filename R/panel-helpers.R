@@ -40,11 +40,49 @@
   sc <- .scroll_scope_of(m, col)
   is.null(sc) || identical(sc, view)
 }
+# ---- session columns ------------------------------------------------------------
+# Columns a user adds during a session (e.g. a signature score from the Signature
+# panel). Each session gets its own registry -- a reactiveVal of
+# list(cols = list(<name> = list(values =, meta =)), version =) -- attached by
+# .scroll_wire to that session's copy of `data` (`data$derived`) and manifest
+# (attribute "scroll_derived"), so the column helpers below see the added columns
+# while the dataset shared across sessions never changes. `values` are aligned to
+# data$cells rows; `meta` is a manifest-style entry (type, levels / range).
+.scroll_derived_of <- function(m) attr(m, "scroll_derived")
+.scroll_derived_cols <- function(m) {
+  d <- .scroll_derived_of(m)
+  if (is.null(d)) list() else shiny::isolate(d())$cols %||% list()
+}
+# The manifest with the session's added columns in `meta` (read without taking a
+# reactive dependency -- observers that should refresh use .scroll_cols_event()).
+.scroll_with_derived <- function(m) {
+  cols <- .scroll_derived_cols(m)
+  for (nm in names(cols)) m$meta[[nm]] <- cols[[nm]]$meta
+  m
+}
+# The event a column-choice observer watches: the active view, plus the session's
+# added columns (so a new column appears without the view changing).
+.scroll_cols_event <- function(view_r, m) {
+  d <- .scroll_derived_of(m)
+  list(view_r(), if (is.null(d)) 0L else d()$version)
+}
+.scroll_derived_version <- function(m) {
+  d <- .scroll_derived_of(m)
+  if (is.null(d)) 0L else d()$version
+}
+# data$cells plus the session's added columns (aligned by row).
+.scroll_cells_with_derived <- function(cells, cols) {
+  for (nm in names(cols)) cells[[nm]] <- cols[[nm]]$values
+  cells
+}
+
 .scroll_cat_cols <- function(m, view = NULL) {
+  m <- .scroll_with_derived(m)
   cols <- names(Filter(function(x) identical(x$type, "categorical"), m$meta))
   cols[vapply(cols, function(c) .scroll_col_in_view(m, c, view), logical(1))]
 }
 .scroll_num_cols <- function(m, view = NULL) {
+  m <- .scroll_with_derived(m)
   cols <- names(Filter(function(x) identical(x$type, "numeric"), m$meta))
   cols[vapply(cols, function(c) .scroll_col_in_view(m, c, view), logical(1))]
 }
@@ -63,9 +101,9 @@
 # recompute from the in-RAM cells table (cheap; NA -> a missing category, which
 # for a subset-scoped column drops non-members, matching the build-time scoping).
 .scroll_meta_levels <- function(data, col) {
-  lv <- data$manifest$meta[[col]]$levels
+  lv <- .scroll_with_derived(data$manifest)$meta[[col]]$levels
   if (!is.null(lv)) return(unlist(lv, use.names = FALSE))
-  v <- data$cells[[col]]
+  v <- data$cells[[col]] %||% .scroll_derived_cols(data$manifest)[[col]]$values
   if (is.null(v)) return(character(0))
   sort(unique(as.character(v[!is.na(v)])))
 }
@@ -131,8 +169,8 @@
 # only in their view). Preserves the current pick when still valid.
 .scroll_bind_view_cols <- function(input, session, view_r, cols_fn, ids,
                                    prepend = NULL, default = NULL,
-                                   multiple = FALSE, allow_empty = FALSE) {
-  observeEvent(view_r(), {
+                                   multiple = FALSE, allow_empty = FALSE, m = NULL) {
+  observeEvent(if (is.null(m)) view_r() else .scroll_cols_event(view_r, m), {
     cols <- cols_fn(view_r())
     for (id in ids) {
       cur <- input[[id]]
@@ -160,12 +198,12 @@
 .scroll_bind_view_cats <- function(input, session, view_r, m, ids,
                                    prepend = NULL, default = NULL, ...)
   .scroll_bind_view_cols(input, session, view_r,
-                         function(v) .scroll_cat_cols(m, v), ids, prepend, default, ...)
+                         function(v) .scroll_cat_cols(m, v), ids, prepend, default, ..., m = m)
 
 .scroll_bind_view_nums <- function(input, session, view_r, m, ids,
                                    prepend = NULL, default = NULL, ...)
   .scroll_bind_view_cols(input, session, view_r,
-                         function(v) .scroll_num_cols(m, v), ids, prepend, default, ...)
+                         function(v) .scroll_num_cols(m, v), ids, prepend, default, ..., m = m)
 
 .scroll_default <- function(data, key, fallback) {
   data$config[[key]] %||% data$manifest[[key]] %||% fallback

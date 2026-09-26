@@ -47,6 +47,9 @@
 #'   per source under `counts/<assay>/`), enabling the Pseudobulk DE panel — same
 #'   as [scroll_build()]'s `counts = TRUE`. An append run must match the setting
 #'   the project was first built with.
+#' @param ranks Store within-cell ranks for the rank-based signature scores (see
+#'   [scroll_build()]). `NULL` (default) keeps an existing project's setting, and is
+#'   `FALSE` for a new one; an append run must match the original setting.
 #' @param id_of `function(source) -> character` id used for append-tracking and
 #'   part-file tags (default `as.character`).
 #' @param overwrite If `TRUE`, wipe `outdir` first (a fresh build).
@@ -57,7 +60,7 @@
 scroll_build_stream <- function(outdir, sources, reader, assays = NULL,
                                 embeddings = NULL, meta_cols = NULL, quantize = FALSE,
                                 counts = FALSE, id_of = as.character, overwrite = FALSE,
-                                verbose = interactive()) {
+                                ranks = NULL, verbose = interactive()) {
   .scroll_need_seurat()
   .scroll_check_zstd()
   if (isTRUE(quantize))
@@ -92,6 +95,23 @@ scroll_build_stream <- function(outdir, sources, reader, assays = NULL,
                         "append with the same setting, or rebuild with overwrite = TRUE."),
                  isTRUE(old_man$has_counts)), call. = FALSE)
 
+  old_ranks <- if (!is.null(old_man)) isTRUE(old_man$assays[[1]]$ranks)
+  if (is.null(ranks)) ranks <- old_ranks %||% FALSE
+  if (!is.null(old_man) && !identical(isTRUE(ranks), old_ranks))
+    stop(sprintf(paste0("scroll_build_stream: this project was built with ranks = %s; ",
+                        "append with the same setting, or rebuild with overwrite = TRUE."),
+                 old_ranks), call. = FALSE)
+  # gene / cell statistics accumulate across runs: they need every source, so a
+  # project first built without them (an older scroll) stays without them
+  keep_stats <- is.null(old_man) || isTRUE(old_man$assays[[1]]$stats)
+  gstats <- list(); cstats <- list()
+  if (!is.null(old_man) && keep_stats)
+    for (a in names(old_man$assays)) {
+      sd <- file.path(outdir, "stats", a)
+      gstats[[a]] <- as.data.frame(arrow::read_parquet(file.path(sd, "genes.parquet"), mmap = FALSE))
+      cstats[[a]] <- list(as.data.frame(arrow::read_parquet(file.path(sd, "cells.parquet"), mmap = FALSE)))
+    }
+
   lock <- NULL; new_cells <- list(); last_seu <- NULL
   for (i in todo) {
     id <- ids[[i]]
@@ -124,7 +144,18 @@ scroll_build_stream <- function(outdir, sources, reader, assays = NULL,
 
     for (assay in lock$assays) {
       ai <- .scroll_export_assay(seu, assay, tmp_root, quantize = FALSE, offset = offset,
-                                 cell_ids = cframe$cell)
+                                 cell_ids = cframe$cell, ranks = ranks)
+      if (keep_stats) {                                  # per-gene sums add up across sources
+        g <- ai$stats$genes; old <- gstats[[assay]]
+        if (!is.null(old)) {
+          feats <- union(old$feature, g$feature)
+          sm <- stats::setNames(numeric(length(feats)), feats)
+          sm[old$feature] <- old$sum; sm[g$feature] <- sm[g$feature] + g$sum
+          g <- data.frame(feature = feats, sum = unname(sm), stringsAsFactors = FALSE)
+        }
+        gstats[[assay]] <- g[, c("feature", "sum")]
+        cstats[[assay]] <- c(cstats[[assay]], list(ai$stats$cells))
+      }
       .scroll_stream_move(file.path(tmp_root, "expr", assay),
                           file.path(outdir, "expr", assay), tag = .scroll_safe_tag(id))
       gmax[[assay]] <- max(gmax[[assay]] %||% 0, ai$max)
@@ -156,6 +187,15 @@ scroll_build_stream <- function(outdir, sources, reader, assays = NULL,
     list(features = feats, max = gmax[[assay]] %||% 1, n_features = length(feats))
   })
   names(assay_info) <- lock$assays
+  for (assay in lock$assays) {
+    assay_info[[assay]]$ranks <- isTRUE(ranks)
+    if (keep_stats && !is.null(gstats[[assay]])) {
+      g <- gstats[[assay]]; g$mean <- g$sum / nrow(cells)
+      st <- list(genes = g, cells = do.call(rbind, cstats[[assay]]))
+      .scroll_write_stats(outdir, assay, st)
+      assay_info[[assay]]$stats <- st
+    }
+  }
   .scroll_write_manifest(outdir, last_seu, assay_info, lock$embeddings, cells,
                          lock$meta_cols, n_cells = nrow(cells), quantize = FALSE,
                          has_counts = isTRUE(counts), cells = cells, subsets = NULL)

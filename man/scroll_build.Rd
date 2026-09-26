@@ -19,6 +19,7 @@ scroll_build(
   panels = NULL,
   exclude_panels = NULL,
   max_levels = .SCROLL_MAX_LEVELS,
+  ranks = FALSE,
   overwrite = FALSE,
   verbose = interactive()
 )
@@ -83,6 +84,11 @@ clone id or barcode with thousands of values) still export normally and stay
 fully usable — the manifest just records their \code{n_levels} count and the app
 recomputes the level set from \code{cells.parquet} when a control needs it. Keeps
 the manifest small and hand-editable. Defaults to 200.}
+
+\item{ranks}{If \code{TRUE}, also store each value's rank within its cell, which the
+Signature panel's rank-based scores (UCell, AUCell) need. Off by default: ranks
+barely compress, so they add roughly 40-50\% to the expression store. Per-gene
+means for an exact AddModuleScore are always stored (\verb{stats/<assay>/}).}
 
 \item{overwrite}{If \code{TRUE}, an existing \code{outdir} is removed first.}
 

@@ -1,5 +1,5 @@
 # The Signature panel: live per-cell module scoring from a gene list, shown on the
-# embedding or as a violin. Runtime-only (Mean / Scaled), no build artifact.
+# embedding or as a violin (R/signature.R, R/panel-signature.R).
 
 test_that(".scroll_signature_score computes mean and scaled correctly", {
   cells <- data.frame(cell = c("c1", "c2", "c3", "c4"), .gidx = 1:4,
@@ -95,18 +95,17 @@ test_that(".scroll_module_score is seed-stable and filter-invariant per cell", {
   # a cell's score does not depend on which other cells are shown
   sub <- data$cells[1:60, , drop = FALSE]
   s_sub <- scroll:::.scroll_module_score(sub, sig, data, "RNA", nbin = 4, ctrl = 3, seed = 1)
-  expect_equal(s_sub, s1[1:60])
+  expect_equal(as.numeric(s_sub), as.numeric(s1[1:60]))
 })
 
-test_that("runtime AddModuleScore agrees with Seurat::AddModuleScore", {
-  skip_if_not_installed("Seurat")
-  set.seed(42)
-  ng <- 300L; nc <- 150L
+# A small object with a real, cell-varying signature (`sig`) for the parity tests.
+sig_object <- function(ng = 300L, nc = 150L, lambda = 0.8, seed = 42) {
+  set.seed(seed)
   genes <- paste0("Gene", seq_len(ng))
-  cm <- matrix(rpois(ng * nc, 0.8), nrow = ng,
+  cm <- matrix(rpois(ng * nc, lambda), nrow = ng,
                dimnames = list(genes, paste0("c", seq_len(nc))))
   sig <- genes[1:8]
-  hot <- seq_len(nc / 2)                                  # give the signature real, cell-varying signal
+  hot <- seq_len(nc / 2)                                  # give the signature real signal
   cm[sig, hot] <- cm[sig, hot] + rpois(length(sig) * length(hot), 5)
   obj <- SeuratObject::CreateSeuratObject(counts = Matrix::Matrix(cm, sparse = TRUE),
                                           min.cells = 0, min.features = 0)
@@ -114,20 +113,95 @@ test_that("runtime AddModuleScore agrees with Seurat::AddModuleScore", {
                                     new.data = Matrix::Matrix(.lognorm(cm, 1e4), sparse = TRUE))
   emb <- matrix(rnorm(nc * 2), ncol = 2, dimnames = list(colnames(obj), c("UMAP_1", "UMAP_2")))
   obj[["umap"]] <- SeuratObject::CreateDimReducObject(embeddings = emb, key = "UMAP_", assay = "RNA")
-
-  obj <- Seurat::AddModuleScore(obj, features = list(sig), name = "sigscore",
-                                nbin = 10, ctrl = 20, seed = 1)
-  seurat <- obj$sigscore1
-
-  dir <- file.path(tempdir(), "scroll-sig-parity")
+  list(obj = obj, sig = sig)
+}
+sig_build <- function(obj, quantize = FALSE, ranks = TRUE, ...) {
+  dir <- tempfile("sig")
   suppressMessages(scroll_build(obj, dir, assays = "RNA", embeddings = "umap",
-                                quantize = FALSE, overwrite = TRUE))
-  data <- scroll:::.scroll_load(dir)
-  on.exit(scroll_disconnect(data$con), add = TRUE)
-  scr <- scroll:::.scroll_module_score(data$cells, sig, data, "RNA", nbin = 10, ctrl = 20, seed = 1)
+                                quantize = quantize, ranks = ranks, verbose = FALSE, ...))
+  scroll:::.scroll_load(dir)
+}
 
-  seurat <- seurat[match(data$cells$cell, colnames(obj))]  # align by barcode
-  expect_gt(stats::cor(scr, seurat), 0.9)                  # near-identical; control RNG differs slightly
+test_that("AddModuleScore matches Seurat::AddModuleScore exactly (same control genes)", {
+  skip_if_not_installed("Seurat")
+  for (cfg in list(list(ng = 300L, nbin = 10L, ctrl = 20L),
+                   list(ng = 3000L, nbin = 24L, ctrl = 100L))) {   # Seurat's defaults
+    x <- sig_object(cfg$ng)
+    ref <- suppressWarnings(Seurat::AddModuleScore(x$obj, features = list(x$sig), name = "s",
+                                                   nbin = cfg$nbin, ctrl = cfg$ctrl, seed = 1))$s1
+    data <- sig_build(x$obj)
+    scr <- scroll:::.scroll_module_score(data$cells, x$sig, data, "RNA",
+                                         nbin = cfg$nbin, ctrl = cfg$ctrl, seed = 1)
+    expect_true(attr(scr, "exact"))
+    # identical control set; the residue is only the store's float32 values
+    expect_equal(as.numeric(scr), unname(ref[match(data$cells$cell, colnames(x$obj))]),
+                 tolerance = 1e-5)
+    scroll_disconnect(data$con)
+  }
+})
+
+test_that("the control draw leaves the session's RNG untouched", {
+  set.seed(99); a <- stats::runif(1)
+  set.seed(99)
+  scroll:::.scroll_seurat_controls(stats::setNames(seq(0, 1, length.out = 50), paste0("g", 1:50)),
+                                   c("g3", "g40"), nbin = 5, ctrl = 4, seed = 1)
+  expect_identical(stats::runif(1), a)
+})
+
+test_that("without build-time gene means, AddModuleScore falls back to a store scan", {
+  x <- sig_object()
+  data <- sig_build(x$obj)
+  on.exit(scroll_disconnect(data$con), add = TRUE)
+  data$manifest$assays$RNA$stats <- NULL                  # as an older build
+  scr <- scroll:::.scroll_module_score(data$cells, x$sig, data, "RNA", nbin = 10, ctrl = 20)
+  expect_false(attr(scr, "exact"))
+  expect_gt(stats::cor(scr, as.numeric(scroll:::.scroll_module_score(
+    data$cells, x$sig, sig_build(x$obj), "RNA", nbin = 10, ctrl = 20))), 0.9)
+})
+
+test_that("UCell matches UCell::ScoreSignatures_UCell exactly, quantized or not", {
+  skip_if_not_installed("UCell")
+  x <- sig_object(ng = 2000L, nc = 120L, lambda = 0.3, seed = 7)
+  dat <- SeuratObject::GetAssayData(x$obj, layer = "data")
+  for (q in c(FALSE, TRUE)) {
+    data <- sig_build(x$obj, quantize = q)
+    for (mr in c(1500, 100)) {
+      u <- suppressWarnings(UCell::ScoreSignatures_UCell(dat, features = list(s = x$sig),
+                                                         maxRank = mr, ncores = 1))
+      scr <- scroll:::.scroll_ucell_score(data$cells, x$sig, data, "RNA", max_rank = mr)
+      expect_equal(scr, unname(u[match(data$cells$cell, rownames(u)), 1]), tolerance = 1e-12)
+    }
+    scroll_disconnect(data$con)
+  }
+})
+
+test_that("UCell and AUCell-style match a dense reference built from base::rank", {
+  x <- sig_object(ng = 400L, nc = 60L, lambda = 0.4, seed = 3)
+  dat <- as.matrix(SeuratObject::GetAssayData(x$obj, layer = "data"))
+  R <- apply(dat, 2, function(v) rank(-v, ties.method = "average"))   # genes x cells
+  rs <- t(R[x$sig, ]); n <- length(x$sig)
+  data <- sig_build(x$obj, quantize = TRUE)
+  on.exit(scroll_disconnect(data$con), add = TRUE)
+  key <- match(data$cells$cell, rownames(rs))
+  # UCell, max rank 50
+  u <- 1 - (rowSums(pmin(rs, 50)) - n * (n + 1) / 2) / (n * 50 - n * (n + 1) / 2)
+  expect_equal(scroll:::.scroll_ucell_score(data$cells, x$sig, data, "RNA", max_rank = 50),
+               unname(u[key]))
+  # AUCell-style: recovery-curve area over the top ceiling(5%) ranks, normalized
+  thr <- ceiling(0.05 * nrow(dat)); best <- seq_len(n); best <- best[best < thr]
+  a <- vapply(seq_len(nrow(rs)), function(i) {
+    v <- sort(rs[i, ][rs[i, ] < thr]); sum(diff(c(v, thr)) * seq_along(v))
+  }, numeric(1)) / sum(diff(c(best, thr)) * seq_along(best))
+  expect_equal(scroll:::.scroll_aucell_score(data$cells, x$sig, data, "RNA"), a[key])
+})
+
+test_that("rank-based scores need a project built with ranks", {
+  x <- sig_object()
+  data <- sig_build(x$obj, ranks = FALSE)
+  on.exit(scroll_disconnect(data$con), add = TRUE)
+  expect_null(data$manifest$assays$RNA$ranks)
+  expect_error(scroll:::.scroll_ucell_score(data$cells, x$sig, data, "RNA"), "ranks = TRUE")
+  expect_true(isTRUE(data$manifest$assays$RNA$stats))    # gene means are always baked
 })
 
 test_that("signature_server requires at least one gene", {

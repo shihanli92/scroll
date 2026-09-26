@@ -239,6 +239,7 @@
 # an attribute; see .scroll_wire). Set only when it changed, so no reactive loops.
 # Exports use plain .scroll_apply_style (nothing to report).
 .scroll_style_plot <- function(p, style_r) {
+  force(p)          # build once: a plot that can't draw yet (validate) errors here, not twice
   if (is.null(style_r)) return(p)
   cat_rv <- attr(style_r, "scroll_catalog")
   if (is.function(cat_rv)) {

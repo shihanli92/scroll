@@ -50,6 +50,8 @@
     l <- list(max = info$max, n_features = info$n_features,
               features = as.list(info$features))
     if (a %in% peaks_assay) l$kind <- "peaks"        # accessibility, not expression
+    if (!is.null(info$stats)) l$stats <- TRUE        # stats/<assay>/ (gene means, cell counts)
+    if (isTRUE(info$ranks)) l$ranks <- TRUE          # expr rank2 column (UCell / AUCell)
     l
   })
   names(assays) <- names(assay_info)
