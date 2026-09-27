@@ -26,6 +26,7 @@ scroll_build(
   exclude_panels = NULL,
   max_levels = .SCROLL_MAX_LEVELS,
   ranks = FALSE,
+  genesets = NULL,
   overwrite = FALSE,
   verbose = interactive()
 )
@@ -142,6 +143,14 @@ scroll_build(
   default: ranks barely compress, so they add roughly 40-50% to the
   expression store. Per-gene means for an exact AddModuleScore are
   always stored (`stats/<assay>/`).
+
+- genesets:
+
+  Optional gene sets for the GSEA panel, as a list of
+  [`scroll_add_genesets()`](https://shihanli92.github.io/scroll/reference/scroll_add_genesets.md)
+  arguments, e.g. `list(msigdb = c("H", "GO:BP"), gmt = "my_sets.gmt")`.
+  Can also be added later with
+  [`scroll_add_genesets()`](https://shihanli92.github.io/scroll/reference/scroll_add_genesets.md).
 
 - overwrite:
 

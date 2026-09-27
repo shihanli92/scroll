@@ -15,7 +15,7 @@ store of expression (expr/&amp;lt;assay&amp;gt;/), a manifest.yaml, and app scaf
 
     <a class="navbar-brand me-2" href="../index.html">scroll</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.7</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.8</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -67,6 +67,7 @@ store of expression (<code>expr/&lt;assay&gt;/</code>), a <code>manifest.yaml</c
 <span>  exclude_panels <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  max_levels <span class="op">=</span> <span class="va">.SCROLL_MAX_LEVELS</span>,</span>
 <span>  ranks <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  genesets <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  overwrite <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/interactive.html" class="external-link">interactive</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -169,6 +170,13 @@ the manifest small and hand-editable. Defaults to 200.</p></dd>
 Signature panel's rank-based scores (UCell, AUCell) need. Off by default: ranks
 barely compress, so they add roughly 40-50% to the expression store. Per-gene
 means for an exact AddModuleScore are always stored (<code>stats/&lt;assay&gt;/</code>).</p></dd>
+
+
+<dt id="arg-genesets">genesets<a class="anchor" aria-label="anchor" href="#arg-genesets"></a></dt>
+<dd><p>Optional gene sets for the GSEA panel, as a list of
+<code><a href="scroll_add_genesets.html">scroll_add_genesets()</a></code> arguments, e.g.
+<code>list(msigdb = c("H", "GO:BP"), gmt = "my_sets.gmt")</code>. Can also be added later
+with <code><a href="scroll_add_genesets.html">scroll_add_genesets()</a></code>.</p></dd>
 
 
 <dt id="arg-overwrite">overwrite<a class="anchor" aria-label="anchor" href="#arg-overwrite"></a></dt>

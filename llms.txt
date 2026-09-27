@@ -6,11 +6,11 @@ infrastructure.*
 `scroll` turns a processed Seurat object into a polished, interactive
 web explorer — a scrolling page of analysis panels (DimPlot,
 FeaturePlot, Signature, Biaxial, DotPlot, Heatmap, Violin, Proportions,
-DE, Pseudobulk DE), each with its own fine-grained controls. A heavy
-offline **build phase** extracts lightweight on-disk artifacts; the
-**runtime** (a bslib Shiny app) reads only those, querying expression
-one feature at a time via arrow — so runtime memory stays flat
-regardless of dataset size. It deploys as a plain `app.R` on an
+DE, Pseudobulk DE, GSEA), each with its own fine-grained controls. A
+heavy offline **build phase** extracts lightweight on-disk artifacts;
+the **runtime** (a bslib Shiny app) reads only those, querying
+expression one feature at a time via arrow — so runtime memory stays
+flat regardless of dataset size. It deploys as a plain `app.R` on an
 open-source Shiny Server, with no render step.
 
 > **Status:** feature-complete for the MVP and validated at scale (a
@@ -190,6 +190,7 @@ scroll_multi_app(c("PBMC 3k" = "pbmc3k", "CITE-seq" = "cite"))
 | **Proportions** | group-by (x) · fill-by · palette · normalize-to-100% |
 | **DE** | contrast (group vs group / vs rest) · live Wilcoxon via `presto`, computed once and shown as a **Table** (sortable, min-% / top-N filters) and a **Volcano** (logFC & adj-p cutoffs · top-N labels via ggrepel) |
 | **Pseudobulk DE** | aggregate cells into sample-level counts (combined-interaction groups × replicate) and test with **edgeR/limma-voom**; pseudo-replicate modes (`no_replicate` pools each group) + min-cell cutoffs; optional **stability** re-runs (report each gene’s selection frequency across random draws). Needs a counts store (see below). Table + Volcano/stability output |
+| **GSEA** | preranked gene-set enrichment (**fgsea**) on the latest DE or Pseudobulk result: rank by avg_log2FC, AUC, signed −log10 p or limma t · gene sets saved in the project ([`scroll_add_genesets()`](https://shihanli92.github.io/scroll/reference/scroll_add_genesets.md): MSigDB collections or your own `.gmt`) or fetched live from MSigDB when `msigdbr` is installed · table (NES, adj. p, leading edge), top-pathway bars, running enrichment plot |
 
 Each card’s control column holds *what to plot*; **how it looks** lives
 in the plot’s **Style sheet**, opened from the paintbrush button in its
@@ -448,12 +449,17 @@ app.
 
 ## Differential expression
 
-Live Wilcoxon markers and replicate-aware pseudobulk testing.
+Live Wilcoxon markers, replicate-aware pseudobulk testing, and gene-set
+enrichment.
 
 - [`scroll_de()`](https://shihanli92.github.io/scroll/reference/scroll_de.md)
   : Live differential expression for a contrast (presto / Wilcoxon)
 - [`scroll_pseudobulk_de()`](https://shihanli92.github.io/scroll/reference/scroll_pseudobulk_de.md)
   : Pseudobulk differential expression (edgeR / limma-voom)
+- [`scroll_gsea()`](https://shihanli92.github.io/scroll/reference/scroll_gsea.md)
+  : Preranked GSEA on a differential-expression result
+- [`scroll_add_genesets()`](https://shihanli92.github.io/scroll/reference/scroll_add_genesets.md)
+  : Add gene sets to a built scroll project
 
 ## Extend the app
 

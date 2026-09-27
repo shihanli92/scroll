@@ -75,12 +75,17 @@ app.
 
 ## Differential expression
 
-Live Wilcoxon markers and replicate-aware pseudobulk testing.
+Live Wilcoxon markers, replicate-aware pseudobulk testing, and gene-set
+enrichment.
 
 - [`scroll_de()`](https://shihanli92.github.io/scroll/reference/scroll_de.md)
   : Live differential expression for a contrast (presto / Wilcoxon)
 - [`scroll_pseudobulk_de()`](https://shihanli92.github.io/scroll/reference/scroll_pseudobulk_de.md)
   : Pseudobulk differential expression (edgeR / limma-voom)
+- [`scroll_gsea()`](https://shihanli92.github.io/scroll/reference/scroll_gsea.md)
+  : Preranked GSEA on a differential-expression result
+- [`scroll_add_genesets()`](https://shihanli92.github.io/scroll/reference/scroll_add_genesets.md)
+  : Add gene sets to a built scroll project
 
 ## Extend the app
 

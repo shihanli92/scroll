@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="index.html">scroll</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.7</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.8</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -52,7 +52,7 @@
 <p><em>Interactive single-cell explorers, served from your own infrastructure.</em></p>
 <!-- badges: start -->
 
-<p><code>scroll</code> turns a processed Seurat object into a polished, interactive web explorer — a scrolling page of analysis panels (DimPlot, FeaturePlot, Signature, Biaxial, DotPlot, Heatmap, Violin, Proportions, DE, Pseudobulk DE), each with its own fine-grained controls. A heavy offline <strong>build phase</strong> extracts lightweight on-disk artifacts; the <strong>runtime</strong> (a bslib Shiny app) reads only those, querying expression one feature at a time via arrow — so runtime memory stays flat regardless of dataset size. It deploys as a plain <code>app.R</code> on an open-source Shiny Server, with no render step.</p>
+<p><code>scroll</code> turns a processed Seurat object into a polished, interactive web explorer — a scrolling page of analysis panels (DimPlot, FeaturePlot, Signature, Biaxial, DotPlot, Heatmap, Violin, Proportions, DE, Pseudobulk DE, GSEA), each with its own fine-grained controls. A heavy offline <strong>build phase</strong> extracts lightweight on-disk artifacts; the <strong>runtime</strong> (a bslib Shiny app) reads only those, querying expression one feature at a time via arrow — so runtime memory stays flat regardless of dataset size. It deploys as a plain <code>app.R</code> on an open-source Shiny Server, with no render step.</p>
 <blockquote>
 <p><strong>Status:</strong> feature-complete for the MVP and validated at scale (a live 4.4M-cell atlas). Includes the two-phase build; eight analysis panels (incl. a live DE panel and replicate-aware <strong>Pseudobulk DE</strong>); a compact <strong>v2 storage format</strong> (int32 cell-index + zstd, ~5× smaller than v1; lossless with <code>quantize = FALSE</code>); <strong><code><a href="reference/scroll_build_stream.html">scroll_build_stream()</a></code></strong> for streaming multi-million-cell builds on a laptop; <strong><code><a href="reference/scroll_multi_app.html">scroll_multi_app()</a></code></strong> for several datasets behind one page; multimodal support (multi-assay, per-cell <strong>VDJ / immune repertoire</strong> via <code><a href="reference/vdj_spec.html">vdj_spec()</a></code> — reads TCR/BCR from <strong>scRepertoire / AIRR-dandelion / Platypus</strong> out of the box, <strong>spatial</strong> tissue-image maps via <code><a href="reference/spatial_spec.html">spatial_spec()</a></code>, and <strong>scATAC</strong> peaks via <code><a href="reference/atac_spec.html">atac_spec()</a></code>); <strong>subset views</strong> for reprocessed sub-embeddings; rich declarative controls (data-derived choices, cascading levels, preferred defaults, palette picker); PNG/PDF/CSV export; a rasterization/memoization performance pass; and the public <code><a href="reference/register_panel.html">register_panel()</a></code> extension point. Documentation: <a href="https://shihanli92.github.io/scroll/">pkgdown site</a>.</p>
 </blockquote>
@@ -173,6 +173,10 @@ Install from a local checkout instead
 <tr>
 <td><strong>Pseudobulk DE</strong></td>
 <td>aggregate cells into sample-level counts (combined-interaction groups × replicate) and test with <strong>edgeR/limma-voom</strong>; pseudo-replicate modes (<code>no_replicate</code> pools each group) + min-cell cutoffs; optional <strong>stability</strong> re-runs (report each gene’s selection frequency across random draws). Needs a counts store (see below). Table + Volcano/stability output</td>
+</tr>
+<tr>
+<td><strong>GSEA</strong></td>
+<td>preranked gene-set enrichment (<strong>fgsea</strong>) on the latest DE or Pseudobulk result: rank by avg_log2FC, AUC, signed −log10 p or limma t · gene sets saved in the project (<code><a href="reference/scroll_add_genesets.html">scroll_add_genesets()</a></code>: MSigDB collections or your own <code>.gmt</code>) or fetched live from MSigDB when <code>msigdbr</code> is installed · table (NES, adj. p, leading edge), top-pathway bars, running enrichment plot</td>
 </tr>
 </tbody>
 </table>

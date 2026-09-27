@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">scroll</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.7</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.8</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,6 +32,24 @@
       <small>Source: <a href="https://github.com/shihanli92/scroll/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.3.8" id="scroll-038">scroll 0.3.8<a class="anchor" aria-label="anchor" href="#scroll-038"></a></h2>
+<div class="section level3">
+<h3 id="new-gsea-panel-0-3-8">New GSEA panel<a class="anchor" aria-label="anchor" href="#new-gsea-panel-0-3-8"></a></h3>
+<ul><li>
+<strong>Gene-set enrichment on your DE results.</strong> A new GSEA panel runs preranked GSEA (fgsea) on the latest result of the DE or Pseudobulk panel in the session, with no second contrast to set up. Genes are ranked by avg_log2FC, AUC, a signed −log10 p or (Pseudobulk) limma’s moderated t, from unrounded values with ties broken deterministically. Results show as a table (NES, adj. p, leading edge), the top pathways up and down, and the running enrichment plot for any pathway (click a table row).</li>
+<li>
+<strong>Gene sets.</strong> <code>scroll_add_genesets(dir, msigdb = c("H", "GO:BP"), gmt = ...)</code> saves MSigDB collections (via msigdbr) and/or <code>.gmt</code> files into a built project, trimmed to its genes; it needs no Seurat object, so it works on deployed projects. <code>scroll_build(genesets = )</code> does the same at build time. When <code>msigdbr</code> is installed, the panel also offers the curated MSigDB collections live. The species is guessed from gene-symbol case (override with <code>species:</code> in config.yaml).</li>
+<li>
+<strong><code>scroll_gsea(de, gene_sets)</code></strong> runs the same analysis headlessly on any <code><a href="../reference/scroll_de.html">scroll_de()</a></code> / <code><a href="../reference/scroll_pseudobulk_de.html">scroll_pseudobulk_de()</a></code> result.</li>
+<li>
+<code><a href="../reference/scroll_de.html">scroll_de()</a></code> and <code><a href="../reference/scroll_pseudobulk_de.html">scroll_pseudobulk_de()</a></code> results now carry their unrounded metrics as a <code>ranking</code> attribute (Pseudobulk adds limma’s t); the returned columns are unchanged.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="fixes-0-3-8">Fixes<a class="anchor" aria-label="anchor" href="#fixes-0-3-8"></a></h3>
+<ul><li>The app bar and panel rail no longer scroll away while the startup warm-up (<code>prewarm_views</code>) runs. Its scroll lock sat on <code>&lt;body&gt;</code>, which turned the body into its own scroll container (un-sticking both) without actually locking the page; it now sits on <code>&lt;html&gt;</code>. This showed most after reloading a link to a panel (e.g. <code>#de</code>), which opens the page part-way down.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.3.7" id="scroll-037">scroll 0.3.7<a class="anchor" aria-label="anchor" href="#scroll-037"></a></h2>
 <div class="section level3">
