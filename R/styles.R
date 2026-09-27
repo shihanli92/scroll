@@ -78,8 +78,10 @@ body{background:var(--sc-ground); color:var(--sc-ink);
 .scroll-warm-fill{height:100%; width:0; background:#2563A8; border-radius:2px;
   transition:width .35s ease;}
 /* lock page scroll while warming so scrolling can't flip panels on-screen and pollute
-   the plot cache mid-cycle (the overlay covers the page; this stops wheel/keyboard scroll) */
-body.scroll-warming{overflow:hidden;}
+   the plot cache mid-cycle (the overlay covers the page; this stops wheel/keyboard scroll).
+   On <html>, the page's scroller: overflow:hidden on <body> would not lock anything and
+   would make <body> a scroll container, un-sticking the app bar and panel rail. */
+html.scroll-warming{overflow:hidden;}
 
 /* Manual per-level colour pickers: compact hex pills that wrap into rows */
 .scroll-manual-grid{display:flex; flex-wrap:wrap; gap:6px 8px; margin:4px 0 2px;}
@@ -869,7 +871,7 @@ function scrollAdjustTables(){
   var fuse = null;
   function hide(ov){
     if(fuse){ clearTimeout(fuse); fuse=null; }
-    document.body.classList.remove('scroll-warming');
+    document.documentElement.classList.remove('scroll-warming');
     ov.classList.add('scroll-warm-hiding');           // fade, then remove from flow
     setTimeout(function(){ ov.style.display='none'; }, 340);
   }
@@ -892,7 +894,7 @@ function scrollAdjustTables(){
       if(m && m.frac!=null){ var f=ov.querySelector('.scroll-warm-fill');
         if(f) f.style.width=(Math.max(0,Math.min(1,m.frac))*100)+'%'; }
       if(m && m.show){ ov.classList.remove('scroll-warm-hiding'); ov.style.display='flex';
-        document.body.classList.add('scroll-warming'); }
+        document.documentElement.classList.add('scroll-warming'); }
       else { hide(ov); }
     });
   }
@@ -900,9 +902,9 @@ function scrollAdjustTables(){
   if(window.Shiny && Shiny.addCustomMessageHandler) onConnect();
   else if(window.jQuery) jQuery(document).on('shiny:connected', onConnect);
   else document.addEventListener('shiny:connected', onConnect);
-  // lock scroll + arm the fuse from the initial paint (body exists only after parse)
+  // lock scroll + arm the fuse from the initial paint (the overlay exists only after parse)
   function initLock(){ if(document.getElementById('scroll-warm-overlay')){
-    document.body.classList.add('scroll-warming'); arm(); } }
+    document.documentElement.classList.add('scroll-warming'); arm(); } }
   if(document.readyState!=='loading') initLock();
   else document.addEventListener('DOMContentLoaded', initLock);
 })();

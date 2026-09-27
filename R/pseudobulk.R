@@ -323,6 +323,9 @@ scroll_pseudobulk_de <- function(data, assay, aggregate_cols, ident1, ident2 = N
     p_val = signif(tt$P.Value, 3),
     p_val_adj = signif(tt$adj.P.Val, 3),
     row.names = NULL, stringsAsFactors = FALSE)
+  # unrounded ranking metrics (GSEA): limma's moderated t is the natural gene ranking
+  attr(res, "ranking") <- data.frame(gene = rownames(tt), t = tt$t, logFC = tt$logFC,
+                                     p_val = tt$P.Value, stringsAsFactors = FALSE)
   attr(res, "pseudo") <- sm$pseudo
   attr(res, "regime") <- sm$regime
   attr(res, "design") <- design_formula

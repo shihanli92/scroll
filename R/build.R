@@ -57,6 +57,10 @@
 #'   Signature panel's rank-based scores (UCell, AUCell) need. Off by default: ranks
 #'   barely compress, so they add roughly 40-50% to the expression store. Per-gene
 #'   means for an exact AddModuleScore are always stored (`stats/<assay>/`).
+#' @param genesets Optional gene sets for the GSEA panel, as a list of
+#'   [scroll_add_genesets()] arguments, e.g.
+#'   `list(msigdb = c("H", "GO:BP"), gmt = "my_sets.gmt")`. Can also be added later
+#'   with [scroll_add_genesets()].
 #' @param overwrite If `TRUE`, an existing `outdir` is removed first.
 #' @param verbose If `TRUE`, report progress: a step message per phase and a
 #'   progress bar over each assay's feature-partition export (the slow step).
@@ -70,7 +74,7 @@ scroll_build <- function(object, outdir,
                          quantize = TRUE, counts = FALSE, subsets = NULL,
                          vdj = NULL, spatial = NULL, atac = NULL,
                          panels = NULL, exclude_panels = NULL,
-                         max_levels = .SCROLL_MAX_LEVELS, ranks = FALSE,
+                         max_levels = .SCROLL_MAX_LEVELS, ranks = FALSE, genesets = NULL,
                          overwrite = FALSE, verbose = interactive()) {
   if (!is.null(panels) && !is.character(panels))
     stop("`panels` must be a character vector of panel ids, or NULL.", call. = FALSE)
@@ -194,6 +198,10 @@ scroll_build <- function(object, outdir,
                          peaks_assay = if (!is.null(atac_block)) atac_block$assay else character(),
                          max_levels = max_levels)
   scroll_scaffold_app(outdir, panels = panels, exclude_panels = exclude_panels)
+  if (!is.null(genesets)) {                            # gene sets for the GSEA panel
+    .scroll_step(verbose, "Saving gene sets...")
+    do.call(scroll_add_genesets, c(list(outdir), genesets))
+  }
 
   message("scroll project built at: ", normalizePath(outdir))
   invisible(outdir)

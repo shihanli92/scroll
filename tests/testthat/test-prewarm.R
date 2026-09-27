@@ -95,3 +95,14 @@ test_that(".scroll_page shows the warm-up overlay only when warming", {
   expect_true(grepl("scroll-warm-overlay", html_on))
   expect_false(grepl("scroll-warm-overlay", html_off))   # preview path: no stranded overlay
 })
+
+test_that("the warm-up scroll lock sits on <html>, so the app bar and rail stay sticky", {
+  # overflow:hidden on <body> (while <html> is the page's scroller) makes <body> a
+  # scroll container: it locks nothing and un-sticks the app bar / panel rail.
+  css <- scroll:::.scroll_css()
+  expect_match(css, "html.scroll-warming{overflow:hidden;}", fixed = TRUE)
+  expect_false(grepl("body.scroll-warming", css, fixed = TRUE))
+  js <- scroll:::.scroll_warm_js()
+  expect_false(grepl("document.body.classList", js, fixed = TRUE))
+  expect_match(js, "document.documentElement.classList.add('scroll-warming')", fixed = TRUE)
+})

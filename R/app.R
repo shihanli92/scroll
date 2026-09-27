@@ -73,7 +73,13 @@
        desc = "Aggregate cells into pseudobulk samples and test with edgeR/limma-voom.",
        when = function(m) isTRUE(m$has_counts) && .scroll_has_contrast(m),
        ui = pseudobulk_de_ui, style_ui = pseudobulk_de_style_ui,
-       style_caps = list(limits = c("x", "y"), breaks = c("x", "y")), server = pseudobulk_de_server)
+       style_caps = list(limits = c("x", "y"), breaks = c("x", "y")), server = pseudobulk_de_server),
+  list(id = "gsea", label = "GSEA",
+       title = "Gene-set enrichment",
+       desc = "Preranked GSEA (fgsea) on the latest DE or Pseudobulk result.",
+       when = .scroll_has_contrast,
+       ui = gsea_ui, style_ui = gsea_style_ui,
+       style_caps = list(limits = "x", breaks = "x"), server = gsea_server)
 ),
   # Modality panels: each carries a `when(manifest)` predicate and only surfaces
   # for projects whose manifest has the matching block (see .scroll_assemble_panels).
@@ -547,6 +553,8 @@ scroll_reset_panels <- function() {
   derived <- reactiveVal(list(cols = list(), version = 0L))
   data$derived <- derived
   attr(data$manifest, "scroll_derived") <- derived
+  # this session's latest DE / Pseudobulk results, shared with the GSEA panel
+  data$results <- reactiveVal(list())
   active_view <- reactive(.scroll_nz(input$scroll_view))
   # deferred filters: committed only on Apply (Reset clears). Each panel has its own
   # style value (theme, ...), edited live from its Style sheet.
@@ -585,7 +593,8 @@ scroll_reset_panels <- function() {
     .scroll_prewarm(input, session, subs, labels)
   }
   # the session's reactive state, for tests
-  invisible(list(derived = derived, cells = active_cells, cache_key = cache_key_r))
+  invisible(list(derived = derived, cells = active_cells, cache_key = cache_key_r,
+                 results = data$results))
 }
 
 # Cycle the app-bar View selector through each subset view (then back to

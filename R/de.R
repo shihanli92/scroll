@@ -136,7 +136,7 @@ scroll_de <- function(data, assay, group_col, ident1, ident2 = NULL, min_pct = 0
   res <- res[res$group == "group1", , drop = FALSE]
   res <- res[pmax(res$pct_in, res$pct_out) >= min_pct * 100, , drop = FALSE]
   res <- res[order(res$padj, -abs(res$logFC)), , drop = FALSE]
-  data.frame(
+  out <- data.frame(
     gene = res$feature,
     logFC = round(res$logFC, 3),
     avg_log2FC = round(unname(log2fc[res$feature]), 3),
@@ -147,6 +147,11 @@ scroll_de <- function(data, assay, group_col, ident1, ident2 = NULL, min_pct = 0
     p_val_adj = signif(res$padj, 3),
     row.names = NULL, stringsAsFactors = FALSE
   )
+  # the same metrics unrounded, for ranking genes (GSEA): 3-dp rounding ties many genes
+  attr(out, "ranking") <- data.frame(
+    gene = res$feature, avg_log2FC = unname(log2fc[res$feature]), auc = res$auc,
+    logFC = res$logFC, p_val = res$pval, stringsAsFactors = FALSE)
+  out
 }
 
 # Per-cell contrast label aligned to the rows of `cells`: "group1" (a cell whose

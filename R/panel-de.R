@@ -124,6 +124,14 @@ de_server <- function(id, data, cells_r = reactive(data$cells),
       r$ok
     })
 
+    # share the latest result with the GSEA panel (this session)
+    observeEvent(result(), {
+      r <- result()
+      if (!is.null(r$err)) return()
+      .scroll_publish_result(data, "de", r$ok, .scroll_contrast_text(
+        input$group, input$ident1, input$ident2, sprintf("Wilcoxon, %s", assay())))
+    })
+
     table_rows <- function() {
       res <- de_df()
       res <- res[pmax(res$pct.1, res$pct.2) >= input$minpct / 100, , drop = FALSE]

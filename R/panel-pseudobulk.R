@@ -247,6 +247,18 @@ pseudobulk_de_server <- function(id, data, cells_r = reactive(data$cells),
       else r$ok
     })
 
+    # share the latest result with the GSEA panel (this session); a stability run
+    # shares its aggregate (median logFC across runs)
+    observeEvent(result(), {
+      r <- result()
+      if (!is.null(r$err)) return()
+      df <- if (!is.null(r$runs)) .scroll_stability_aggregate(r$runs, input$lfc, input$padj) else r$ok
+      how <- if (!is.null(r$runs)) sprintf("Pseudobulk stability (%d runs, median logFC)", length(r$runs))
+             else "Pseudobulk limma-voom"
+      .scroll_publish_result(data, "pseudobulk", df, .scroll_contrast_text(
+        input$aggregate_by, input$ident1, input$ident2, sprintf("%s, %s", how, assay())))
+    })
+
     output$note <- renderUI({
       req(input$compute > 0); r <- result(); if (!is.null(r$err)) return(NULL)
       amber <- function(txt) div(class = "scroll-desc", style = "margin:0 0 8px; color:#B45309", txt)

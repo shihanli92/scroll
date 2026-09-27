@@ -20,6 +20,7 @@ scroll_build(
   exclude_panels = NULL,
   max_levels = .SCROLL_MAX_LEVELS,
   ranks = FALSE,
+  genesets = NULL,
   overwrite = FALSE,
   verbose = interactive()
 )
@@ -89,6 +90,11 @@ the manifest small and hand-editable. Defaults to 200.}
 Signature panel's rank-based scores (UCell, AUCell) need. Off by default: ranks
 barely compress, so they add roughly 40-50\% to the expression store. Per-gene
 means for an exact AddModuleScore are always stored (\verb{stats/<assay>/}).}
+
+\item{genesets}{Optional gene sets for the GSEA panel, as a list of
+\code{\link[=scroll_add_genesets]{scroll_add_genesets()}} arguments, e.g.
+\code{list(msigdb = c("H", "GO:BP"), gmt = "my_sets.gmt")}. Can also be added later
+with \code{\link[=scroll_add_genesets]{scroll_add_genesets()}}.}
 
 \item{overwrite}{If \code{TRUE}, an existing \code{outdir} is removed first.}
 

@@ -36,7 +36,7 @@ test_that("modality panels are gated out for a manifest without their block", {
   ids <- vapply(scroll:::.scroll_assemble_panels(rna_man), `[[`, "", "id")
   expect_equal(ids,
                c("dimplot", "featureplot", "signature", "biaxial", "dotplot", "heatmap",
-                 "violin", "proportions", "de", "pseudobulk"))
+                 "violin", "proportions", "de", "pseudobulk", "gsea"))
 })
 
 test_that("built-in panels drop out when the data can't support them", {

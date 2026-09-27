@@ -1,3 +1,34 @@
+# scroll 0.3.8
+
+## New GSEA panel
+
+* **Gene-set enrichment on your DE results.** A new GSEA panel runs preranked GSEA
+  (fgsea) on the latest result of the DE or Pseudobulk panel in the session, with no
+  second contrast to set up. Genes are ranked by avg_log2FC, AUC, a signed −log10 p
+  or (Pseudobulk) limma's moderated t, from unrounded values with ties broken
+  deterministically. Results show as a table (NES, adj. p, leading edge), the top
+  pathways up and down, and the running enrichment plot for any pathway (click a
+  table row).
+* **Gene sets.** `scroll_add_genesets(dir, msigdb = c("H", "GO:BP"), gmt = ...)` saves
+  MSigDB collections (via msigdbr) and/or `.gmt` files into a built project, trimmed
+  to its genes; it needs no Seurat object, so it works on deployed projects.
+  `scroll_build(genesets = )` does the same at build time. When `msigdbr` is
+  installed, the panel also offers the curated MSigDB collections live. The species
+  is guessed from gene-symbol case (override with `species:` in config.yaml).
+* **`scroll_gsea(de, gene_sets)`** runs the same analysis headlessly on any
+  `scroll_de()` / `scroll_pseudobulk_de()` result.
+* `scroll_de()` and `scroll_pseudobulk_de()` results now carry their unrounded
+  metrics as a `ranking` attribute (Pseudobulk adds limma's t); the returned columns
+  are unchanged.
+
+## Fixes
+
+* The app bar and panel rail no longer scroll away while the startup warm-up
+  (`prewarm_views`) runs. Its scroll lock sat on `<body>`, which turned the body into
+  its own scroll container (un-sticking both) without actually locking the page; it
+  now sits on `<html>`. This showed most after reloading a link to a panel (e.g.
+  `#de`), which opens the page part-way down.
+
 # scroll 0.3.7
 
 ## Signature panel

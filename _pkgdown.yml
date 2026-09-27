@@ -43,10 +43,12 @@ reference:
   - scroll_dequantize
 
 - title: Differential expression
-  desc: Live Wilcoxon markers and replicate-aware pseudobulk testing.
+  desc: Live Wilcoxon markers, replicate-aware pseudobulk testing, and gene-set enrichment.
   contents:
   - scroll_de
   - scroll_pseudobulk_de
+  - scroll_gsea
+  - scroll_add_genesets
 
 - title: Extend the app
   desc: >
