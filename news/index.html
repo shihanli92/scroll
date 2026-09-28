@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">scroll</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.9</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.10</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,6 +32,19 @@
       <small>Source: <a href="https://github.com/shihanli92/scroll/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.3.10" id="scroll-0310">scroll 0.3.10<a class="anchor" aria-label="anchor" href="#scroll-0310"></a></h2>
+<div class="section level3">
+<h3 id="new-column-from-a-mapping-0-3-10">New column from a mapping<a class="anchor" aria-label="anchor" href="#new-column-from-a-mapping-0-3-10"></a></h3>
+<ul><li>
+<strong>Make a grouping column in the app.</strong> A <em>New column</em> section in the right-hand rail turns the levels of any categorical column into new labels for the session, e.g. donor to genotype with <code>[D1, D2]: WT, [D3, D4]: KO</code>. Entries can also be a single level (<code>D5: WT</code>) and <code>*: other</code> labels every level not listed (otherwise they are left missing). The column appears in every panel’s column menus, like a Signature column, and is not saved to the project. <code>session_columns: false</code> in config.yaml hides the section.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="de-export-0-3-10">DE export<a class="anchor" aria-label="anchor" href="#de-export-0-3-10"></a></h3>
+<ul><li>
+<strong>Export only the genes that pass your cutoffs.</strong> The DE and Pseudobulk DE panels’ “Export all genes” switch is now a <strong>CSV export</strong> choice: <em>Shown rows</em> (the table on screen, as before), <em>Genes passing cutoffs</em>, or <em>All genes</em>. <em>Genes passing cutoffs</em> keeps the genes the volcano colours: adj. p below the cutoff, |fold change| at or above the logFC cutoff, and (DE) at least <em>Min % expressing</em> in one group. For a Pseudobulk stability run it keeps genes at or above the consistency cutoff and the logFC cutoff.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.3.9" id="scroll-039">scroll 0.3.9<a class="anchor" aria-label="anchor" href="#scroll-039"></a></h2>
 <div class="section level3">
