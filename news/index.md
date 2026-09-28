@@ -1,5 +1,13 @@
 # Changelog
 
+## scroll 0.3.9
+
+### Documentation
+
+- The README is now a short introduction: what scroll does, how to
+  install it, a three-line build and serve, and links to the articles
+  and function reference.
+
 ## scroll 0.3.8
 
 ### New GSEA panel
