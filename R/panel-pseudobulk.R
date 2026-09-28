@@ -111,7 +111,7 @@ pseudobulk_de_ui <- function(id, data) {
         sliderInput(ns("stabcut"), "Consistency cutoff", 0, 1, 0.8, 0.05)),
       .scroll_group("Table",
         sliderInput(ns("topn"), "Show top", 10, 300, 50, 10),
-        bslib::input_switch(ns("export_all"), "Export all genes (CSV)", FALSE)),
+        .scroll_export_input(ns)),
       .scroll_group("Volcano / stability",
         sliderInput(ns("lfc"), "logFC cutoff", 0, 3, 1, 0.1),
         numericInput(ns("padj"), "Adj. p cutoff", 0.05, min = 0, max = 1, step = 0.01)),
@@ -313,9 +313,12 @@ pseudobulk_de_server <- function(id, data, cells_r = reactive(data$cells),
     })
     output$plot <- renderPlot(plot_r())
     .scroll_plot_downloads(output, plot_r, id)
-    output$csv <- .scroll_csv_handler(
-      reactive(if (isTRUE(input$export_all)) de_df() else table_rows()),
-      paste0("scroll_", id, ".csv"))
+    export_r <- reactive(switch(input$export %||% "shown",
+      all = de_df(),
+      sig = .scroll_de_passing(de_df(), lfc = input$lfc %||% 1, padj = input$padj %||% 0.05,
+                               cut = input$stabcut %||% 0.8),
+      table_rows()))
+    output$csv <- .scroll_csv_handler(export_r, paste0("scroll_", id, ".csv"))
   })
 }
 

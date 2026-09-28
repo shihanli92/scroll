@@ -311,11 +311,13 @@ scroll_reset_panels <- function() {
 }
 
 # The right-hand control rail: the Filters section (when the project has filterable
-# columns). Plot styling lives in each panel's Style sheet (R/style.R).
+# columns) and the New column section (R/session-cols.R). Plot styling lives in each
+# panel's Style sheet (R/style.R).
 .scroll_controls_ui <- function(data, ns = identity) {
-  fl <- .scroll_filters_ui(data, ns)
-  if (is.null(fl)) return(NULL)
-  tags$aside(class = "scroll-filters", fl)
+  secs <- list(.scroll_filters_ui(data, ns), .scroll_newcol_ui(data, ns))
+  secs <- Filter(Negate(is.null), secs)
+  if (!length(secs)) return(NULL)
+  tags$aside(class = "scroll-filters", secs)
 }
 
 # Narrow `cells` by every active filter (AND). An untouched control is a no-op: an
@@ -399,7 +401,8 @@ scroll_reset_panels <- function() {
     selectizeInput(ns("scroll_subset_val"), NULL, choices = NULL, multiple = TRUE,
                    width = "200px", options = list(placeholder = "all")))
   # toggle to collapse/expand the right control rail (frees plot width on narrow screens)
-  has_ctrl <- length(.scroll_filter_specs(data)) > 0
+  has_ctrl <- length(.scroll_filter_specs(data)) > 0 ||
+    (.scroll_newcol_on(data) && length(cats) > 0)
   toggle <- if (has_ctrl)
     tags$button(class = "scroll-ctl-toggle", type = "button",
                 onclick = "scrollToggleControls(this)", `data-tip` = .SCROLL_TIPS$ctl_hide,
@@ -576,6 +579,7 @@ scroll_reset_panels <- function() {
                                derived()$version))       # a re-scored added column is new data
   .scroll_bind_subset_control(input, session, data)
   .scroll_bind_filters(input, session, data, filt_rv)
+  .scroll_bind_newcol(input, output, session, data, derived)   # rail: New column
   .scroll_render_ncells(output, data$manifest, active_cells, active_view)
   # saved plot styles (style.yaml, R/style-save.R): read once per session
   style_ctx <- .scroll_style_ctx(data)

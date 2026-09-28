@@ -160,7 +160,7 @@ test_that("de_server computes table + volcano from one contrast", {
   })
 })
 
-test_that("de_server can export all genes (not just the top-N)", {
+test_that("de_server exports shown rows, genes passing cutoffs, or all genes", {
   skip_if_not_installed("presto")
   data <- scroll:::.scroll_load(test_project())
   on.exit(scroll_disconnect(data$con))
@@ -168,13 +168,19 @@ test_that("de_server can export all genes (not just the top-N)", {
   shiny::testServer(scroll:::de_server, args = list(data = data), {
     session$setInputs(group = "celltype", ident1 = ct, ident2 = "rest",
                       minpct = 0, topn = 5, lfc = 1, padj = 0.05, labeln = 10,
-                      aspect = 1, export_all = FALSE, compute = 1)
+                      aspect = 1, export = "shown", compute = 1)
     full <- nrow(de_df())
     expect_gt(full, 5)                         # full result has more than the cap
-    expect_lte(nrow(table_rows()), 5)          # default CSV is the displayed top-N
-    session$setInputs(export_all = TRUE)       # "Export all genes" -> full de_df()
-    exported <- if (isTRUE(input$export_all)) de_df() else table_rows()
-    expect_equal(nrow(exported), full)
+    expect_equal(export_r(), table_rows())     # default CSV is the displayed top-N
+    expect_lte(nrow(export_r()), 5)
+    session$setInputs(export = "all")
+    expect_equal(nrow(export_r()), full)
+    # cutoffs: every exported gene passes all of them, and no passing gene is missed
+    session$setInputs(export = "sig", lfc = 0.2, padj = 0.5, minpct = 20)
+    d <- de_df()
+    pass <- d$p_val_adj < 0.5 & abs(d$avg_log2FC) >= 0.2 & pmax(d$pct.1, d$pct.2) >= 0.2
+    expect_setequal(export_r()$gene, d$gene[pass])
+    expect_true(all(export_r()$p_val_adj < 0.5 & abs(export_r()$avg_log2FC) >= 0.2))
   })
 })
 
@@ -193,4 +199,18 @@ test_that("de_server captures a too-few-cells contrast as a friendly message", {
     expect_false(is.null(result()$err))          # error captured, not raised
     expect_match(result()$err, "at least 3 cells")
   })
+})
+
+test_that(".scroll_de_passing applies the volcano and stability rules", {
+  de <- data.frame(gene = c("a", "b", "c", "d"), avg_log2FC = c(2, -2, 0.5, 2),
+                   logFC = 0, p_val_adj = c(0.01, 0.01, 0.01, 0.2),
+                   pct.1 = c(0.5, 0.05, 0.5, 0.5), pct.2 = c(0.1, 0.02, 0.1, 0.1))
+  out <- scroll:::.scroll_de_passing(de, lfc = 1, padj = 0.05, fc_col = "avg_log2FC")
+  expect_equal(out$gene, c("a", "b"))                   # c: small FC, d: padj too high
+  out <- scroll:::.scroll_de_passing(de, lfc = 1, padj = 0.05, fc_col = "avg_log2FC", min_pct = 10)
+  expect_equal(out$gene, "a")                           # b: expressed in < 10% on both sides
+  st <- data.frame(gene = c("a", "b", "c"), sel_freq = c(0.9, 0.9, 0.5),
+                   median_logFC = c(1.5, 0.2, 2))
+  expect_equal(scroll:::.scroll_de_passing(st, lfc = 1, cut = 0.8)$gene, "a")
+  expect_equal(nrow(scroll:::.scroll_de_passing(de[0, ])), 0)
 })

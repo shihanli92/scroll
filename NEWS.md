@@ -1,3 +1,25 @@
+# scroll 0.3.10
+
+## New column from a mapping
+
+* **Make a grouping column in the app.** A *New column* section in the right-hand
+  rail turns the levels of any categorical column into new labels for the session,
+  e.g. donor to genotype with `[D1, D2]: WT, [D3, D4]: KO`. Entries can also be a
+  single level (`D5: WT`) and `*: other` labels every level not listed (otherwise
+  they are left missing). The column appears in every panel's column menus, like a
+  Signature column, and is not saved to the project. `session_columns: false` in
+  config.yaml hides the section.
+
+## DE export
+
+* **Export only the genes that pass your cutoffs.** The DE and Pseudobulk DE panels'
+  "Export all genes" switch is now a **CSV export** choice: *Shown rows* (the table
+  on screen, as before), *Genes passing cutoffs*, or *All genes*. *Genes passing
+  cutoffs* keeps the genes the volcano colours: adj. p below the cutoff, |fold
+  change| at or above the logFC cutoff, and (DE) at least *Min % expressing* in one
+  group. For a Pseudobulk stability run it keeps genes at or above the consistency
+  cutoff and the logFC cutoff.
+
 # scroll 0.3.9
 
 ## Documentation

@@ -28,7 +28,7 @@ de_ui <- function(id, data) {
       .scroll_group("Table",
         sliderInput(ns("minpct"), "Min % expressing", 0, 50, 10, 1),
         sliderInput(ns("topn"), "Show top", 10, 300, 50, 10),
-        bslib::input_switch(ns("export_all"), "Export all genes (CSV)", FALSE)),
+        .scroll_export_input(ns)),
       .scroll_group("Volcano",
         sliderInput(ns("lfc"), "avg_log2FC cutoff", 0, 3, 1, 0.1),
         numericInput(ns("padj"), "Adj. p cutoff", 0.05, min = 0, max = 1, step = 0.01)),
@@ -56,6 +56,30 @@ de_ui <- function(id, data) {
 }
 
 .scroll_has_dt <- function() requireNamespace("DT", quietly = TRUE)
+
+# What the Table tab's CSV button writes: the rows on screen, only the genes that
+# pass the panel's cutoffs, or every gene tested.
+.scroll_export_input <- function(ns)
+  selectInput(ns("export"), "CSV export",
+              c("Shown rows" = "shown", "Genes passing cutoffs" = "sig", "All genes" = "all"))
+
+# Genes passing a DE result's cutoffs, the same rule the volcano / stability plot
+# colours by: adj. p < padj and |fold change| >= lfc (plus a min fraction
+# expressing when the result has pct.1 / pct.2). A stability result (runs > 1)
+# passes on selection frequency >= cut and |median logFC| >= lfc.
+.scroll_de_passing <- function(df, lfc = 1, padj = 0.05, fc_col = "logFC", min_pct = 0, cut = 0.8) {
+  if (is.null(df) || !nrow(df)) return(df)
+  keep <- if ("sel_freq" %in% names(df)) {
+    df$sel_freq >= cut & abs(df$median_logFC) >= lfc
+  } else {
+    if (!fc_col %in% names(df)) fc_col <- "logFC"
+    ok <- df$p_val_adj < padj & abs(df[[fc_col]]) >= lfc
+    if (all(c("pct.1", "pct.2") %in% names(df)))
+      ok <- ok & pmax(df$pct.1, df$pct.2) >= min_pct / 100
+    ok
+  }
+  df[!is.na(keep) & keep, , drop = FALSE]
+}
 
 # The volcano's look controls, shown in the panel's Style sheet (same input ids).
 de_style_ui <- function(id, data) {
@@ -153,9 +177,12 @@ de_server <- function(id, data, cells_r = reactive(data$cells),
     })
     output$plot <- renderPlot(volcano_r())
     .scroll_plot_downloads(output, volcano_r, id)
-    output$csv <- .scroll_csv_handler(
-      reactive(if (isTRUE(input$export_all)) de_df() else table_rows()),
-      paste0("scroll_", id, ".csv"))
+    export_r <- reactive(switch(input$export %||% "shown",
+      all = de_df(),
+      sig = .scroll_de_passing(de_df(), lfc = input$lfc %||% 1, padj = input$padj %||% 0.05,
+                               fc_col = "avg_log2FC", min_pct = input$minpct %||% 0),
+      table_rows()))
+    output$csv <- .scroll_csv_handler(export_r, paste0("scroll_", id, ".csv"))
   })
 }
 

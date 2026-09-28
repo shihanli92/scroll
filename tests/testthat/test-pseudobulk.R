@@ -308,15 +308,15 @@ test_that("pseudobulk_de_server populates combined levels and computes", {
     expect_false(is.null(result()$ok))
     expect_false(is.null(output$table))
     expect_false(is.null(output$plot))
-    # export-all switch: CSV picks the full de_df() over the displayed top-N
-    session$setInputs(topn = 3, export_all = FALSE)
+    # CSV export: shown rows (default), all genes, or genes passing the cutoffs
+    session$setInputs(topn = 3, export = "shown")
     full <- nrow(de_df())
-    if (full > 3) {
-      expect_lte(nrow(table_rows()), 3)
-      session$setInputs(export_all = TRUE)
-      exported <- if (isTRUE(input$export_all)) de_df() else table_rows()
-      expect_equal(nrow(exported), full)
-    }
+    expect_equal(export_r(), table_rows())
+    session$setInputs(export = "all")
+    expect_equal(nrow(export_r()), full)
+    session$setInputs(export = "sig", lfc = 0.1, padj = 0.9)
+    d <- de_df()
+    expect_setequal(export_r()$gene, d$gene[d$p_val_adj < 0.9 & abs(d$logFC) >= 0.1])
   })
 })
 
