@@ -1,5 +1,41 @@
 # Changelog
 
+## scroll 0.3.11
+
+### Documentation
+
+- A new article, **A tour of the app**, walks through each part of the
+  app with screenshots (pkgdown site only; not installed with the
+  package).
+
+### Ridge plot panel
+
+- **A new Ridge panel** draws a gene’s (or a numeric column’s) density
+  in each group, one ridge per group, like
+  [`Seurat::RidgePlot`](https://satijalab.org/seurat/reference/RidgePlot.html).
+  It has the Violin panel’s controls: one or several genes (several make
+  a grid), a metadata source, grouping by several columns. *Expressing
+  cells only* drops the zeros that otherwise form a tall spike at 0. In
+  the Style sheet, *Layout* draws overlapping ridges (with a slider for
+  how far), separate rows that never touch, or every curve overlaid on
+  one axis; *Line type by group* gives each group its own line type (up
+  to six groups). It is drawn without extra packages.
+
+### Grouping and label order
+
+- **Group by several columns** in DotPlot (and its heatmap tiles) and in
+  the Proportions x-axis, as Violin and Heatmap already allowed: the
+  groups become the `a | b` combinations.
+- **Natural order by default.** Group labels in DotPlot, Heatmap,
+  Violin, Ridge and Proportions now sort numbers by value (cluster 2
+  before 10) rather than as text. Colours are still assigned by label,
+  so they don’t change.
+- **Your own order.** These panels’ Style sheets have a *Group order*
+  list: drag the labels into place (or focus one and use the arrow
+  keys), and *Reset* to go back. The order is saved with the plot’s
+  style. In Proportions it is the *Manual* choice under *Order groups*;
+  in DotPlot it applies while columns aren’t clustered.
+
 ## scroll 0.3.10
 
 ### New column from a mapping

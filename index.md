@@ -31,7 +31,7 @@ To deploy, copy the `myapp/` folder to a Shiny Server.
 ## Panels
 
 DimPlot, FeaturePlot, Signature scores, Biaxial, DotPlot, Heatmap,
-Violin, Proportions, DE, Pseudobulk DE and GSEA, plus repertoire
+Violin, Ridge, Proportions, DE, Pseudobulk DE and GSEA, plus repertoire
 (TCR/BCR), spatial and ATAC panels when the data has them. Each plot has
 a Style sheet for its look and exports to PNG or PDF.
 

@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">scroll</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.11</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,6 +32,27 @@
       <small>Source: <a href="https://github.com/shihanli92/scroll/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.3.11" id="scroll-0311">scroll 0.3.11<a class="anchor" aria-label="anchor" href="#scroll-0311"></a></h2>
+<div class="section level3">
+<h3 id="documentation-0-3-11">Documentation<a class="anchor" aria-label="anchor" href="#documentation-0-3-11"></a></h3>
+<ul><li>A new article, <strong>A tour of the app</strong>, walks through each part of the app with screenshots (pkgdown site only; not installed with the package).</li>
+</ul></div>
+<div class="section level3">
+<h3 id="ridge-plot-panel-0-3-11">Ridge plot panel<a class="anchor" aria-label="anchor" href="#ridge-plot-panel-0-3-11"></a></h3>
+<ul><li>
+<strong>A new Ridge panel</strong> draws a gene’s (or a numeric column’s) density in each group, one ridge per group, like <code><a href="https://satijalab.org/seurat/reference/RidgePlot.html" class="external-link">Seurat::RidgePlot</a></code>. It has the Violin panel’s controls: one or several genes (several make a grid), a metadata source, grouping by several columns. <em>Expressing cells only</em> drops the zeros that otherwise form a tall spike at 0. In the Style sheet, <em>Layout</em> draws overlapping ridges (with a slider for how far), separate rows that never touch, or every curve overlaid on one axis; <em>Line type by group</em> gives each group its own line type (up to six groups). It is drawn without extra packages.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="grouping-and-label-order-0-3-11">Grouping and label order<a class="anchor" aria-label="anchor" href="#grouping-and-label-order-0-3-11"></a></h3>
+<ul><li>
+<strong>Group by several columns</strong> in DotPlot (and its heatmap tiles) and in the Proportions x-axis, as Violin and Heatmap already allowed: the groups become the <code>a | b</code> combinations.</li>
+<li>
+<strong>Natural order by default.</strong> Group labels in DotPlot, Heatmap, Violin, Ridge and Proportions now sort numbers by value (cluster 2 before 10) rather than as text. Colours are still assigned by label, so they don’t change.</li>
+<li>
+<strong>Your own order.</strong> These panels’ Style sheets have a <em>Group order</em> list: drag the labels into place (or focus one and use the arrow keys), and <em>Reset</em> to go back. The order is saved with the plot’s style. In Proportions it is the <em>Manual</em> choice under <em>Order groups</em>; in DotPlot it applies while columns aren’t clustered.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.3.10" id="scroll-0310">scroll 0.3.10<a class="anchor" aria-label="anchor" href="#scroll-0310"></a></h2>
 <div class="section level3">
