@@ -121,11 +121,39 @@
   invisible(.scroll_style_path(dir))
 }
 
+# Write style.yaml in place: for a server where the app may write that one file
+# but not create files in the project folder (so the atomic rename isn't possible).
+.scroll_write_styles_inplace <- function(dir, styles) {
+  tmp <- tempfile(".style-", fileext = ".yaml")           # build in the session temp dir
+  on.exit(unlink(tmp), add = TRUE)
+  .scroll_write_styles(dirname(tmp), styles)              # writes <tempdir>/style.yaml
+  src <- .scroll_style_path(dirname(tmp))
+  on.exit(unlink(src), add = TRUE)
+  if (!file.copy(src, .scroll_style_path(dir), overwrite = TRUE))
+    stop("could not write ", .scroll_style_path(dir), call. = FALSE)
+  invisible(.scroll_style_path(dir))
+}
+
 # Can this process write style.yaml? (A deployed app often runs as a user that can't.)
+# Either the project folder is writable (atomic replace), or style.yaml exists and is
+# writable itself (written in place).
 .scroll_style_writable <- function(dir) {
   path <- .scroll_style_path(dir)
-  dir.exists(dir) && file.access(dir, 2L) == 0L &&
-    (!file.exists(path) || file.access(path, 2L) == 0L)
+  if (!dir.exists(dir)) return(FALSE)
+  if (file.access(dir, 2L) == 0L) return(!file.exists(path) || file.access(path, 2L) == 0L)
+  file.exists(path) && file.access(path, 2L) == 0L
+}
+
+# Why Save can't write here, naming the user the app runs as and what to change.
+.scroll_style_unwritable_msg <- function(dir) {
+  who <- tryCatch(Sys.info()[["effective_user"]], error = function(e) NA)
+  if (is.null(who) || is.na(who) || !nzchar(who) || identical(who, "unknown")) who <- "the app"
+  else who <- sprintf("the app's user ('%s')", who)
+  sprintf(paste("%s can't write %s. On the server, let it: e.g.",
+                "sudo touch %s && sudo chown %s %s"),
+          who, .scroll_style_path(dir), .scroll_style_path(dir),
+          if (grepl("'", who)) sub(".*'(.*)'.*", "\\1", who) else "shiny",
+          .scroll_style_path(dir))
 }
 
 .scroll_style_save_on <- function(data) !isFALSE(data$config$style_save) && !is.null(data$dir)
@@ -149,15 +177,15 @@
 # each other. Returns the ids written.
 .scroll_save_styles <- function(data, ctx) {
   if (!.scroll_style_writable(data$dir))
-    stop("the app can't write to the project folder, so the style can't be saved here.",
-         call. = FALSE)
+    stop(.scroll_style_unwritable_msg(data$dir), call. = FALSE)
   cur <- lapply(ctx$snap, function(f) f())
   dirty <- names(cur)[!vapply(names(cur), function(k)
     .scroll_style_same(cur[[k]], ctx$saved[[k]]), logical(1))]
   if (!length(dirty)) return(character(0))
   disk <- .scroll_read_styles(data$dir)
   for (k in dirty) { disk[[k]] <- cur[[k]]; ctx$saved[[k]] <- cur[[k]] }
-  .scroll_write_styles(data$dir, disk)
+  if (file.access(data$dir, 2L) == 0L) .scroll_write_styles(data$dir, disk)
+  else .scroll_write_styles_inplace(data$dir, disk)        # only style.yaml is writable
   dirty
 }
 

@@ -130,3 +130,17 @@ test_that("the Ridge panel offers per-group line types only for few groups", {
     expect_null(linetypes_r())
   })
 })
+
+test_that("ridge fill: filled with an opacity, or coloured outlines only", {
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  v <- data$query1("RNA", "CD3D")
+  rp <- function(...) scroll:::view_ridge(data$cells, list(feature = "CD3D", group_by = "celltype"),
+                                          v, list(...))
+  b <- ggplot2::ggplot_build(rp(fill_alpha = 0.4))$data[[1]]
+  expect_equal(unique(b$alpha), 0.4)
+  p <- rp(ridge_fill = "outline")
+  b <- ggplot2::ggplot_build(p)$data[[1]]
+  expect_true(all(is.na(b$fill)))
+  expect_gt(length(unique(b$colour)), 1)                     # a colour per group
+})

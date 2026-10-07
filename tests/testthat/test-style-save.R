@@ -153,3 +153,18 @@ test_that("an overwrite rebuild keeps the project's style.yaml", {
   build()
   expect_identical(scroll:::.scroll_read_styles(dir)$dimplot$theme$legend, "top")
 })
+
+test_that("Save writes style.yaml in place when only that file is writable", {
+  skip_on_os("windows")                                      # chmod semantics
+  d <- tempfile(); dir.create(d)
+  on.exit({ Sys.chmod(d, "755"); unlink(d, recursive = TRUE) }, add = TRUE)
+  writeLines("# placeholder", file.path(d, "style.yaml"))
+  Sys.chmod(d, "555")                                        # folder read-only
+  skip_if(file.access(d, 2L) == 0L, "running as a user who can write anywhere")
+  expect_true(scroll:::.scroll_style_writable(d))
+  scroll:::.scroll_write_styles_inplace(d, list(dimplot = list(theme = list(legend = "bottom"))))
+  expect_equal(scroll:::.scroll_read_styles(d)$dimplot$theme$legend, "bottom")
+  Sys.chmod(file.path(d, "style.yaml"), "444")
+  expect_false(scroll:::.scroll_style_writable(d))
+  expect_match(scroll:::.scroll_style_unwritable_msg(d), "chown")
+})

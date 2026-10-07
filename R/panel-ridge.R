@@ -51,6 +51,10 @@ ridge_style_ui <- function(id, data) {
                   "Overlaid (one axis)" = "overlay")),
     conditionalPanel("input['ridgemode'] == 'ridges'", ns = ns,
       sliderInput(ns("ridgescale"), "Ridge height (overlap)", 0.5, 4, 1.4, 0.1)),
+    selectInput(ns("ridgefill"), "Fill",
+                c("Filled" = "filled", "Outline only (coloured lines)" = "outline")),
+    conditionalPanel("input['ridgefill'] == 'filled'", ns = ns,
+      sliderInput(ns("fillalpha"), "Fill opacity", 0.05, 1, 0.9, 0.05)),
     bslib::input_switch(ns("ltgroup"), "Line type by group", FALSE),
     uiOutput(ns("linetypes")),
     .scroll_order_input(ns("order")),
@@ -72,6 +76,16 @@ ridge_server <- function(id, data, cells_r = reactive(data$cells),
       if (identical(input$palette, "Manual")) .scroll_manual_ui(session$ns, lvl_r()))
     manual_colors <- reactive(
       if (identical(input$palette, "Manual")) .scroll_manual_colors(input, lvl_r()))
+    # overlaid curves need see-through fills: switching layout moves the opacity
+    # between the two defaults, unless the user has set their own
+    alpha_default <- function(mode) if (identical(mode, "overlay")) 0.35 else 0.9
+    prev_mode <- "ridges"
+    observeEvent(input$ridgemode, {
+      a <- input$fillalpha
+      if (!is.null(a) && isTRUE(all.equal(a, alpha_default(prev_mode))))
+        updateSliderInput(session, "fillalpha", value = alpha_default(input$ridgemode))
+      prev_mode <<- input$ridgemode
+    }, ignoreInit = TRUE)
     # a line type per group (few groups only: there are six line types)
     lt_n <- length(.SCROLL_LINETYPES)
     output$linetypes <- renderUI({
@@ -114,6 +128,8 @@ ridge_server <- function(id, data, cells_r = reactive(data$cells),
       list(theme = theme_r(), palette = input$palette, legend = isTRUE(input$legend),
            ridge_scale = input$ridgescale %||% 1.4, ridge_mode = input$ridgemode %||% "ridges",
            linetypes = linetypes_r(), group_order = .scroll_order_value(input$order),
+           ridge_fill = input$ridgefill %||% "filled",
+           fill_alpha = input$fillalpha %||% alpha_default(input$ridgemode),
            aspect = input$aspect, manual_colors = manual_colors())))
     plot_r <- .scroll_lazy_plot(input, function() {
       d <- data_r()

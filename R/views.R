@@ -1466,18 +1466,24 @@ view_ridge <- function(cells, params, values = NULL, state = list()) {
   cols <- .scroll_group_colors(d$group, state)
   lt <- unlist(state$linetypes)
   lt <- lt[names(lt) %in% lv]
-  aes_map <- ggplot2::aes(x = .data$x, ymin = .data$base, ymax = .data$top,
-                          fill = .data$group, group = .data$group)
+  # filled curves (a grey outline), or outline only: each group's line in its colour
+  outline <- identical(.scroll_opt(params, state, "ridge_fill", "filled"), "outline")
+  alpha <- .scroll_opt(params, state, "fill_alpha", if (overlay) 0.35 else 0.9)
+  aes_map <- ggplot2::aes(x = .data$x, ymin = .data$base, ymax = .data$top, group = .data$group)
+  if (outline) aes_map$colour <- quote(.data$group) else aes_map$fill <- quote(.data$group)
   if (length(lt)) aes_map$linetype <- quote(.data$group)
+  lw <- if (outline) 0.7 else if (length(lt)) 0.5 else 0.3
+  ribbon <- if (outline)
+    ggplot2::geom_ribbon(fill = NA, linewidth = lw, outline.type = "upper")
+  else ggplot2::geom_ribbon(colour = "grey20", linewidth = lw, alpha = alpha, outline.type = "upper")
   p <- ggplot2::ggplot(d, aes_map) +
-    .scroll_role(ggplot2::geom_ribbon(colour = "grey20", linewidth = if (length(lt)) 0.5 else 0.3,
-                                      alpha = if (overlay) 0.35 else 0.9,
-                                      outline.type = "upper"), "Ridges") +
-    ggplot2::scale_fill_manual(values = cols) +
+    .scroll_role(ribbon, "Ridges") +
+    (if (outline) ggplot2::scale_colour_manual(values = cols)
+     else ggplot2::scale_fill_manual(values = cols)) +
     ggplot2::scale_x_continuous(expand = ggplot2::expansion(mult = c(0, 0.02))) +
     ggplot2::labs(x = params$feature %||% params$value_col %||% "expression",
                   y = if (overlay) "density (scaled)" else r$group_lab,
-                  fill = r$group_lab)
+                  fill = r$group_lab, colour = r$group_lab)
   if (length(lt)) {
     full <- stats::setNames(rep("solid", length(lv)), lv); full[names(lt)] <- lt
     p <- p + ggplot2::scale_linetype_manual(values = full) + ggplot2::labs(linetype = r$group_lab)
