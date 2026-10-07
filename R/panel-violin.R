@@ -52,6 +52,7 @@ violin_style_ui <- function(id, data) {
     # (point size / opacity / shape are per-layer settings: Layers > Points)
     conditionalPanel("input['jitter'] == true && input['stack'] != true", ns = ns,
       sliderInput(ns("pfrac"), "Subsample points (%)", 1, 100, 100, 1)),
+    .scroll_order_input(ns("order")),
     .scroll_aspect_input(ns))
 }
 
@@ -78,6 +79,9 @@ violin_server <- function(id, data, cells_r = reactive(data$cells),
       if (identical(input$palette, "Manual")) .scroll_manual_ui(session$ns, lvl_r()))
     manual_colors <- reactive(
       if (identical(input$palette, "Manual")) .scroll_manual_colors(input, lvl_r()))
+    # the Style sheet's drag list holds the group labels (not the split ones)
+    .scroll_bind_order(session, "order", reactive({ req(input$group)
+      .scroll_group_levels(cells_r(), input$group) }))
     # DATA reactive: cells + query (cosmetic changes no longer re-hit the store).
     # A numeric metadata column (source = "Metadata") plots directly; otherwise a
     # queried feature.
@@ -106,6 +110,7 @@ violin_server <- function(id, data, cells_r = reactive(data$cells),
            legend = isTRUE(input$legend), aspect = input$aspect,
            violin_width = input$vwidth %||% 0.9, point_size = input$psize %||% 0.3,
            point_alpha = input$palpha %||% 0.3, point_frac = (input$pfrac %||% 100) / 100,
+           group_order = .scroll_order_value(input$order),
            manual_colors = manual_colors())))
     plot_r <- .scroll_lazy_plot(input, function() {
       d <- data_r()

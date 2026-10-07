@@ -56,6 +56,12 @@
        ui = violin_ui, style_ui = violin_style_ui,
        style_caps = list(limits = "y", breaks = "y", flip = TRUE,
                          trans = list(y = c("sqrt", "log1p", "pseudo_log", "reverse"))), server = violin_server),
+  list(id = "ridge", label = "Ridge",
+       title = "Ridge plot",
+       desc = "A gene's density in each group, one ridge per group.",
+       when = function(m) length(.scroll_cat_cols(m)) >= 1,
+       ui = ridge_ui, style_ui = ridge_style_ui,
+       style_caps = list(limits = "x", breaks = "x"), server = ridge_server),
   list(id = "proportions", label = "Proportions",
        title = "Composition",
        desc = "Stacked composition of one annotation within another.",
@@ -537,9 +543,11 @@ scroll_reset_panels <- function() {
             div(class = "scroll-warm-bar", div(class = "scroll-warm-fill"))))
   bslib::page_fluid(
     theme = .scroll_theme(),
-    tags$head(tags$style(HTML(paste0(.scroll_css(), .scroll_layout_css(data$config)))),
+    tags$head(tags$style(HTML(paste0(.scroll_css(), .scroll_order_css(),
+                                           .scroll_layout_css(data$config)))),
               tags$script(HTML(.scroll_spy_js())),
               tags$script(HTML(.scroll_lazy_js())),
+              tags$script(HTML(.scroll_order_js())),
               tags$script(HTML(.scroll_warm_js()))),
     overlay,
     .scroll_body(data, title, panels)
@@ -805,9 +813,11 @@ scroll_multi_app <- function(projects) {
 
   ui <- bslib::page_fluid(
     theme = .scroll_theme(),
-    tags$head(tags$style(HTML(paste0(.scroll_css(), .scroll_layout_css(datas[[1]]$config)))),
+    tags$head(tags$style(HTML(paste0(.scroll_css(), .scroll_order_css(),
+                                           .scroll_layout_css(datas[[1]]$config)))),
               tags$script(HTML(.scroll_spy_js())),
-              tags$script(HTML(.scroll_lazy_js()))),
+              tags$script(HTML(.scroll_lazy_js())),
+              tags$script(HTML(.scroll_order_js()))),
     # .scroll-multi lets the CSS pin the dataset tab strip and drop each dataset's
     # app bar + rail below it, so the dataset selector stays visible while scrolling.
     div(class = "scroll-multi", do.call(bslib::navset_tab, tabs))

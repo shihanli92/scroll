@@ -51,7 +51,9 @@ dotplot_ui <- function(id, data) {
                                       maxOptions = 50, plugins = list("remove_button"))),
         .scroll_paste_handler(ns("markers"), ns("marker_paste"))),
       .scroll_group("Grouping",
-        selectInput(ns("group"), "Group by", stats::setNames(cats, cats), selected = cats[[1]]),
+        # multi-select: group by the "a | b" interaction of several columns
+        selectizeInput(ns("group"), "Group by", stats::setNames(cats, cats), selected = cats[[1]],
+                       multiple = TRUE, options = list(plugins = list("remove_button"))),
         if (length(assays) > 1)
           selectInput(ns("assay"), "Assay", assays, selected = m$default_assay)),
       .scroll_group("Appearance",
@@ -79,6 +81,8 @@ dotplot_style_ui <- function(id, data) {
       sliderInput(ns("dotrange"), "Dot size", 0, 10, c(1, 6), 0.5)),
     conditionalPanel("input['display'] == 'tiles' && input['scale']", ns = ns,
       sliderInput(ns("clip"), "Clip z at \u00b1", 0.5, 5, 2.5, 0.5)),
+    # ignored while columns are clustered (the dendrogram sets their order)
+    .scroll_order_input(ns("order")),
     .scroll_aspect_input(ns))
 }
 
@@ -86,7 +90,9 @@ dotplot_server <- function(id, data, cells_r = reactive(data$cells),
                            view_r = reactive(NULL), theme_r = reactive(NULL), style_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
-    .scroll_bind_view_cats(input, session, view_r, m, "group")
+    .scroll_bind_view_cats(input, session, view_r, m, "group", multiple = TRUE)
+    .scroll_bind_order(session, "order", reactive({ req(input$group)
+      .scroll_group_levels(cells_r(), input$group) }))
     assay <- reactive(input$assay %||% m$default_assay)
     defaults <- intersect(unlist(data$config$markers), .scroll_features_of(m, m$default_assay))
     # assay-repopulate + pasted gene list + long-list warning, and mirror the pick
@@ -113,7 +119,8 @@ dotplot_server <- function(id, data, cells_r = reactive(data$cells),
     })
     cosmetic_r <- .scroll_cosmetic(reactive(
       list(theme = theme_r(), palette = input$palette, dot_size = input$dotrange,
-           clip = input$clip %||% 2.5, mark_genes = input$mark, aspect = input$aspect)))
+           clip = input$clip %||% 2.5, mark_genes = input$mark, aspect = input$aspect,
+           group_order = .scroll_order_value(input$order))))
     plot_r <- .scroll_lazy_plot(input, function() {
       d <- data_r(); st <- c(cosmetic_r(), list(style = style_r()))
       if (identical(d$display, "tiles"))

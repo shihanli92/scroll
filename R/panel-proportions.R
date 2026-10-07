@@ -10,7 +10,9 @@ proportions_ui <- function(id, data) {
     div(
       class = "scroll-controls",
       .scroll_group("Composition",
-        selectInput(ns("group"), "Group by (x)", stats::setNames(cats, cats), selected = x_default),
+        # multi-select: group bars by the "a | b" interaction of several columns
+        selectizeInput(ns("group"), "Group by (x)", stats::setNames(cats, cats), selected = x_default,
+                       multiple = TRUE, options = list(plugins = list("remove_button"))),
         # multi-select: pick >1 column to fill by their "a | b" interaction (like DimPlot colour-by)
         selectizeInput(ns("fill"), "Fill by", stats::setNames(cats, cats), selected = cats[[1]],
                        multiple = TRUE, options = list(plugins = list("remove_button"))),
@@ -39,12 +41,14 @@ proportions_style_ui <- function(id, data) {
     bslib::input_switch(ns("legend"), "Legend", TRUE),
     bslib::input_switch(ns("horizontal"), "Horizontal bars", FALSE),
     selectInput(ns("xorder"), "Order groups",
-                c("Alphabetical" = "alpha", "Total count" = "total",
-                  "By fill level" = "level", "Reverse" = "reverse")),
+                c("Natural (A-Z, 1-10)" = "alpha", "Total count" = "total",
+                  "By fill level" = "level", "Reverse" = "reverse", "Manual" = "manual")),
     conditionalPanel("input['xorder'] == 'level'", ns = ns,
       selectInput(ns("orderlevel"), "Order by level", choices = NULL)),
+    conditionalPanel("input['xorder'] == 'manual'", ns = ns,
+      .scroll_order_input(ns("order"))),
     selectInput(ns("fillorder"), "Order fill",
-                c("Alphabetical" = "alpha", "Abundance" = "abundance", "Reverse" = "reverse")),
+                c("Natural (A-Z, 1-10)" = "alpha", "Abundance" = "abundance", "Reverse" = "reverse")),
     selectInput(ns("labels"), "Segment labels",
                 c("None" = "none", "Count" = "count", "Percent" = "percent")),
     conditionalPanel("input['labels'] != 'none'", ns = ns,
@@ -57,7 +61,9 @@ proportions_server <- function(id, data, cells_r = reactive(data$cells),
                                view_r = reactive(NULL), theme_r = reactive(NULL), style_r = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     m <- data$manifest
-    .scroll_bind_view_cats(input, session, view_r, m, "group")                  # single-select x
+    .scroll_bind_view_cats(input, session, view_r, m, "group", multiple = TRUE) # multi-select x
+    .scroll_bind_order(session, "order", reactive({ req(input$group)
+      .scroll_group_levels(cells_r(), input$group) }))
     .scroll_bind_view_cats(input, session, view_r, m, "fill", multiple = TRUE)  # multi-select interaction
     # per-fill color pickers when the palette is "Manual": levels of the (possibly
     # composite) Fill-by, computed on the active cells for >1 column.
@@ -84,6 +90,7 @@ proportions_server <- function(id, data, cells_r = reactive(data$cells),
            fill_layout = input$filllayout %||% "combine", bar_width = input$barwidth %||% 0.8,
            outline = input$outline %||% 0.2, x_order = input$xorder %||% "alpha",
            x_order_level = input$orderlevel, fill_order = input$fillorder %||% "alpha",
+           group_order = .scroll_order_value(input$order),
            labels = input$labels %||% "none", label_min = input$labelmin %||% 0,
            label_size = input$labelsize %||% 2.8, totals = isTRUE(input$totals),
            horizontal = isTRUE(input$horizontal),

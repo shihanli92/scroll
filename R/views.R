@@ -867,6 +867,7 @@ view_feature_blend <- function(cells, params, values1, values2, state = list()) 
           else rep("all", nrow(cells))                 # ungrouped: one block
 
   ng <- table(gvec)                                     # cells per group (drops NA)
+  ng <- ng[.scroll_natural_sort(names(ng))]             # natural order: 2 before 10
   groups <- names(ng); nf <- length(features); nk <- length(groups)
   sumM  <- matrix(0, nf, nk, dimnames = list(features, groups))
   nposM <- sumM
@@ -954,6 +955,9 @@ view_dotplot <- function(cells, params, expr_long, state = list(), assembly = NU
   }
   agg <- assembly$agg; hr <- assembly$hr; hc <- assembly$hc
   group_by <- assembly$group_by; scaled <- assembly$scaled
+  if (is.null(hc) && length(state$group_order))           # manual order (unless clustered)
+    agg$group <- factor(as.character(agg$group),
+                        levels = .scroll_level_order(levels(agg$group), state$group_order))
 
   dsize <- .scroll_opt(params, state, "dot_size", c(1, 6))
   pal <- .scroll_opt(params, state, "palette", "magma")
@@ -965,7 +969,7 @@ view_dotplot <- function(cells, params, expr_long, state = list(), assembly = NU
     ggplot2::scale_size(range = dsize, limits = c(0, 1), labels = scales::percent,
                         name = "% expressing") +
     .scroll_continuous_scale(pal, if (scaled) "z-score" else "mean expr.") +
-    ggplot2::labs(x = group_by, y = NULL) +
+    ggplot2::labs(x = paste(group_by, collapse = " | "), y = NULL) +
     .scroll_base_theme(axis_text = TRUE, x_angle = 45)
 
   # aspect.ratio letterboxes the panel, which would detach the aplot trees, so
@@ -1174,7 +1178,8 @@ view_heatmap <- function(cells, params, expr_long, state = list(), assembly = NU
 
   if (identical(assembly$mode, "cells")) {
     grouped <- length(assembly$group_by) > 0             # group-by is optional
-    long$group <- factor(cm$group[long$col], levels = unique(cm$group))
+    long$group <- factor(cm$group[long$col],
+                         levels = .scroll_level_order(cm$group, state$group_order))
     xlab <- sprintf("%s%s of %s cells shown)", if (grouped) paste0(glab, "  (") else "(",
                     format(assembly$n_cells, big.mark = ","),
                     format(assembly$n_total, big.mark = ","))
@@ -1196,7 +1201,9 @@ view_heatmap <- function(cells, params, expr_long, state = list(), assembly = NU
     return(.scroll_hclust_trees(p, assembly$hr, NULL))     # gene dendrogram only
   }
   # aggregated: discrete group x-axis, optional dendrograms (or mark panel)
-  long$x <- factor(cm$column[long$col], levels = cm$column)
+  long$x <- factor(cm$column[long$col],
+                   levels = if (is.null(assembly$hc)) .scroll_level_order(cm$column, state$group_order)
+                            else cm$column)
   p <- ggplot2::ggplot(long, ggplot2::aes(x = .data$x, y = .data[[ycol]], fill = .data$value)) +
     ggplot2::geom_tile(color = "white", linewidth = 0.2) +
     fillscale + ggplot2::scale_x_discrete(expand = c(0, 0)) + yscale +
@@ -1255,6 +1262,10 @@ view_heatmap <- function(cells, params, expr_long, state = list(), assembly = NU
   ok <- !is.na(df$expr) & !is.na(df$group)
   if (has_split) ok <- ok & !is.na(df$.split)
   df <- df[ok, , drop = FALSE]
+  # groups in natural order (cluster 2 before 10), or the Style sheet's manual order;
+  # colours stay keyed by label, so reordering never recolours a group
+  df$group <- factor(df$group, levels = .scroll_level_order(df$group, state$group_order))
+  if (has_split) df$.split <- factor(df$.split, levels = .scroll_natural_sort(df$.split))
   df$.fill <- if (has_split) df$.split else df$group
   list(df = df, cols = .scroll_group_colors(df$.fill, state),
        pos = if (has_split) ggplot2::position_dodge(width = 0.9) else "dodge",
@@ -1384,6 +1395,120 @@ view_violin_stacked <- function(cells, params, values_long, state = list()) {
   p <- p + .scroll_ggtheme(state$theme)
   if (!is.null(state$aspect)) p <- p + ggplot2::theme(aspect.ratio = state$aspect)
   p
+}
+
+# --- Ridge plot -------------------------------------------------------------------
+
+# Per-group kernel densities of `x` on one shared grid, scaled so the tallest curve
+# over all groups is 1 (ggridges' convention: `scale` then sets the overlap). A group
+# with one value, or all-equal values, gets a narrow bump instead of failing.
+.scroll_ridge_density <- function(x, g, lv, n = 512L) {
+  rng <- range(x)
+  if (diff(rng) == 0) rng <- rng + c(-0.5, 0.5)
+  pad <- diff(rng) * 0.02; rng <- rng + c(-pad, pad)
+  out <- lapply(lv, function(l) {
+    v <- x[g == l]
+    if (!length(v)) return(NULL)
+    bw <- if (length(v) >= 2 && stats::sd(v) > 0) stats::bw.nrd0(v) else diff(rng) / 60
+    d <- stats::density(v, bw = bw, from = rng[1], to = rng[2], n = n)
+    data.frame(group = l, x = d$x, y = d$y, stringsAsFactors = FALSE)
+  })
+  d <- do.call(rbind, out)
+  d$h <- if (max(d$y) > 0) d$y / max(d$y) else d$y
+  d
+}
+
+# Values + groups behind a ridge plot (shared by the plot and its CSV).
+.scroll_ridge_df <- function(cells, params, values) {
+  b <- .scroll_violin_base(cells, params$group_by, NULL, "ridge plot")
+  df <- b$base
+  df$expr <- if (!is.null(params$value_col))
+               suppressWarnings(as.numeric(cells[[params$value_col]]))
+             else .scroll_expr_vector(cells, values)
+  df <- df[!is.na(df$expr) & !is.na(df$group), , drop = FALSE]
+  if (isTRUE(params$nonzero)) df <- df[df$expr != 0, , drop = FALSE]
+  list(df = df, group_lab = b$group_lab)
+}
+
+#' Ridge plot: a feature's density in each group, one ridge per group
+#'
+#' The Seurat `RidgePlot` view, drawn natively (no ggridges): each group's density
+#' is a filled curve on its own row, the tallest curve one row high times
+#' `ridge_scale` (so neighbouring ridges overlap), first group on top.
+#'
+#' @param cells The cells data.frame.
+#' @param params List with `group_by` and a value source: `feature` (queried into
+#'   `values`) or `value_col` (a numeric metadata column); `nonzero = TRUE` keeps
+#'   only cells with a non-zero value.
+#' @param values A data.frame(cell, value) for the feature, or `NULL`.
+#' @param state Optional toggle state (`palette`, `manual_colors`, `group_order`,
+#'   `ridge_mode` -- "ridges" (overlapping rows, `ridge_scale` sets how far), "separate"
+#'   (rows that never touch) or "overlay" (every curve on one axis) --, `linetypes`
+#'   (a line type per group label), `legend`, `aspect`, `theme`).
+#' @return A ggplot.
+#' @noRd
+view_ridge <- function(cells, params, values = NULL, state = list()) {
+  r <- .scroll_ridge_df(cells, params, values)
+  df <- r$df
+  if (!nrow(df)) stop(if (isTRUE(params$nonzero)) "No cell has a non-zero value here."
+                      else "No cells to plot.", call. = FALSE)
+  lv <- .scroll_level_order(df$group, state$group_order)
+  mode <- .scroll_opt(params, state, "ridge_mode", "ridges")
+  overlay <- identical(mode, "overlay")
+  scale <- switch(mode, separate = 0.92, overlay = 1,
+                  .scroll_opt(params, state, "ridge_scale", 1.4))
+  d <- .scroll_ridge_density(df$expr, df$group, lv)
+  base <- if (overlay) stats::setNames(rep(0, length(lv)), lv)
+          else stats::setNames(rev(seq_along(lv)) - 1, lv)  # first group on the top row
+  d$base <- base[d$group]
+  d$top <- d$base + d$h * scale
+  d$group <- factor(d$group, levels = lv)                  # upper rows drawn first, lower in front
+  cols <- .scroll_group_colors(d$group, state)
+  lt <- unlist(state$linetypes)
+  lt <- lt[names(lt) %in% lv]
+  aes_map <- ggplot2::aes(x = .data$x, ymin = .data$base, ymax = .data$top,
+                          fill = .data$group, group = .data$group)
+  if (length(lt)) aes_map$linetype <- quote(.data$group)
+  p <- ggplot2::ggplot(d, aes_map) +
+    .scroll_role(ggplot2::geom_ribbon(colour = "grey20", linewidth = if (length(lt)) 0.5 else 0.3,
+                                      alpha = if (overlay) 0.35 else 0.9,
+                                      outline.type = "upper"), "Ridges") +
+    ggplot2::scale_fill_manual(values = cols) +
+    ggplot2::scale_x_continuous(expand = ggplot2::expansion(mult = c(0, 0.02))) +
+    ggplot2::labs(x = params$feature %||% params$value_col %||% "expression",
+                  y = if (overlay) "density (scaled)" else r$group_lab,
+                  fill = r$group_lab)
+  if (length(lt)) {
+    full <- stats::setNames(rep("solid", length(lv)), lv); full[names(lt)] <- lt
+    p <- p + ggplot2::scale_linetype_manual(values = full) + ggplot2::labs(linetype = r$group_lab)
+  }
+  p <- p + if (overlay)
+    ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0, 0.05)))
+  else ggplot2::scale_y_continuous(breaks = unname(base[lv]), labels = lv,
+                                   expand = ggplot2::expansion(add = c(0.05, 0.1)))
+  # overlaid curves aren't labelled on the axis, so they need the legend
+  legend <- overlay || isTRUE(.scroll_opt(params, state, "legend", FALSE))
+  p <- p + .scroll_base_theme(legend = legend, axis_text = TRUE)
+  if (length(lt)) p <- p + ggplot2::theme(legend.key.width = ggplot2::unit(2.2, "lines"))
+  .scroll_apply_aspect(p, state$aspect %||% 1, state$theme)
+}
+
+# Line types for "Line type by group", in the order they are handed out.
+.SCROLL_LINETYPES <- c("solid", "dashed", "dotted", "dotdash", "longdash", "twodash")
+
+#' Ridge plots for several genes, one panel per gene
+#' @noRd
+view_ridge_multi <- function(cells, params, values_long, state = list()) {
+  feats <- params$features
+  panels <- lapply(feats, function(g) {
+    v <- if (!is.null(values_long) && nrow(values_long))
+           values_long[values_long$feature == g, c("cell", "value"), drop = FALSE] else NULL
+    view_ridge(cells, list(feature = g, group_by = params$group_by,
+                           nonzero = params$nonzero), v, state)
+  })
+  if (length(panels) == 1 || !requireNamespace("patchwork", quietly = TRUE))
+    return(panels[[1]])
+  patchwork::wrap_plots(panels, ncol = params$ncol %||% ceiling(sqrt(length(panels))))
 }
 
 # Long data.frame of all column pairs (one facet per pair), NA rows dropped.
@@ -1541,18 +1666,19 @@ view_proportions <- function(cells, params, state = list()) {
   tot <- function(v) tapply(tab$Freq, tab[[v]], sum)
   fill_lv <- switch(.scroll_opt(params, state, "fill_order", "alpha"),
     abundance = names(sort(tot("fill"), decreasing = TRUE)),
-    reverse   = rev(sort(unique(tab$fill))),
-    sort(unique(tab$fill)))
+    reverse   = rev(.scroll_natural_sort(tab$fill)),
+    .scroll_natural_sort(tab$fill))
   x_order <- .scroll_opt(params, state, "x_order", "alpha")
   x_level <- .scroll_opt(params, state, "x_order_level", NULL)   # order x by this fill level's share
   x_lv <- if (identical(x_order, "level") && !is.null(x_level) && x_level %in% tab$fill) {
     sub <- tab[tab$fill == x_level, , drop = FALSE]
     ord <- as.character(sub$x[order(-sub$pct)])
-    c(ord, setdiff(sort(unique(tab$x)), ord))                    # groups lacking the level last
+    c(ord, setdiff(.scroll_natural_sort(tab$x), ord))            # groups lacking the level last
   } else switch(x_order,
     total   = names(sort(tot("x"), decreasing = TRUE)),
-    reverse = rev(sort(unique(tab$x))),
-    sort(unique(tab$x)))
+    reverse = rev(.scroll_natural_sort(tab$x)),
+    manual  = .scroll_level_order(tab$x, state$group_order),
+    .scroll_natural_sort(tab$x))
   tab$fill <- factor(tab$fill, levels = fill_lv)
   tab$x    <- factor(tab$x, levels = x_lv)
   # bar position: "fill" (100% composition), "stack" (raw counts), "dodge"

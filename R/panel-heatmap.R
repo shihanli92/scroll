@@ -66,6 +66,7 @@ heatmap_style_ui <- function(id, data) {
     conditionalPanel("input['scale']", ns = ns,
       sliderInput(ns("clip"), "Clip z at \u00b1", 0.5, 5, 2.5, 0.5)),
     bslib::input_switch(ns("legend"), "Legend", TRUE),
+    .scroll_order_input(ns("order")),
     .scroll_aspect_input(ns))
 }
 
@@ -76,6 +77,7 @@ heatmap_server <- function(id, data, cells_r = reactive(data$cells),
     # multi-select, view-aware group-by; optional (may stay empty for one block)
     .scroll_bind_view_cats(input, session, view_r, m, "group",
                            multiple = TRUE, allow_empty = TRUE)
+    .scroll_bind_order(session, "order", reactive(.scroll_group_levels(cells_r(), input$group)))
     assay <- reactive(input$assay %||% m$default_assay)
     # default gene set: a project's `heatmap_markers:` (e.g. top variable genes)
     # when set, else the curated `markers:` shared with DotPlot.
@@ -117,7 +119,8 @@ heatmap_server <- function(id, data, cells_r = reactive(data$cells),
     # re-query, no subsample/PC1), so palette/clip/legend/label/aspect redraw at once.
     cosmetic_r <- .scroll_cosmetic(reactive(
       list(theme = theme_r(), palette = input$palette, clip = input$clip %||% 2.5,
-           mark_genes = input$mark, legend = isTRUE(input$legend), aspect = input$aspect)))
+           mark_genes = input$mark, legend = isTRUE(input$legend), aspect = input$aspect,
+           group_order = .scroll_order_value(input$order))))
     plot_r <- .scroll_lazy_plot(input, function() {
       d <- data_r()
       view_heatmap(d$cells, list(group_by = d$group_by, features = d$features),
