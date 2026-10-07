@@ -1,5 +1,16 @@
 # Changelog
 
+## scroll 0.3.12
+
+- **Ridge fill.** The Ridge panel’s Style sheet adds *Fill*: filled
+  curves with a *Fill opacity* slider, or outline only, with each
+  group’s line in its colour. Switching to the overlaid layout lowers
+  the opacity so the curves show through.
+- **Saving styles on a server.** Save now works when the app can write
+  `style.yaml` but not the rest of the project folder (it writes the
+  file in place), and when it can’t write at all, the message names the
+  user the app runs as and the command to fix it.
+
 ## scroll 0.3.11
 
 ### Documentation
