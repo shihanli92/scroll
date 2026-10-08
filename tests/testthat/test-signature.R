@@ -213,3 +213,49 @@ test_that("signature_server requires at least one gene", {
     expect_error(plot_r())                               # validate() -> "Add one or more genes..."
   })
 })
+
+test_that("up / down signatures: up minus weight x down, floored at 0 for UCell", {
+  ss <- scroll:::.scroll_signed_score
+  expect_equal(ss(c(0.5, 0.2), NULL, "ucell"), c(0.5, 0.2))           # no down genes: unchanged
+  expect_equal(ss(c(0.5, 0.2), c(0.1, 0.4), "ucell"), c(0.4, 0))      # floored at 0
+  expect_equal(ss(c(0.5, 0.2), c(0.1, 0.4), "mean"), c(0.4, -0.2))    # others may go negative
+  expect_equal(ss(c(0.5, 0.2), c(0.1, 0.4), "aucell", w_neg = 0.5), c(0.45, 0))
+})
+
+test_that("UCell with down genes matches UCell::ScoreSignatures_UCell's 'gene-' entries", {
+  skip_if_not_installed("UCell")
+  x <- sig_object(ng = 2000L, nc = 120L, lambda = 0.3, seed = 7)
+  dat <- SeuratObject::GetAssayData(x$obj, layer = "data")
+  up <- x$sig[1:3]; down <- setdiff(rownames(dat), x$sig)[1:4]
+  data <- sig_build(x$obj)
+  on.exit(scroll_disconnect(data$con), add = TRUE)
+  for (w in c(1, 0.5)) {
+    u <- suppressWarnings(UCell::ScoreSignatures_UCell(dat, ncores = 1, w_neg = w,
+           features = list(s = c(paste0(up, "+"), paste0(down, "-")))))
+    scr <- scroll:::.scroll_signed_score(
+      scroll:::.scroll_ucell_score(data$cells, up, data, "RNA"),
+      scroll:::.scroll_ucell_score(data$cells, down, data, "RNA"), "ucell", w_neg = w)
+    expect_equal(scr, unname(u[match(data$cells$cell, rownames(u)), 1]), tolerance = 1e-12)
+  }
+})
+
+test_that("signature_server scores up and down genes and rejects a gene in both", {
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con), add = TRUE)
+  feats <- scroll:::.scroll_features_of(data$manifest, data$manifest$default_assay)
+  red <- scroll:::.scroll_view_embeddings(data$manifest, NULL)[[1]]
+  panel <- Filter(function(p) identical(p$id, "signature"), scroll:::.scroll_builtin_panels())[[1]]
+  shiny::testServer(panel$server, args = list(data = data), {
+    session$setInputs(sig = feats[1:3], sig_down = feats[4:5], method = "mean", w_neg = 1,
+                      view = "umap", reduction = red, palette = "grey-purple", clip = c(0, 100),
+                      order = TRUE, legend = TRUE, raster = FALSE, aspect = 1, compute = 1)
+    d <- score_r()
+    up <- scroll:::.scroll_cell_mean(d$cells, feats[1:3], data, data$manifest$default_assay)
+    dn <- scroll:::.scroll_cell_mean(d$cells, feats[4:5], data, data$manifest$default_assay)
+    expect_equal(d$values$value, as.numeric(up - dn))
+    expect_match(scroll:::.scroll_sig_label(d$genes, d$down), "3 up, 2 down")
+    expect_s3_class(plot_r(), "ggplot")
+    session$setInputs(sig_down = feats[c(1, 4)], compute = 2)            # feats[1] in both
+    expect_error(score_r(), "in both")
+  })
+})

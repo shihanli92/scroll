@@ -1,3 +1,12 @@
+# scroll 0.3.14
+
+* **Up and down genes in the Signature panel.** A new *Down genes (optional)* box takes
+  genes expected to be low. They are scored with the same method and subtracted from
+  the up-gene score, scaled by *Down-gene weight* (Method settings, default 1). UCell
+  floors the result at 0, matching `UCell::ScoreSignatures_UCell` with `gene-`
+  entries; the other methods (AddModuleScore, AUCell-style, Mean, Scaled) give
+  up minus down, which can be negative. A gene in both lists is reported.
+
 # scroll 0.3.13
 
 * **Multi-tab apps load as fast as one dataset.** `scroll_multi_app()` now puts only

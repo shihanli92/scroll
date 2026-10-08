@@ -208,3 +208,18 @@
   if (max_auc <= 0) return(rep(0, nrow(cells)))
   rowSums(pmax(thr - r, 0)) / max_auc
 }
+
+# ---- up / down signatures ---------------------------------------------------------
+
+# Combine a signature's up- and down-gene scores (each from the same method): UCell's
+# own rule -- up minus w_neg x down, floored at 0 -- for UCell (so it matches
+# UCell::ScoreSignatures_UCell with "gene-" entries), and plain up minus w_neg x down
+# for the others (AddModuleScore, AUCell, Mean and Scaled have no down genes of their
+# own; scoring each list separately and subtracting is the usual way to add them).
+.scroll_signed_score <- function(up, down = NULL, method = "mean", w_neg = 1) {
+  if (is.null(down)) return(up)
+  s <- up - w_neg * down
+  if (identical(method, "ucell")) s <- pmax(s, 0)
+  s
+}
+

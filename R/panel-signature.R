@@ -5,7 +5,8 @@
 # Mean, Scaled (z over the shown cells), AddModuleScore (Seurat, exact on projects
 # with build-time gene means), and the rank-based UCell / AUCell-style (projects
 # built with within-cell ranks). "Add as column" hands the score -- optionally with
-# high/low groups -- to every other panel for this session.
+# high/low groups -- to every other panel for this session. An optional list of down
+# genes is scored the same way and subtracted (.scroll_signed_score).
 
 .SCROLL_SIG_METHODS <- c("Mean (log-norm)" = "mean", "Scaled (z-score, shown cells)" = "scaled",
                          "AddModuleScore (Seurat)" = "addmodulescore",
@@ -28,13 +29,19 @@ signature_ui <- function(id, data) {
     div(
       class = "scroll-controls",
       .scroll_group("Signature",
-        selectizeInput(ns("sig"), "Genes", choices = NULL, multiple = TRUE,
+        selectizeInput(ns("sig"), "Up genes", choices = NULL, multiple = TRUE,
                        options = list(placeholder = "Add genes, or paste a list...",
                                       maxOptions = 50, plugins = list("remove_button"))),
         .scroll_paste_handler(ns("sig"), ns("sig_paste")),
+        # optional: scored with the same method and subtracted from the up score
+        selectizeInput(ns("sig_down"), "Down genes (optional)", choices = NULL, multiple = TRUE,
+                       options = list(placeholder = "Genes expected to be low",
+                                      maxOptions = 50, plugins = list("remove_button"))),
+        .scroll_paste_handler(ns("sig_down"), ns("sig_down_paste")),
         selectInput(ns("method"), "Score", .scroll_sig_methods(m)),
         # each method's own parameters, at the defaults of the tool it reproduces
         .scroll_details("Method settings", open = FALSE,
+          numericInput(ns("w_neg"), "Down-gene weight", 1, min = 0, step = 0.1),
           .scroll_cond_panel(when("addmodulescore"),
             numericInput(ns("nbin"), "Expression bins", 24, min = 2, step = 1),
             numericInput(ns("ctrl"), "Control genes per gene", 100, min = 1, step = 1),
@@ -45,7 +52,7 @@ signature_ui <- function(id, data) {
             numericInput(ns("auc_max_rank"), "Max rank (top genes)", ceiling(0.05 * n_feat),
                          min = 5, step = 10)),
           .scroll_cond_panel(sprintf("['mean','scaled'].indexOf(input['%s']) >= 0", ns("method")),
-            helpText("No settings for this method."))),
+            helpText("No other settings for this method."))),
         if (length(assays) > 1)
           selectInput(ns("assay"), "Assay", assays, selected = m$default_assay),
         actionButton(ns("compute"), "Calculate", class = "btn-primary", width = "100%"),
@@ -104,6 +111,7 @@ signature_server <- function(id, data, cells_r = reactive(data$cells),
     .scroll_bind_view_cats(input, session, view_r, m, "group")
     # assay-aware gene list + pasted delimited gene list
     .scroll_bind_gene_box(input, session, m, assay, "sig", paste_id = "sig_paste")
+    .scroll_bind_gene_box(input, session, m, assay, "sig_down", paste_id = "sig_down_paste")
     # Score only when Calculate is clicked (a score -- especially AddModuleScore's
     # control set -- shouldn't recompute on every keystroke). The view / embedding /
     # group / palette apply live from the cached score, so switching them never
@@ -123,20 +131,37 @@ signature_server <- function(id, data, cells_r = reactive(data$cells),
     }
     score_r <- eventReactive(input$compute, {
       cells <- cells_r()
-      genes <- intersect(input$sig, .scroll_features_of(m, assay()))
-      validate(need(length(genes) >= 1, "Add one or more genes to build a signature."))
+      feats <- .scroll_features_of(m, assay())
+      genes <- intersect(input$sig, feats)
+      down <- intersect(input$sig_down, feats)
+      validate(need(length(genes) >= 1, "Add one or more up genes to build a signature."))
+      both <- intersect(genes, down)
+      validate(need(!length(both), sprintf("%s %s in both the up and the down list.",
+        paste(both, collapse = ", "), if (length(both) == 1) "is" else "are")))
       method <- input$method %||% "mean"
       prm <- list(nbin = as.integer(num(input$nbin, 24, 2)), ctrl = as.integer(num(input$ctrl, 100)),
                   seed = as.integer(num(input$seed, 1, -Inf)), max_rank = num(input$max_rank, 1500, 10),
                   auc_max_rank = num(input$auc_max_rank, NULL, 5))
-      fn <- function(progress = NULL) score_fn(method, genes, assay(), prm, progress)
+      w_neg <- num(input$w_neg, 1, 0)
+      a <- assay()
+      # up genes, then (if any) down genes with the same method, combined
+      fn <- function(progress = NULL) function(cells) {
+        half <- function(lo, hi) if (is.function(progress))
+          function(f, d) progress(lo + (hi - lo) * f, d)
+        if (!length(down)) return(score_fn(method, genes, a, prm, progress)(cells))
+        up <- score_fn(method, genes, a, prm, half(0, 0.5))(cells)
+        dn <- score_fn(method, down, a, prm, half(0.5, 1))(cells)
+        out <- .scroll_signed_score(as.numeric(up), as.numeric(dn), method, w_neg)
+        attr(out, "exact") <- attr(up, "exact")
+        out
+      }
       score <- tryCatch(
         withProgress(message = "Scoring signature", value = 0,
           fn(function(f, d) setProgress(value = f, detail = d))(cells)),
         error = function(e) e)
       validate(need(!inherits(score, "error"),
                     if (inherits(score, "error")) conditionMessage(score)))
-      list(cells = cells, genes = genes, method = method, fn = fn(),
+      list(cells = cells, genes = genes, down = down, method = method, fn = fn(),
            exact = attr(score, "exact"),
            values = data.frame(cell = cells$cell, value = as.numeric(score),
                                stringsAsFactors = FALSE))
@@ -224,7 +249,7 @@ signature_server <- function(id, data, cells_r = reactive(data$cells),
     build <- function(raster) {
       validate(need(input$compute > 0, "Add a gene signature, then click Calculate."))
       d <- score_r(); st <- cosmetic_r(); st$raster <- raster
-      lab <- sprintf("Signature (%d gene%s)", length(d$genes), if (length(d$genes) == 1) "" else "s")
+      lab <- .scroll_sig_label(d$genes, d$down)
       if (identical(input$view %||% "umap", "violin")) {
         grp <- input$group
         validate(need(!is.null(grp) && nzchar(grp), "Pick a categorical column to group the violin."))
@@ -245,6 +270,12 @@ signature_server <- function(id, data, cells_r = reactive(data$cells),
     })
     .scroll_plot_downloads(output, export_r, id, csv_r = csv_r)
   })
+}
+
+# The plot label: "Signature (5 genes)", or "Signature (5 up, 3 down)".
+.scroll_sig_label <- function(up, down = character(0)) {
+  if (length(down)) sprintf("Signature (%d up, %d down)", length(up), length(down))
+  else sprintf("Signature (%d gene%s)", length(up), if (length(up) == 1) "" else "s")
 }
 
 # A default column name for a score: sig_<first gene>[_<method>].
