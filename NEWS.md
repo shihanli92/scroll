@@ -8,6 +8,12 @@
   place), and when it can't write at all, the message names the user the app runs
   as and the command to fix it.
 
+## Bug fixes
+
+* **Clone map: sizes sort as numbers.** The clone table sorted its size column as
+  text (so a clone of 99 cells topped one of 5,671); it now sorts numerically, and
+  opens with the largest clones first.
+
 # scroll 0.3.11
 
 ## Documentation

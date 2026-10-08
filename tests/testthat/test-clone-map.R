@@ -71,3 +71,13 @@ test_that("clone_map plot core greys the base and colours one hue per selected c
   expect_true(any(vapply(pc$layers, function(l)
     inherits(l$geom, "GeomPath") && !inherits(l$geom, "GeomLine"), logical(1))))
 })
+
+test_that("clone sizes sort as numbers in the table's text columns", {
+  st <- scroll:::.scroll_sortable_text
+  x <- c(9, 10, 100, 2, NA)
+  s <- st(x)
+  expect_equal(x[order(s, na.last = NA)], c(2, 9, 10, 100))   # text order = numeric order
+  expect_equal(s[1:4], c("009", "010", "100", "002"))
+  expect_true(is.na(s[5]))
+  expect_equal(st(c(1.5, 10)), c("1.5", "10"))              # non-integers keep plain text
+})

@@ -18,6 +18,18 @@
   tab[order(-tab$size, tab$clone_id), , drop = FALSE]
 }
 
+# A numeric column as text that sorts like the numbers: whole, non-negative values
+# are zero-padded to one width ("009" < "010"); anything else (decimals, negatives)
+# keeps its plain text form.
+.scroll_sortable_text <- function(x) {
+  ok <- !is.na(x)
+  if (!all(x[ok] >= 0 & x[ok] == round(x[ok]))) return(as.character(x))
+  out <- rep(NA_character_, length(x))
+  w <- max(1L, nchar(format(max(c(0, x[ok])), scientific = FALSE)))
+  out[ok] <- formatC(x[ok], width = w, format = "d", flag = "0")
+  out
+}
+
 # The columns to show in the table (clone id + size + whichever descriptors are baked).
 .scroll_clone_disp_cols <- function(tab, segments) {
   keep <- c("clone_id", "size", "group", "antigen", unlist(segments),
@@ -153,17 +165,21 @@ clone_map_server <- function(id, data, cells_r = shiny::reactive(data$cells),
         dd <- t[, disp, drop = FALSE]
         # Every column gets a plain TEXT filter: numeric columns are stringified (else DT
         # renders a noUiSlider range filter that throws "$x.noUiSlider is not a function"
-        # and flakes the session), with type="num" kept so they still sort numerically.
-        # Factor columns are avoided too (they break DT's server-side filtering).
+        # and flakes the session). The table sorts on the server, comparing those strings
+        # as text, so whole numbers are zero-padded to one width (text order = numeric
+        # order: 9 < 10) and the padding is stripped for display. Factor columns are
+        # avoided too (they break DT's server-side filtering).
         num_idx <- unname(which(vapply(dd, is.numeric, logical(1)))) - 1L  # 0-based
-        for (c in names(dd)[num_idx + 1L]) dd[[c]] <- as.character(dd[[c]])
+        for (c in names(dd)[num_idx + 1L]) dd[[c]] <- .scroll_sortable_text(dd[[c]])
         DT::datatable(dd, rownames = FALSE, selection = "multiple",
                       filter = "top",                       # a search input under each column
                       class = "compact stripe hover nowrap scroll-clone-dt",  # condensed rows
                       options = list(pageLength = 10, dom = "ftip", scrollX = TRUE,
                         order = list(list(1, "desc")),                   # size desc
                         columnDefs = list(
-                          list(targets = num_idx, type = "num"),         # numeric sort on strings
+                          list(targets = num_idx, render = DT::JS(       # hide the zero padding
+                            "function(d,t){return t==='display'&&d!=null ?",
+                            "String(d).replace(/^0+(?=\\d)/,'') : d;}")),
                           # truncate the long composite clone id; full id on hover
                           list(targets = 0, render = DT::JS(
                             "function(d,t){return t==='display'&&d&&d.length>26 ?",
