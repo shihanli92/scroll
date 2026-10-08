@@ -1,5 +1,20 @@
 # Changelog
 
+## scroll (development version)
+
+- **Multi-tab apps load as fast as one dataset.**
+  [`scroll_multi_app()`](https://shihanli92.github.io/scroll/reference/scroll_multi_app.md)
+  now puts only the first tab on the page at load; every other tab is
+  sent, and its server side set up, the first time it is opened (with a
+  short “Loading” message). Load time no longer grows with the number of
+  tabs: in a test, 6 tabs went from about 55 s to about 8 s before the
+  first plot.
+- **Show / hide rules no longer slow the page.** The panels’ conditional
+  controls (e.g. *Fill opacity* only when *Fill* is filled) are now
+  written against full input ids, so Shiny no longer scans every input
+  on the page each time any input changes. This was most of the slowdown
+  with many tabs, and helps single apps a little too.
+
 ## scroll 0.3.12
 
 - **Ridge fill.** The Ridge panel’s Style sheet adds *Fill*: filled
