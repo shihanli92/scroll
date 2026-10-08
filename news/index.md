@@ -1,6 +1,6 @@
 # Changelog
 
-## scroll (development version)
+## scroll 0.3.13
 
 - **Multi-tab apps load as fast as one dataset.**
   [`scroll_multi_app()`](https://shihanli92.github.io/scroll/reference/scroll_multi_app.md)
