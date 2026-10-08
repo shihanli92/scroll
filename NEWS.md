@@ -1,4 +1,4 @@
-# scroll (development version)
+# scroll 0.3.13
 
 * **Multi-tab apps load as fast as one dataset.** `scroll_multi_app()` now puts only
   the first tab on the page at load; every other tab is sent, and its server side
