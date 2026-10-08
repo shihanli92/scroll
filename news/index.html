@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">scroll</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.13</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.14</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,6 +32,11 @@
       <small>Source: <a href="https://github.com/shihanli92/scroll/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.3.14" id="scroll-0314">scroll 0.3.14<a class="anchor" aria-label="anchor" href="#scroll-0314"></a></h2>
+<ul><li>
+<strong>Up and down genes in the Signature panel.</strong> A new <em>Down genes (optional)</em> box takes genes expected to be low. They are scored with the same method and subtracted from the up-gene score, scaled by <em>Down-gene weight</em> (Method settings, default 1). UCell floors the result at 0, matching <code><a href="https://rdrr.io/pkg/UCell/man/ScoreSignatures_UCell.html" class="external-link">UCell::ScoreSignatures_UCell</a></code> with <code>gene-</code> entries; the other methods (AddModuleScore, AUCell-style, Mean, Scaled) give up minus down, which can be negative. A gene in both lists is reported.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.3.13" id="scroll-0313">scroll 0.3.13<a class="anchor" aria-label="anchor" href="#scroll-0313"></a></h2>
 <ul><li>
