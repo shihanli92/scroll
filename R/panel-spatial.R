@@ -75,7 +75,7 @@ spatial_style_ui <- function(id, data) {
   if (!length(.scroll_spatial_embeddings(m))) return(NULL)
   shiny::tagList(
     selectInput(ns("cpalette"), "Palette (numeric)", .scroll_continuous_palettes, selected = "viridis"),
-    conditionalPanel("input['mode'] == 'Metadata'", ns = ns,
+    .scroll_cond_panel("input['mode'] == 'Metadata'", ns = ns,
       selectInput(ns("dpalette"), "Palette (categorical)", names(.scroll_discrete_palettes))),
     if (length(m$images) > 0) checkboxInput(ns("image"), "Show tissue image", TRUE))  # any FOV/slide image
 }
@@ -90,10 +90,10 @@ spatial_ui <- function(id, data) {
     # embedding selector only when several tissue maps were baked (multi-FOV/slide)
     if (length(emb) > 1) selectInput(ns("embedding"), "Tissue map", stats::setNames(emb, emb)),
     radioButtons(ns("mode"), "Colour by", c("Gene", "Metadata"), inline = TRUE),
-    conditionalPanel("input['mode'] == 'Gene'", ns = ns,
+    .scroll_cond_panel("input['mode'] == 'Gene'", ns = ns,
       selectizeInput(ns("gene"), "Gene", choices = NULL,
                      options = list(placeholder = "type a gene", maxOptions = 50))),
-    conditionalPanel("input['mode'] == 'Metadata'", ns = ns,
+    .scroll_cond_panel("input['mode'] == 'Metadata'", ns = ns,
       selectInput(ns("meta"), "Metadata", meta_cols)),
     tags$p(class = "scroll-desc", HTML("Drag to zoom &middot; double-click to reset.")))
   bslib::layout_columns(

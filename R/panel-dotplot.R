@@ -60,7 +60,7 @@ dotplot_ui <- function(id, data) {
         # same genes x groups data as dots or as a tile heatmap
         selectInput(ns("display"), "Display", c("Dots" = "dots", "Heatmap (tiles)" = "tiles")),
         bslib::input_switch(ns("scale"), "Scale expression (z-score)", TRUE),
-        conditionalPanel("input['display'] == 'tiles'", ns = ns,       # label rows past ~60 genes
+        .scroll_cond_panel("input['display'] == 'tiles'", ns = ns,       # label rows past ~60 genes
           selectizeInput(ns("mark"), "Label genes", choices = NULL, multiple = TRUE,
                          options = list(placeholder = "Pick genes to label with leader lines",
                                         plugins = list("remove_button"))))),
@@ -77,9 +77,9 @@ dotplot_style_ui <- function(id, data) {
   ns <- NS(id)
   tagList(
     selectInput(ns("palette"), "Palette", .scroll_continuous_palettes, selected = "magma"),
-    conditionalPanel("input['display'] == 'dots'", ns = ns,
+    .scroll_cond_panel("input['display'] == 'dots'", ns = ns,
       sliderInput(ns("dotrange"), "Dot size", 0, 10, c(1, 6), 0.5)),
-    conditionalPanel("input['display'] == 'tiles' && input['scale']", ns = ns,
+    .scroll_cond_panel("input['display'] == 'tiles' && input['scale']", ns = ns,
       sliderInput(ns("clip"), "Clip z at \u00b1", 0.5, 5, 2.5, 0.5)),
     # ignored while columns are clustered (the dendrogram sets their order)
     .scroll_order_input(ns("order")),

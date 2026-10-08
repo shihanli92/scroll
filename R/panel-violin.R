@@ -5,7 +5,7 @@ violin_ui <- function(id, data) {
   m <- data$manifest
   assays <- .scroll_assays_of(m); cats <- .scroll_cat_cols(m); nums <- .scroll_num_cols(m)
   if (!length(cats)) return(.scroll_empty_panel("Needs a categorical metadata column (none found)."))
-  # bare control id: conditionalPanel(ns = ns) prepends the module prefix itself
+  # bare control id: .scroll_cond_panel(ns = ns) prepends the module prefix itself
   when <- function(val) sprintf("input['%s'] == '%s'", "source", val)
   bslib::layout_columns(
     col_widths = c(3, 9), class = "scroll-panel",
@@ -15,7 +15,7 @@ violin_ui <- function(id, data) {
         if (length(nums))
           radioButtons(ns("source"), NULL, c("Gene", "Metadata"), inline = TRUE)
         else NULL,
-        conditionalPanel(
+        .scroll_cond_panel(
           if (length(nums)) when("Gene") else "true", ns = ns,
           selectizeInput(ns("feature"), "Genes", choices = NULL, multiple = TRUE,
                          options = list(placeholder = "Add genes, or paste a list...",
@@ -24,7 +24,7 @@ violin_ui <- function(id, data) {
           if (length(assays) > 1)
             selectInput(ns("assay"), "Assay", assays, selected = m$default_assay)),
         if (length(nums))
-          conditionalPanel(when("Metadata"), ns = ns,
+          .scroll_cond_panel(when("Metadata"), ns = ns,
             selectInput(ns("metacol"), "Numeric column",
                         stats::setNames(nums, nums), selected = nums[[1]]))),
       .scroll_group("Grouping",
@@ -50,7 +50,7 @@ violin_style_ui <- function(id, data) {
     bslib::input_switch(ns("legend"), "Legend", FALSE),
     bslib::input_switch(ns("jitter"), "Show points", FALSE),
     # (point size / opacity / shape are per-layer settings: Layers > Points)
-    conditionalPanel("input['jitter'] == true && input['stack'] != true", ns = ns,
+    .scroll_cond_panel("input['jitter'] == true && input['stack'] != true", ns = ns,
       sliderInput(ns("pfrac"), "Subsample points (%)", 1, 100, 100, 1)),
     .scroll_order_input(ns("order")),
     .scroll_aspect_input(ns))

@@ -39,7 +39,7 @@ heatmap_ui <- function(id, data) {
         selectInput(ns("cellorder"), "Cell order",
                     c("Grouped" = "group", "By PC1 (similar together)" = "pc1",
                       "By metadata column" = "column")),
-        conditionalPanel("input.cellorder == 'column'", ns = ns,
+        .scroll_cond_panel("input.cellorder == 'column'", ns = ns,
           selectInput(ns("ordercol"), "Order by column",
                       stats::setNames(ordcols, ordcols), selected = ordcols[[1]]))),
       .scroll_group("Values",
@@ -63,7 +63,7 @@ heatmap_style_ui <- function(id, data) {
   ns <- NS(id)
   tagList(
     selectInput(ns("palette"), "Palette", .scroll_continuous_palettes, selected = "RdBu"),
-    conditionalPanel("input['scale']", ns = ns,
+    .scroll_cond_panel("input['scale']", ns = ns,
       sliderInput(ns("clip"), "Clip z at \u00b1", 0.5, 5, 2.5, 0.5)),
     bslib::input_switch(ns("legend"), "Legend", TRUE),
     .scroll_order_input(ns("order")),

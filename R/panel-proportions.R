@@ -18,7 +18,7 @@ proportions_ui <- function(id, data) {
                        multiple = TRUE, options = list(plugins = list("remove_button"))),
         # with >1 fill column: combine into one interaction plot, or facet one per
         # column -- as a grid or stacked rows (like the stacked violin)
-        conditionalPanel("input['fill'] && input['fill'].length > 1", ns = ns,
+        .scroll_cond_panel("input['fill'] && input['fill'].length > 1", ns = ns,
           selectInput(ns("filllayout"), "Fill columns",
                       c("Combine levels" = "combine", "Facet (grid)" = "grid",
                         "Facet (stacked rows)" = "stacked"), selected = "combine"))),
@@ -43,15 +43,15 @@ proportions_style_ui <- function(id, data) {
     selectInput(ns("xorder"), "Order groups",
                 c("Natural (A-Z, 1-10)" = "alpha", "Total count" = "total",
                   "By fill level" = "level", "Reverse" = "reverse", "Manual" = "manual")),
-    conditionalPanel("input['xorder'] == 'level'", ns = ns,
+    .scroll_cond_panel("input['xorder'] == 'level'", ns = ns,
       selectInput(ns("orderlevel"), "Order by level", choices = NULL)),
-    conditionalPanel("input['xorder'] == 'manual'", ns = ns,
+    .scroll_cond_panel("input['xorder'] == 'manual'", ns = ns,
       .scroll_order_input(ns("order"))),
     selectInput(ns("fillorder"), "Order fill",
                 c("Natural (A-Z, 1-10)" = "alpha", "Abundance" = "abundance", "Reverse" = "reverse")),
     selectInput(ns("labels"), "Segment labels",
                 c("None" = "none", "Count" = "count", "Percent" = "percent")),
-    conditionalPanel("input['labels'] != 'none'", ns = ns,
+    .scroll_cond_panel("input['labels'] != 'none'", ns = ns,
       sliderInput(ns("labelmin"), "Hide labels below (%)", 0, 50, 0, 1)),
     bslib::input_switch(ns("totals"), "Show group totals", FALSE),
     .scroll_aspect_input(ns))

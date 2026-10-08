@@ -37,7 +37,7 @@ gsea_ui <- function(id, data) {
         sliderInput(ns("topn"), "Show top", 5, 50, 15, 1)),
       .scroll_group("Plot",
         selectInput(ns("show"), "Show", c("Top pathways" = "top", "Enrichment plot" = "enrich")),
-        conditionalPanel(sprintf("input['%s'] == 'enrich'", ns("show")),
+        .scroll_cond_panel(sprintf("input['%s'] == 'enrich'", ns("show")),
           selectizeInput(ns("pathway"), "Pathway", choices = NULL,
                          options = list(placeholder = "Pick a pathway (or click a table row)"))))
     ),

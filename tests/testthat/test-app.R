@@ -302,3 +302,27 @@ test_that("on-screen gate is a Shiny input binding (value ready before first flu
   expect_match(js, "DOMContentLoaded")                  # registered before Shiny.initialize/bindAll
   expect_no_match(js, "shiny:connected")                # no longer deferred to post-connect
 })
+
+test_that("scroll_multi_app sends a tab's page the first time it is opened", {
+  p <- test_project()
+  app <- scroll_multi_app(c("First" = p, "Second" = p))
+  ui <- as.character(htmltools::renderTags(environment(app$httpHandler)$ui)$html)
+  expect_match(ui, 'id="ds1-dimplot"', fixed = TRUE)          # first tab: on the page
+  expect_false(grepl('id="ds2-dimplot"', ui, fixed = TRUE))   # second: not yet
+  expect_match(ui, "ds2-scroll_tab_body", fixed = TRUE)
+  expect_false(grepl('data-ns-prefix="[^"]', ui))             # no prefix-scanning conditionals
+  shiny::testServer(app, {
+    session$setInputs(scroll_tabs = "ds2")
+    expect_match(as.character(output$`ds2-scroll_tab_body`$html), 'id="ds2-dimplot"', fixed = TRUE)
+  })
+})
+
+test_that("module conditions are rewritten to full input ids", {
+  ns <- shiny::NS("ds1-ridge")
+  f <- scroll:::.scroll_ns_condition
+  expect_equal(f("input['mode'] == 'a'", ns), "input['ds1-ridge-mode'] == 'a'")
+  expect_equal(f("input.cellorder == 'column'", ns), "input['ds1-ridge-cellorder'] == 'column'")
+  expect_equal(f("input['fill'] && input['fill'].length > 1", ns),
+               "input['ds1-ridge-fill'] && input['ds1-ridge-fill'].length > 1")
+  expect_equal(f("input[\"x\"]", ns), "input['ds1-ridge-x']")
+})

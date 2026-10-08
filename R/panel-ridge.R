@@ -17,7 +17,7 @@ ridge_ui <- function(id, data) {
         if (length(nums))
           radioButtons(ns("source"), NULL, c("Gene", "Metadata"), inline = TRUE)
         else NULL,
-        conditionalPanel(
+        .scroll_cond_panel(
           if (length(nums)) when("Gene") else "true", ns = ns,
           selectizeInput(ns("feature"), "Genes", choices = NULL, multiple = TRUE,
                          options = list(placeholder = "Add genes, or paste a list...",
@@ -28,7 +28,7 @@ ridge_ui <- function(id, data) {
           # zeros pile up as one tall spike at 0 for most genes
           bslib::input_switch(ns("nonzero"), "Expressing cells only", FALSE)),
         if (length(nums))
-          conditionalPanel(when("Metadata"), ns = ns,
+          .scroll_cond_panel(when("Metadata"), ns = ns,
             selectInput(ns("metacol"), "Numeric column",
                         stats::setNames(nums, nums), selected = nums[[1]]))),
       .scroll_group("Grouping",
@@ -49,11 +49,11 @@ ridge_style_ui <- function(id, data) {
     selectInput(ns("ridgemode"), "Layout",
                 c("Ridges (overlapping)" = "ridges", "Separate rows" = "separate",
                   "Overlaid (one axis)" = "overlay")),
-    conditionalPanel("input['ridgemode'] == 'ridges'", ns = ns,
+    .scroll_cond_panel("input['ridgemode'] == 'ridges'", ns = ns,
       sliderInput(ns("ridgescale"), "Ridge height (overlap)", 0.5, 4, 1.4, 0.1)),
     selectInput(ns("ridgefill"), "Fill",
                 c("Filled" = "filled", "Outline only (coloured lines)" = "outline")),
-    conditionalPanel("input['ridgefill'] == 'filled'", ns = ns,
+    .scroll_cond_panel("input['ridgefill'] == 'filled'", ns = ns,
       sliderInput(ns("fillalpha"), "Fill opacity", 0.05, 1, 0.9, 0.05)),
     bslib::input_switch(ns("ltgroup"), "Line type by group", FALSE),
     uiOutput(ns("linetypes")),

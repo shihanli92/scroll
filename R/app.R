@@ -807,9 +807,18 @@ scroll_multi_app <- function(projects) {
   }, "")
   labels <- ifelse(nzchar(labels), labels, titles)
 
+  # Each tab's page is built once here, but only the first tab is on the page at load:
+  # the others are sent (and their server side set up) the first time the visitor
+  # opens them, so load time doesn't grow with the number of datasets.
+  bodies <- lapply(seq_along(datas), function(i)
+    .scroll_body(datas[[i]], titles[[i]], panels, shiny::NS(ids[[i]])))
   tabs <- lapply(seq_along(datas), function(i)
-    bslib::nav_panel(labels[[i]],
-      .scroll_body(datas[[i]], titles[[i]], panels, shiny::NS(ids[[i]]))))
+    bslib::nav_panel(labels[[i]], value = ids[[i]],
+      if (i == 1L) bodies[[1L]]
+      # a uiOutput holding a "Loading" message until the tab's page replaces it
+      else div(id = paste0(ids[[i]], "-scroll_tab_body"), class = "shiny-html-output",
+               div(class = "scroll-tab-loading", div(class = "scroll-warm-spin"),
+                   span(sprintf("Loading %s\u2026", labels[[i]]))))))
 
   ui <- bslib::page_fluid(
     theme = .scroll_theme(),
@@ -820,16 +829,21 @@ scroll_multi_app <- function(projects) {
               tags$script(HTML(.scroll_order_js()))),
     # .scroll-multi lets the CSS pin the dataset tab strip and drop each dataset's
     # app bar + rail below it, so the dataset selector stays visible while scrolling.
-    div(class = "scroll-multi", do.call(bslib::navset_tab, tabs))
+    div(class = "scroll-multi", do.call(bslib::navset_tab, c(tabs, list(id = "scroll_tabs"))))
   )
   server <- function(input, output, session) {
-    for (i in seq_along(datas)) local({
-      ii <- i
-      # cache plots (shared app-level store, per-dataset cache keys via the namespace)
-      # but skip the view-cycling warm-up -- hidden tabs can't render it.
-      moduleServer(ids[[ii]], function(input, output, session)
-        .scroll_wire(input, output, session, datas[[ii]], panels,
-                     cache = "app", prewarm = FALSE))
+    # cache plots (shared app-level store, per-dataset cache keys via the namespace)
+    # but skip the view-cycling warm-up -- hidden tabs can't render it.
+    wire <- function(i) moduleServer(ids[[i]], function(input, output, session)
+      .scroll_wire(input, output, session, datas[[i]], panels, cache = "app", prewarm = FALSE))
+    loaded <- 1L
+    wire(1L)
+    observeEvent(input$scroll_tabs, {
+      i <- match(input$scroll_tabs, ids)
+      if (is.na(i) || i %in% loaded) return()
+      loaded <<- c(loaded, i)
+      output[[paste0(ids[[i]], "-scroll_tab_body")]] <- renderUI(bodies[[i]])
+      wire(i)
     })
   }
   shiny::shinyApp(ui, server, onStart = function() {

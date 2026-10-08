@@ -526,7 +526,7 @@ register_plot_panel <- function(id, plot, controls = list(), label = id, title =
     else
       sprintf("[%s].indexOf(input['%s']) > -1",
               paste(sprintf("'%s'", vw$equals), collapse = ","), vw$control)
-    shiny::conditionalPanel(cond, u, ns = ns)
+    .scroll_cond_panel(cond, u, ns = ns)
   }
   # scroll_style_input() controls go to the Style sheet, the rest to the column
   in_sheet <- vapply(controls, function(c) isTRUE(c$sheet), logical(1))

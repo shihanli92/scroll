@@ -35,16 +35,16 @@ signature_ui <- function(id, data) {
         selectInput(ns("method"), "Score", .scroll_sig_methods(m)),
         # each method's own parameters, at the defaults of the tool it reproduces
         .scroll_details("Method settings", open = FALSE,
-          conditionalPanel(when("addmodulescore"),
+          .scroll_cond_panel(when("addmodulescore"),
             numericInput(ns("nbin"), "Expression bins", 24, min = 2, step = 1),
             numericInput(ns("ctrl"), "Control genes per gene", 100, min = 1, step = 1),
             numericInput(ns("seed"), "Seed", 1, step = 1)),
-          conditionalPanel(when("ucell"),
+          .scroll_cond_panel(when("ucell"),
             numericInput(ns("max_rank"), "Max rank", 1500, min = 10, step = 50)),
-          conditionalPanel(when("aucell"),
+          .scroll_cond_panel(when("aucell"),
             numericInput(ns("auc_max_rank"), "Max rank (top genes)", ceiling(0.05 * n_feat),
                          min = 5, step = 10)),
-          conditionalPanel(sprintf("['mean','scaled'].indexOf(input['%s']) >= 0", ns("method")),
+          .scroll_cond_panel(sprintf("['mean','scaled'].indexOf(input['%s']) >= 0", ns("method")),
             helpText("No settings for this method."))),
         if (length(assays) > 1)
           selectInput(ns("assay"), "Assay", assays, selected = m$default_assay),
@@ -55,12 +55,12 @@ signature_ui <- function(id, data) {
       .scroll_group("View",
         selectInput(ns("view"), "Show as",
                     c("Feature UMAP" = "umap", "Violin by group" = "violin"))),
-      conditionalPanel(
+      .scroll_cond_panel(
         sprintf("input['%s'] == 'umap'", ns("view")),
         .scroll_group("Embedding",
           selectInput(ns("reduction"), "Reduction", reds,
                       selected = .scroll_default(data, "default_embedding", reds[[1]])))),
-      conditionalPanel(
+      .scroll_cond_panel(
         sprintf("input['%s'] == 'violin'", ns("view")),
         .scroll_group("Grouping",
           if (length(cats))
@@ -76,7 +76,7 @@ signature_ui <- function(id, data) {
 signature_style_ui <- function(id, data) {
   ns <- NS(id)
   tagList(
-    conditionalPanel(
+    .scroll_cond_panel(
       sprintf("input['%s'] == 'umap'", ns("view")),
       selectInput(ns("palette"), "Palette", .scroll_continuous_palettes, selected = "grey-purple"),
       sliderInput(ns("clip"), "Color quantiles (%)", 0, 100, c(0, 100), 1),
@@ -162,7 +162,7 @@ signature_server <- function(id, data, cells_r = reactive(data$cells),
         .scroll_group("Use in other panels",
           textInput(session$ns("col_name"), "Column name", .scroll_sig_col_name(d)),
           checkboxInput(session$ns("col_groups"), "Also add high / low groups", FALSE),
-          conditionalPanel(sprintf("input['%s']", session$ns("col_groups")),
+          .scroll_cond_panel(sprintf("input['%s']", session$ns("col_groups")),
             sliderInput(session$ns("col_cut"), "High from (score)", rng[1], rng[2],
                         round(stats::median(v, na.rm = TRUE), 4), step = step)),
           if (identical(d$method, "scaled"))

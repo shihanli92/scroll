@@ -244,6 +244,9 @@ html.scroll-warming{overflow:hidden;}
   padding:6px 20px 0; background:rgba(251,252,253,.92);
   backdrop-filter:saturate(1.4) blur(8px); border-bottom:1px solid var(--sc-line);}
 .scroll-multi .scroll-appbar{top:43px;}
+/* a multi-app tab waiting for its panels (sent on first open) */
+.scroll-tab-loading{display:flex; align-items:center; justify-content:center; gap:12px;
+  min-height:40vh; color:var(--sc-muted); font-size:14px;}
 /* rail/filters/scroll-margin offsets now come from --sc-appbar-h (the JS measures
    the app bar's bottom, which in multi-app already includes the 43px tab strip). */
 
@@ -687,13 +690,30 @@ function scrollAdjustTables(){
       b.classList.toggle('is-on', on); b.setAttribute('aria-pressed', String(on));
       scrollTip(b); });
   }
+  (window.__scrollInits = window.__scrollInits || []).push(apply);
   if(document.readyState!=='loading') apply(); else document.addEventListener('DOMContentLoaded',apply);
 })();
+// scroll_multi_app sends a tab's page when it is first opened: re-run the one-time
+// set-ups below (rail highlight, saved panel order, two-up) once it is on the page.
 (function(){
-  function spy(){
-    var items=document.querySelectorAll('.scroll-rail-item');
-    var secs=document.querySelectorAll('.scroll-panel-card');
+  function hook(){
+    if(!window.jQuery) return;
+    jQuery(document).on('shiny:value', function(e){
+      if(!/-scroll_tab_body$/.test(e.name || '')) return;
+      setTimeout(function(){ (window.__scrollInits || []).forEach(function(f){ try{ f(); }catch(_){} }); }, 0);
+    });
+  }
+  if(document.readyState!=='loading') hook(); else document.addEventListener('DOMContentLoaded', hook);
+})();
+(function(){
+  // one observer per dataset layout (a multi-app tab added later gets its own)
+  function spy(){ document.querySelectorAll('.scroll-layout').forEach(spyLayout); }
+  function spyLayout(lay){
+    if(lay.__scrollSpy) return;
+    var items=lay.querySelectorAll('.scroll-rail-item');
+    var secs=lay.querySelectorAll('.scroll-panel-card');
     if(!secs.length) return;
+    lay.__scrollSpy=true;
     var visible={};                                     // set of intersecting card ids
     var io=new IntersectionObserver(function(es){
       es.forEach(function(e){ if(e.isIntersecting) visible[e.target.id]=1; else delete visible[e.target.id]; });
@@ -708,6 +728,7 @@ function scrollAdjustTables(){
     },{rootMargin:'-45% 0px -45% 0px'});
     secs.forEach(function(s){io.observe(s);});
   }
+  (window.__scrollInits = window.__scrollInits || []).push(spy);
   if(document.readyState!=='loading') spy(); else document.addEventListener('DOMContentLoaded',spy);
 })();
 // Drag-to-reorder panels via the section rail: drag a rail item, the panel cards
@@ -785,6 +806,7 @@ function scrollAdjustTables(){
     var rail=el&&el.closest('.scroll-rail'); if(rail){ try{ localStorage.removeItem(keyOf(rail)); }catch(e){} }
     location.reload();
   };
+  (window.__scrollInits = window.__scrollInits || []).push(applyStored);
   if(document.readyState!=='loading') applyStored(); else document.addEventListener('DOMContentLoaded', applyStored);
 })();
 ")

@@ -40,6 +40,30 @@
   sc <- .scroll_scope_of(m, col)
   is.null(sc) || identical(sc, view)
 }
+# .scroll_cond_panel() for module UIs, without its `ns =` argument. With `ns`, Shiny
+# re-checks every module conditional on every input change by scanning ALL the
+# page's input values for the module prefix -- cost ~ conditionals x inputs per
+# update, which made a many-tab scroll_multi_app take close to a minute to settle.
+# Here the condition's input references are rewritten to the full (namespaced) ids
+# instead -- input['x'] / input["x"] / input.x -> input['<ns(x)>'] -- so Shiny
+# evaluates it against the global inputs with no scan. Same behaviour otherwise.
+.scroll_cond_panel <- function(condition, ..., ns = NULL) {
+  if (is.function(ns)) condition <- .scroll_ns_condition(condition, ns)
+  shiny::conditionalPanel(condition, ...)
+}
+.scroll_ns_condition <- function(condition, ns) {
+  q <- function(id) sprintf("input['%s']", ns(id))
+  rep <- function(x, rx) {
+    m <- gregexpr(rx, x, perl = TRUE)
+    regmatches(x, m) <- lapply(regmatches(x, m), function(h)
+      vapply(h, function(one) q(sub(rx, "\\1", one, perl = TRUE)), ""))
+    x
+  }
+  condition <- rep(condition, "input\\[\\s*'([^']+)'\\s*\\]")
+  condition <- rep(condition, 'input\\[\\s*"([^"]+)"\\s*\\]')
+  rep(condition, "(?<![\\w.'\"])input\\.([A-Za-z_][A-Za-z0-9_]*)")
+}
+
 # ---- session columns ------------------------------------------------------------
 # Columns a user adds during a session (e.g. a signature score from the Signature
 # panel). Each session gets its own registry -- a reactiveVal of

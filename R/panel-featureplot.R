@@ -41,7 +41,7 @@ featureplot_style_ui <- function(id, data) {
     bslib::input_switch(ns("raster"), "Rasterize (fast)", TRUE),
     .scroll_aspect_input(ns),
     # blend colours (the Blend switch itself stays with the data controls)
-    conditionalPanel(
+    .scroll_cond_panel(
       condition = sprintf("input['%s']", ns("blend")),
       sliderInput(ns("blend_threshold"), "Blend threshold", 0, 1, 0.5, 0.05),
       colourpicker::colourInput(ns("blend_c1"), "First gene colour", "#FF0000"),

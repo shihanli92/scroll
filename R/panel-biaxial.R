@@ -17,7 +17,7 @@ biaxial_ui <- function(id, data) {
     return(.scroll_empty_panel("Needs a categorical column to colour by (none found)."))
   color_default <- if ("hto" %in% cats) "hto" else cats[[1]]
   assays <- .scroll_assays_of(m)
-  # bare control id: conditionalPanel(ns = ns) prepends the module prefix itself
+  # bare control id: .scroll_cond_panel(ns = ns) prepends the module prefix itself
   when <- function(v) sprintf("input['%s'] == '%s'", "source", v)
   bslib::layout_columns(
     col_widths = c(3, 9), class = "scroll-panel",
@@ -25,11 +25,11 @@ biaxial_ui <- function(id, data) {
       class = "scroll-controls",
       .scroll_group("Axes",
         radioButtons(ns("source"), NULL, c("Metadata", "Genes"), inline = TRUE),
-        conditionalPanel(when("Metadata"), ns = ns,
+        .scroll_cond_panel(when("Metadata"), ns = ns,
           selectizeInput(ns("features"), "Numeric columns", choices = nums,
                          selected = .scroll_default_biaxial(nums), multiple = TRUE,
                          options = list(placeholder = "Pick 2+ numeric columns"))),
-        conditionalPanel(when("Genes"), ns = ns,
+        .scroll_cond_panel(when("Genes"), ns = ns,
           if (length(assays) > 1)
             selectInput(ns("gassay"), "Assay", assays, selected = m$default_assay),
           selectizeInput(ns("genes"), "Genes", choices = NULL, multiple = TRUE,
