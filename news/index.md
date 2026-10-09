@@ -1,5 +1,18 @@
 # Changelog
 
+## scroll 0.3.14.2
+
+### Bug fixes
+
+- **Gene boxes empty in multi-tab apps.** In
+  [`scroll_multi_app()`](https://shihanli92.github.io/scroll/reference/scroll_multi_app.md),
+  a tab opened for the first time could show gene boxes with no gene
+  list (seen on a server: every tab except the first, and except
+  projects with several assays). The server could send the gene list
+  before the tab’s controls existed in the browser, and it was lost. A
+  tab’s server side is now set up only once the browser reports its
+  controls are in place.
+
 ## scroll 0.3.14.1
 
 - **Filters follow the View and the session’s columns.** The Filters
