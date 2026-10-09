@@ -1,3 +1,17 @@
+# scroll 0.3.15
+
+* **Wide CSVs for GraphPad Prism.** Violin, Ridge, Signature, Proportions and DotPlot
+  now have a CSV menu: *Long (tidy)*, as before, or *Wide (for Prism)*:
+  * Violin / Ridge / Signature: one column per group, each cell's value underneath (a
+    Prism Column table); several genes give `gene: group` columns, a split violin
+    `group: split`.
+  * Proportions: one row per group, one column per category (% for 100% bars, else
+    counts).
+  * DotPlot (dots or tiles): genes x groups, a block of mean expression then a block
+    of % expressing.
+
+  Columns follow the plot's order (natural, or the manual group order).
+
 # scroll 0.3.14.2
 
 ## Bug fixes

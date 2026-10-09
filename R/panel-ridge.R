@@ -35,7 +35,7 @@ ridge_ui <- function(id, data) {
         selectizeInput(ns("group"), "Group by", stats::setNames(cats, cats), selected = cats[[1]],
                        multiple = TRUE, options = list(plugins = list("remove_button"))))
     ),
-    .scroll_plot_area(ns, csv = TRUE)
+    .scroll_plot_area(ns, csv = TRUE, csv_wide = TRUE)
   )
 }
 
@@ -152,6 +152,14 @@ ridge_server <- function(id, data, cells_r = reactive(data$cells),
       }
       .scroll_violin_source(d$cells, d$group_by, d$feature, d$values, d$value_col)
     })
-    .scroll_plot_downloads(output, plot_r, id, csv_r = csv_r)
+    # wide: one column per group, the plotted cells (zeros left out if so set)
+    wide_r <- reactive({
+      d <- data_r()
+      series <- .scroll_wide_series(d)
+      if (isTRUE(d$nonzero)) series <- lapply(series, function(v) replace(v, v == 0, NA))
+      .scroll_wide_columns(series, .scroll_wide_groups(d$cells, d$group_by),
+                           .scroll_order_value(input$order))
+    })
+    .scroll_plot_downloads(output, plot_r, id, csv_r = csv_r, csv_wide_r = wide_r)
   })
 }

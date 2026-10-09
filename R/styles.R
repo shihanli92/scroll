@@ -378,6 +378,9 @@ table.scroll-clone-dt thead th{padding-top:2px; padding-bottom:2px;}
 .scroll-dl.btn:hover{color:var(--sc-accent-deep); border-color:var(--sc-accent);
   background:var(--sc-wash);}
 .scroll-dl.btn .fa,.scroll-dl.btn svg{margin-right:5px; opacity:.7;}
+/* CSV menu (long / wide-for-Prism), R/csv-wide.R */
+.scroll-dl-menu .dropdown-menu{min-width:0; padding:4px 0; font-size:12px; z-index:1100;}
+.scroll-dl-menu .dropdown-item{padding:4px 14px;}
 /* Style button: opens this plot's side sheet (R/style.R) */
 .scroll-style-btn{display:inline-flex; align-items:center; justify-content:center; width:28px;
   height:26px; padding:0; font-size:12px; cursor:pointer; color:var(--sc-muted);

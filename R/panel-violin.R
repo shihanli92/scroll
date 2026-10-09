@@ -37,7 +37,7 @@ violin_ui <- function(id, data) {
         # stacked = one compact row per gene (Seurat stacked violin); points off then
         bslib::input_switch(ns("stack"), "Stacked (one row per gene)", FALSE))
     ),
-    .scroll_plot_area(ns, csv = TRUE)
+    .scroll_plot_area(ns, csv = TRUE, csv_wide = TRUE)
   )
 }
 
@@ -138,7 +138,14 @@ violin_server <- function(id, data, cells_r = reactive(data$cells),
       }
       .scroll_violin_source(d$cells, d$group_by, d$feature, d$values, d$value_col, d$split_by)
     })
-    .scroll_plot_downloads(output, plot_r, id, csv_r = csv_r)
+    # wide: one column per group (split -> "group: split"), per gene when several
+    wide_r <- reactive({
+      d <- data_r()
+      .scroll_wide_columns(.scroll_wide_series(d),
+                           .scroll_wide_groups(d$cells, d$group_by, d$split_by),
+                           .scroll_order_value(input$order))
+    })
+    .scroll_plot_downloads(output, plot_r, id, csv_r = csv_r, csv_wide_r = wide_r)
   })
 }
 

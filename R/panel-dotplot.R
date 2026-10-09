@@ -68,7 +68,7 @@ dotplot_ui <- function(id, data) {
         selectInput(ns("cluster"), "Cluster (hclust)",
                     c("Off" = "off", "Rows" = "rows", "Columns" = "columns", "Both" = "both")))
     ),
-    .scroll_plot_area(ns, csv = TRUE)
+    .scroll_plot_area(ns, csv = TRUE, csv_wide = TRUE)
   )
 }
 
@@ -134,7 +134,16 @@ dotplot_server <- function(id, data, cells_r = reactive(data$cells),
       if (identical(d$display, "tiles"))
         .scroll_heatmap_source(d$cells, d$features, d$group_by, d$expr_long)
       else .scroll_dotplot_source(d$assembly) })
-    .scroll_plot_downloads(output, plot_r, id, csv_r = csv_r)
+    # wide: genes x groups in the plotted order -- mean expression, then % expressing
+    wide_r <- reactive({
+      d <- data_r(); a <- d$assembly
+      tiles <- identical(d$display, "tiles")
+      fo <- if (tiles) a$feature_order else rev(levels(a$agg$feature))
+      go <- if (!is.null(a$hc)) (if (tiles) as.character(a$col_meta$column) else levels(a$agg$group))
+            else .scroll_order_value(input$order)
+      .scroll_dotplot_wide(d$cells, d$features, d$group_by, d$expr_long, fo, go)
+    })
+    .scroll_plot_downloads(output, plot_r, id, csv_r = csv_r, csv_wide_r = wide_r)
   })
 }
 

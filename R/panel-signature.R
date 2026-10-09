@@ -74,7 +74,7 @@ signature_ui <- function(id, data) {
             selectInput(ns("group"), "Group by", stats::setNames(cats, cats), selected = cats[[1]])
           else helpText("No categorical column available for a violin.")))
     ),
-    .scroll_plot_area(ns, csv = TRUE)
+    .scroll_plot_area(ns, csv = TRUE, csv_wide = TRUE)
   )
 }
 
@@ -268,7 +268,15 @@ signature_server <- function(id, data, cells_r = reactive(data$cells),
       d <- score_r()
       data.frame(cell = d$cells$cell, signature_score = d$values$value, stringsAsFactors = FALSE)
     })
-    .scroll_plot_downloads(output, export_r, id, csv_r = csv_r)
+    # wide: one column per group of the violin's Group by (a single column without one)
+    wide_r <- reactive({
+      req(input$compute > 0)
+      d <- score_r(); grp <- .scroll_nz(input$group)
+      g <- if (!is.null(grp) && grp %in% names(d$cells)) as.character(d$cells[[grp]])
+           else rep("signature_score", nrow(d$cells))
+      .scroll_wide_columns(list(signature_score = d$values$value), g)
+    })
+    .scroll_plot_downloads(output, export_r, id, csv_r = csv_r, csv_wide_r = wide_r)
   })
 }
 

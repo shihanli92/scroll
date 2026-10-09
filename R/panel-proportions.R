@@ -28,7 +28,7 @@ proportions_ui <- function(id, data) {
                     c("Fill (100%)" = "fill", "Stack (counts)" = "stack",
                       "Grouped (dodge)" = "dodge"), selected = "fill"))
     ),
-    .scroll_plot_area(ns, csv = TRUE)
+    .scroll_plot_area(ns, csv = TRUE, csv_wide = TRUE)
   )
 }
 
@@ -102,7 +102,13 @@ proportions_server <- function(id, data, cells_r = reactive(data$cells),
     }, style_r)
     output$plot <- renderPlot(plot_r())
     csv_r <- reactive({ d <- data_r(); .scroll_proportions_source(d$cells, d$group_by, d$fill_by) })
-    .scroll_plot_downloads(output, plot_r, id, csv_r = csv_r)
+    # wide: one row per group, one column per category (% for 100% bars, else counts)
+    wide_r <- reactive({
+      d <- data_r()
+      .scroll_proportions_wide(d$cells, d$group_by, d$fill_by, input$position %||% "fill",
+                               if (identical(input$xorder, "manual")) .scroll_order_value(input$order))
+    })
+    .scroll_plot_downloads(output, plot_r, id, csv_r = csv_r, csv_wide_r = wide_r)
   })
 }
 

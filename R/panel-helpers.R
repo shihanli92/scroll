@@ -402,14 +402,16 @@
 # viewport units where no container ancestor exists.
 .SCROLL_PLOT_H <- "calc(round(down, clamp(320px, min(100vh - 190px, 90cqw), 1100px), 1px))"
 
-.scroll_plot_area <- function(ns, height = .SCROLL_PLOT_H, csv = FALSE)
+.scroll_plot_area <- function(ns, height = .SCROLL_PLOT_H, csv = FALSE, csv_wide = FALSE)
   div(class = "scroll-plot",
       div(class = "scroll-plot-bar",
           .scroll_style_button(ns),
           .scroll_size_slider(ns),
           .scroll_dl_button(ns("png"), "PNG"),
           .scroll_dl_button(ns("pdf"), "PDF"),
-          if (isTRUE(csv)) .scroll_dl_button(ns("csv"), "CSV")),
+          # long CSV only, or a menu of long + wide (R/csv-wide.R)
+          if (isTRUE(csv_wide)) .scroll_csv_menu(ns)
+          else if (isTRUE(csv)) .scroll_dl_button(ns("csv"), "CSV")),
       # the hold reserves the plot's height so that when an off-screen card is
       # suspended (its output display:none'd for lazy rendering) the card does not
       # collapse and jump the scroll position.
@@ -454,7 +456,7 @@
 # Register the standard PNG + PDF download outputs (ids "png"/"pdf") for a plot
 # reactive on a module's `output`. Filenames stem from the panel id. When `csv_r`
 # (a data.frame reactive of the plot's source data) is supplied, also wire output$csv.
-.scroll_plot_downloads <- function(output, plot_r, id, csv_r = NULL) {
+.scroll_plot_downloads <- function(output, plot_r, id, csv_r = NULL, csv_wide_r = NULL) {
   # capture the module session now (during server setup) so the handler reads the
   # right (namespaced) dl_scale input when it later fires.
   dom <- shiny::getDefaultReactiveDomain()
@@ -462,6 +464,8 @@
   output$png <- .scroll_img_handler(plot_r, paste0("scroll_", id, ".png"), "png", scale)
   output$pdf <- .scroll_img_handler(plot_r, paste0("scroll_", id, ".pdf"), "pdf", scale)
   if (!is.null(csv_r)) output$csv <- .scroll_csv_handler(csv_r, paste0("scroll_", id, ".csv"))
+  if (!is.null(csv_wide_r))
+    output$csv_wide <- .scroll_wide_handler(csv_wide_r, paste0("scroll_", id, "_wide.csv"))
   invisible()
 }
 
