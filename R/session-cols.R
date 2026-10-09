@@ -14,9 +14,15 @@
 
 .scroll_newcol_on <- function(data) !isFALSE(data$config$session_columns)
 
+# Columns a mapping can start from: every categorical column, including each subset
+# view's own columns (e.g. its cluster ids; cells outside the subset get no label)
+# and the session's added columns.
+.scroll_newcol_cols <- function(m)
+  names(Filter(function(e) identical(e$type, "categorical"), .scroll_with_derived(m)$meta))
+
 .scroll_newcol_ui <- function(data, ns = identity) {
   if (!.scroll_newcol_on(data)) return(NULL)
-  cats <- .scroll_cat_cols(data$manifest)
+  cats <- .scroll_newcol_cols(data$manifest)
   if (!length(cats)) return(NULL)
   .scroll_details("New column", open = FALSE,
     div(class = "scroll-filter",
@@ -78,14 +84,14 @@
 # Server side: live level hint, Add (replaces a session column of the same name),
 # and removal. `derived` is the session registry from .scroll_wire.
 .scroll_bind_newcol <- function(input, output, session, data, derived) {
-  if (!.scroll_newcol_on(data) || !length(.scroll_cat_cols(data$manifest))) return(invisible())
+  if (!.scroll_newcol_on(data) || !length(.scroll_newcol_cols(data$manifest))) return(invisible())
   m <- data$manifest
   src_values <- function(col)
     data$cells[[col]] %||% .scroll_derived_cols(m)[[col]]$values
 
   # the column menu follows the session's added columns (map a mapped column again)
   observeEvent(derived()$version, {
-    cats <- .scroll_cat_cols(m)
+    cats <- .scroll_newcol_cols(m)
     cur <- isolate(input$scroll_newcol_from)
     updateSelectInput(session, "scroll_newcol_from", choices = stats::setNames(cats, cats),
                       selected = if (!is.null(cur) && cur %in% cats) cur else cats[[1]])

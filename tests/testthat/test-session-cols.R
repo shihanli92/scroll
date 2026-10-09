@@ -70,3 +70,21 @@ test_that("the New column section is in the rail unless config turns it off", {
   html <- as.character(scroll:::.scroll_controls_ui(data))
   expect_false(grepl("scroll_newcol_map", html, fixed = TRUE))
 })
+
+test_that("New column can map a subset view's own column", {
+  data <- scroll:::.scroll_load(subset_test_project())
+  on.exit(scroll_disconnect(data$con))
+  expect_true("tsub" %in% scroll:::.scroll_newcol_cols(data$manifest))
+  panels <- Filter(function(p) p$id == "dimplot", scroll:::.scroll_builtin_panels())
+  lv <- scroll:::.scroll_meta_levels(data, "tsub")
+  shiny::testServer(function(input, output, session) {
+    reg <- scroll:::.scroll_wire(input, output, session, data, panels, prewarm = FALSE)
+  }, {
+    session$setInputs(scroll_newcol_from = "tsub", scroll_newcol_name = "tlab",
+                      scroll_newcol_map = sprintf("[%s]: a, *: b", lv[1]), scroll_newcol_add = 1)
+    v <- reg$derived()$cols$tlab$values
+    src <- as.character(data$cells$tsub)
+    expect_true(all(is.na(v[is.na(src)])))              # outside the subset: no label
+    expect_true(all(v[!is.na(src)] == ifelse(src[!is.na(src)] == lv[1], "a", "b")))
+  })
+})

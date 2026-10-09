@@ -264,27 +264,39 @@ scroll_reset_panels <- function() {
 # ---- global filter rail (right sidebar) -------------------------------------
 # A set of per-column filters that narrow the cells EVERY panel sees, composed into
 # the active-cells reactive. Categorical columns get a level multi-select, numeric
-# columns a range slider. One deterministic spec list drives the UI, the apply step,
-# and Reset, so their input ids line up. config `filters: false` turns the rail off;
-# `filters: [col, col]` curates (and orders) which columns appear.
+# columns a range slider. The list follows the session: the active View's own
+# (scoped) columns -- e.g. a subset's cluster ids -- and the session's added columns
+# (New column, Signature's Add as column) appear alongside the dataset's columns.
+# config `filters: false` turns the rail off; `filters: [col, col]` curates (and
+# orders) the dataset columns shown (added session columns are always offered).
 
-.scroll_filter_specs <- function(data) {
+.scroll_filters_on <- function(data) !isFALSE(data$config$filters) && length(data$manifest$meta) > 0
+
+# A stable input id for a column's filter (survives the list changing with the View).
+.scroll_filter_id <- function(col) {
+  cp <- utf8ToInt(enc2utf8(col))
+  sprintf("flt_%s_%d", substr(gsub("[^A-Za-z0-9]+", "_", col), 1L, 40L),
+          as.integer(sum(cp * seq_along(cp)) %% 1e6))
+}
+
+.scroll_filter_specs <- function(data, view = NULL) {
   m <- data$manifest; cfg <- data$config$filters
   if (isFALSE(cfg)) return(list())
-  cols <- c(.scroll_cat_cols(m), .scroll_num_cols(m))
-  if (is.character(cfg)) cols <- cfg[cfg %in% cols]            # curated subset, config order
+  mm <- .scroll_with_derived(m)
+  cols <- c(.scroll_cat_cols(m, view), .scroll_num_cols(m, view))
+  if (is.character(cfg))                                       # curated subset, config order
+    cols <- c(cfg[cfg %in% cols], intersect(cols, names(.scroll_derived_cols(m))))
   specs <- list()
-  for (col in cols) {
-    e <- m$meta[[col]]
+  for (col in unique(cols)) {
+    e <- mm$meta[[col]]
     if (identical(e$type, "categorical")) {
-      if (.scroll_n_levels(m, col) > .SCROLL_MAX_LEVELS) next  # skip barcode/clone-scale cols
-      specs[[length(specs) + 1L]] <- list(col = col, type = "categorical",
-                                          id = paste0("flt_", length(specs)))
+      if (.scroll_n_levels(mm, col) > .SCROLL_MAX_LEVELS) next # skip barcode/clone-scale cols
+      specs[[length(specs) + 1L]] <- list(col = col, type = "categorical", id = .scroll_filter_id(col))
     } else {
       lo <- e$range$min; hi <- e$range$max
       if (is.null(lo) || is.null(hi) || !is.finite(lo) || !is.finite(hi) || lo >= hi) next
-      specs[[length(specs) + 1L]] <- list(col = col, type = "numeric",
-                                          id = paste0("flt_", length(specs)), min = lo, max = hi)
+      specs[[length(specs) + 1L]] <- list(col = col, type = "numeric", id = .scroll_filter_id(col),
+                                          min = lo, max = hi)
     }
   }
   specs
@@ -296,24 +308,28 @@ scroll_reset_panels <- function() {
     tags$summary(class = "scroll-ctl-summary", title),
     div(class = "scroll-ctl-body", ...))
 
+# The section shell; its controls are rendered by the server (.scroll_bind_filters),
+# since they depend on the View and the session's columns.
 .scroll_filters_ui <- function(data, ns = identity) {
-  specs <- .scroll_filter_specs(data)
-  if (!length(specs)) return(NULL)
-  ctrls <- lapply(specs, function(s) {
-    if (identical(s$type, "categorical"))
-      div(class = "scroll-filter",
-          selectizeInput(ns(s$id), s$col, choices = .scroll_meta_levels(data, s$col),
-                         multiple = TRUE,
-                         options = list(placeholder = "all", plugins = list("remove_button"))))
-    else
-      div(class = "scroll-filter",
-          sliderInput(ns(s$id), s$col, min = s$min, max = s$max, value = c(s$min, s$max)))
-  })
+  if (!.scroll_filters_on(data)) return(NULL)
   .scroll_details("Filters", open = TRUE,
     div(class = "scroll-apply-row",
         actionButton(ns("scroll_filter_apply"), "Apply", class = "btn-sm btn-primary"),
         actionLink(ns("scroll_filter_reset"), "Reset all")),
-    ctrls)
+    uiOutput(ns("scroll_filter_controls")))
+}
+
+# One filter control, showing `value` (the applied filter) if any.
+.scroll_filter_control <- function(s, data, ns, value = NULL) {
+  if (identical(s$type, "categorical"))
+    div(class = "scroll-filter",
+        selectizeInput(ns(s$id), s$col, choices = .scroll_meta_levels(data, s$col),
+                       selected = value, multiple = TRUE,
+                       options = list(placeholder = "all", plugins = list("remove_button"))))
+  else
+    div(class = "scroll-filter",
+        sliderInput(ns(s$id), s$col, min = s$min, max = s$max,
+                    value = if (length(value) == 2L) value else c(s$min, s$max)))
 }
 
 # The right-hand control rail: the Filters section (when the project has filterable
@@ -326,36 +342,63 @@ scroll_reset_panels <- function() {
   tags$aside(class = "scroll-filters", secs)
 }
 
-# Narrow `cells` by every active filter (AND). An untouched control is a no-op: an
-# empty categorical selection means "all", a full-range slider means "all". Numeric
-# NAs are kept (a scoped column is simply absent for non-members, not filtered out).
-.scroll_filter_cells <- function(cells, data, input) {
-  specs <- .scroll_filter_specs(data)
-  if (!length(specs) || !nrow(cells)) return(cells)
+# Narrow `cells` by the applied filters (AND): `applied` is a list of filter specs,
+# each with the `value` committed on Apply (only filters that actually narrow are
+# kept, so no filter -> `cells` returned as is, without a copy). Numeric NAs are
+# kept (a scoped column is simply absent for non-members, not filtered out).
+.scroll_filter_cells <- function(cells, applied) {
+  if (!length(applied) || !nrow(cells)) return(cells)
   keep <- rep(TRUE, nrow(cells))
-  for (s in specs) {
+  for (s in applied) {
     if (!s$col %in% names(cells)) next
-    v <- cells[[s$col]]; val <- input[[s$id]]
-    if (identical(s$type, "categorical")) {
-      if (length(val)) keep <- keep & as.character(v) %in% val
-    } else if (length(val) == 2L && (val[[1]] > s$min || val[[2]] < s$max)) {
-      keep <- keep & (is.na(v) | (v >= val[[1]] & v <= val[[2]]))
-    }
+    v <- cells[[s$col]]; val <- s$value
+    if (identical(s$type, "categorical")) keep <- keep & as.character(v) %in% val
+    else keep <- keep & (is.na(v) | (v >= val[[1]] & v <= val[[2]]))
   }
-  cells[keep, , drop = FALSE]
+  if (all(keep)) cells else cells[keep, , drop = FALSE]
 }
 
-# Deferred filters: commit the controls to `filt_rv` (a snapshot named by input id)
-# only on Apply; Reset clears the controls and the applied snapshot (reverts to all
-# cells). Panels don't re-narrow until Apply, so dragging sliders is free.
-.scroll_bind_filters <- function(input, session, data, filt_rv) {
-  specs <- .scroll_filter_specs(data)
-  if (!length(specs)) return(invisible())
-  observeEvent(input$scroll_filter_apply,
-    filt_rv(stats::setNames(lapply(specs, function(s) input[[s$id]]),
-                            vapply(specs, `[[`, "", "id"))))
+# Is a control's value an actual filter? (Empty selection / full-range slider = all.)
+.scroll_filter_active <- function(s, val) {
+  if (identical(s$type, "categorical")) length(val) > 0
+  else length(val) == 2L && (val[[1]] > s$min || val[[2]] < s$max)
+}
+
+# Deferred filters: the controls are committed to `filt_rv` (applied filters, named
+# by input id) only on Apply; Reset clears the controls and the applied filters.
+# Panels don't re-narrow until Apply, so dragging sliders is free. The controls are
+# rebuilt when the View or the session's columns change, showing what is applied; an
+# applied filter whose column has gone (another View's column, a removed session
+# column) is dropped.
+.scroll_bind_filters <- function(input, output, session, data, filt_rv,
+                                 active_view = reactive(NULL)) {
+  if (!.scroll_filters_on(data)) return(invisible())
+  m <- data$manifest
+  specs_r <- reactive({
+    .scroll_derived_version(m)                         # session columns added / removed
+    .scroll_filter_specs(data, active_view())
+  })
+  output$scroll_filter_controls <- renderUI({
+    specs <- specs_r(); applied <- isolate(filt_rv())
+    if (!length(specs)) return(helpText("No columns to filter."))
+    tagList(lapply(specs, function(s)
+      .scroll_filter_control(s, data, session$ns, applied[[s$id]]$value)))
+  })
+  observeEvent(specs_r(), {
+    ids <- vapply(specs_r(), `[[`, "", "id")
+    cur <- isolate(filt_rv())
+    if (length(cur) && !all(names(cur) %in% ids)) filt_rv(cur[names(cur) %in% ids])
+  }, ignoreInit = TRUE)
+  observeEvent(input$scroll_filter_apply, {
+    app <- list()
+    for (s in specs_r()) {
+      val <- input[[s$id]]
+      if (.scroll_filter_active(s, val)) app[[s$id]] <- c(s, list(value = val))
+    }
+    filt_rv(app)
+  })
   observeEvent(input$scroll_filter_reset, {
-    for (s in specs)
+    for (s in specs_r())
       if (identical(s$type, "categorical"))
         updateSelectizeInput(session, s$id, selected = character(0))
       else
@@ -407,7 +450,7 @@ scroll_reset_panels <- function() {
     selectizeInput(ns("scroll_subset_val"), NULL, choices = NULL, multiple = TRUE,
                    width = "200px", options = list(placeholder = "all")))
   # toggle to collapse/expand the right control rail (frees plot width on narrow screens)
-  has_ctrl <- length(.scroll_filter_specs(data)) > 0 ||
+  has_ctrl <- .scroll_filters_on(data) ||
     (.scroll_newcol_on(data) && length(cats) > 0)
   toggle <- if (has_ctrl)
     tags$button(class = "scroll-ctl-toggle", type = "button",
@@ -586,7 +629,7 @@ scroll_reset_panels <- function() {
                                input$scroll_subset_val, filt_rv(),
                                derived()$version))       # a re-scored added column is new data
   .scroll_bind_subset_control(input, session, data)
-  .scroll_bind_filters(input, session, data, filt_rv)
+  .scroll_bind_filters(input, output, session, data, filt_rv, active_view)
   .scroll_bind_newcol(input, output, session, data, derived)   # rail: New column
   .scroll_render_ncells(output, data$manifest, active_cells, active_view)
   # saved plot styles (style.yaml, R/style-save.R): read once per session
@@ -677,7 +720,7 @@ scroll_reset_panels <- function() {
     base <- .scroll_view_cells(cells, m, active_view())
     base <- .scroll_subset_cells(base, .scroll_nz(input$scroll_subset_col),
                                  input$scroll_subset_val)
-    .scroll_filter_cells(base, data, filt_rv())      # applied on the filter Apply button
+    .scroll_filter_cells(base, filt_rv())            # applied on the filter Apply button
   })
 }
 
