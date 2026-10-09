@@ -700,7 +700,17 @@ function scrollAdjustTables(){
     if(!window.jQuery) return;
     jQuery(document).on('shiny:value', function(e){
       if(!/-scroll_tab_body$/.test(e.name || '')) return;
-      setTimeout(function(){ (window.__scrollInits || []).forEach(function(f){ try{ f(); }catch(_){} }); }, 0);
+      var name = e.name, ds = name.replace(/-scroll_tab_body$/, ''), t0 = Date.now();
+      // wait until the page is on screen and its controls are bound, then re-run the
+      // set-ups and tell the server, which only then sets up the tab (see scroll_multi_app)
+      (function wait(){
+        var out = document.getElementById(name);
+        var ready = out && out.querySelector('.scroll-layout') && out.querySelector('.shiny-bound-input');
+        if(!ready && Date.now() - t0 < 15000){ setTimeout(wait, 50); return; }
+        (window.__scrollInits || []).forEach(function(f){ try{ f(); }catch(_){} });
+        if(window.Shiny && Shiny.setInputValue)
+          Shiny.setInputValue(ds + '-scroll_tab_ready', Date.now(), {priority: 'event'});
+      })();
     });
   }
   if(document.readyState!=='loading') hook(); else document.addEventListener('DOMContentLoaded', hook);

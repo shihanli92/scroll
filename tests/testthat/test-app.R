@@ -314,6 +314,10 @@ test_that("scroll_multi_app sends a tab's page the first time it is opened", {
   shiny::testServer(app, {
     session$setInputs(scroll_tabs = "ds2")
     expect_match(as.character(output$`ds2-scroll_tab_body`$html), 'id="ds2-dimplot"', fixed = TRUE)
+    # its server side waits for the browser's "controls are in place" signal
+    expect_error(output$`ds2-scroll_ncells`)
+    session$setInputs(`ds2-scroll_tab_ready` = 1)
+    expect_match(as.character(output$`ds2-scroll_ncells`$html), "cells")
   })
 })
 

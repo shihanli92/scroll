@@ -881,12 +881,20 @@ scroll_multi_app <- function(projects) {
       .scroll_wire(input, output, session, datas[[i]], panels, cache = "app", prewarm = FALSE))
     loaded <- 1L
     wire(1L)
+    # First open of a tab: send its page, then set up its server side only once the
+    # browser reports the page's controls are in place (`<ds>-scroll_tab_ready`, sent by
+    # .scroll_spy_js). Set up in the same step, the server's first messages to those
+    # controls -- e.g. a gene box's gene list -- could arrive before the controls exist
+    # and be dropped, leaving the box empty.
     observeEvent(input$scroll_tabs, {
       i <- match(input$scroll_tabs, ids)
       if (is.na(i) || i %in% loaded) return()
       loaded <<- c(loaded, i)
       output[[paste0(ids[[i]], "-scroll_tab_body")]] <- renderUI(bodies[[i]])
-      wire(i)
+    })
+    for (i in seq_along(ids)[-1L]) local({
+      ii <- i
+      observeEvent(input[[paste0(ids[[ii]], "-scroll_tab_ready")]], wire(ii), once = TRUE)
     })
   }
   shiny::shinyApp(ui, server, onStart = function() {
