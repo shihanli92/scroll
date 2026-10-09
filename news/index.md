@@ -1,5 +1,17 @@
 # Changelog
 
+## scroll 0.3.14.1
+
+- **Filters follow the View and the session’s columns.** The Filters
+  rail now lists a subset view’s own columns (e.g. its cluster ids)
+  while that view is chosen, and any column added this session (New
+  column, or Signature’s *Add as column*). A filter on a column that
+  goes away (switching View, removing a session column) is dropped. With
+  no filter applied, the cell table is no longer copied on every change.
+- **New column can start from a subset’s columns.** Its *From column*
+  menu now lists each subset view’s own columns (e.g. a subset’s cluster
+  ids) too; cells outside the subset get no label.
+
 ## scroll 0.3.14
 
 - **Up and down genes in the Signature panel.** A new *Down genes
