@@ -24,6 +24,8 @@ dev/
 
 # Internal usage guide — lab reference, not part of the package
 USAGE.md
+# Internal guide for AI agents using scroll — local only, not published
+USING_SCROLL.md
 
 # stray analysis CSV exports copied into the repo for debugging (not package files)
 /scroll_de.csv
