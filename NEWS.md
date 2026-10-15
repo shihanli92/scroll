@@ -1,3 +1,35 @@
+# scroll 0.3.16
+
+## Bug fixes
+
+* **Streaming builds survive a failed run.** If `scroll_build_stream()` stopped
+  part-way (a reader error, a full disk, a killed session), the next run skipped
+  the sources it had finished but gave the following ones the same cell numbers,
+  so expression values were attached to the wrong cells. Each source is now
+  committed on its own (in a hidden `.stream/` folder, removed when the run
+  finishes); a re-run keeps the sources that finished, clears what an unfinished
+  one left behind, and carries on.
+  Projects streamed by an earlier scroll are taken over on their next append.
+* **Streamed projects list every source's genes.** The manifest took its gene
+  list from the last source only, so genes missing there could not be picked in
+  the app. It now lists the union over all sources.
+* **Merging a streamed store uses bounded memory.** The final merge of the
+  per-source files read the whole assay into R. It now works through the genes a
+  batch at a time and replaces the old files only once the new one is complete.
+* **Plots from one user's added columns are no longer shown to another.** Two
+  users of the same app who each added a column of the same name (e.g. two
+  different `sig_CD3D` scores) could be served each other's cached DimPlot,
+  FeaturePlot or Biaxial image. A session with added columns now keeps its own
+  cache entries.
+* **VisiumV1 spots land on the tissue.** Spot coordinates from a VisiumV1 image
+  were scaled to the low-resolution image twice, crowding every spot into one
+  corner. VisiumV2 was not affected.
+* **The default assay is always one that was built.** A project built with
+  `assays =` not including the object's default assay (e.g. an SCT default built
+  with `assays = "RNA"`) named the missing assay as its default, and every panel
+  failed to read it. The build now picks the first exported assay, and older
+  projects with this problem open on their first assay.
+
 # scroll 0.3.15
 
 * **Wide CSVs for GraphPad Prism.** Violin, Ridge, Signature, Proportions and DotPlot

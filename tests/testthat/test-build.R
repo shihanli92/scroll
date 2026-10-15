@@ -200,3 +200,17 @@ test_that("cell ranks handle ties, explicit zeros and negative values", {
   ref <- apply(m, 2, function(v) rank(-v, ties.method = "average"))
   expect_identical(r2, as.integer(2 * ref[cbind(tr$i, tr$j)]))
 })
+
+test_that("default_assay names an exported assay", {
+  obj <- make_test_object()                       # default assay RNA, plus ADT
+  dir <- tempfile("adt-only")
+  suppressMessages(scroll_build(obj, dir, assays = "ADT", embeddings = "umap",
+                                meta_cols = "celltype", verbose = FALSE))
+  expect_identical(scroll_manifest(dir)$default_assay, "ADT")
+  # a project built before the fix still opens on an assay it has
+  man <- scroll_manifest(dir); man$default_assay <- "SCT"
+  yaml::write_yaml(man, file.path(dir, "manifest.yaml"), unicode = TRUE)
+  data <- scroll:::.scroll_load(dir); on.exit(scroll_disconnect(data$con))
+  expect_identical(data$manifest$default_assay, "ADT")
+  expect_gt(nrow(data$query1("ADT", unlist(data$manifest$assays$ADT$features)[1])), 0)
+})

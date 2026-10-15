@@ -624,10 +624,18 @@ scroll_reset_panels <- function() {
   # The leading namespace keeps datasets from colliding in the shared app-level cache
   # under scroll_multi_app (blank "" for the flat scroll_app / preview paths).
   ns <- session$ns("")
+  # Added columns are this session's own data, but the cache is shared by every
+  # session: two sessions can each add a `sig_CD3D` (same name, same version
+  # count) holding different scores. So once a session has added columns its keys
+  # carry the session token (no sharing); without any it shares the cache.
+  derived_key_r <- reactive({
+    d <- derived()
+    if (length(d$cols)) list(session$token, d$version) else ""
+  })
   cache_key_r <- reactive(list(ns, active_view() %||% "",
                                .scroll_nz(input$scroll_subset_col),
                                input$scroll_subset_val, filt_rv(),
-                               derived()$version))       # a re-scored added column is new data
+                               derived_key_r()))         # a re-scored added column is new data
   .scroll_bind_subset_control(input, session, data)
   .scroll_bind_filters(input, output, session, data, filt_rv, active_view)
   .scroll_bind_newcol(input, output, session, data, derived)   # rail: New column

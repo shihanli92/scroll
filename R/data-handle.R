@@ -18,6 +18,10 @@
 .scroll_load <- function(dir) {
   con <- scroll_connect(dir)
   manifest <- scroll_manifest(dir)
+  # projects built before 0.3.16 could name an assay that was not exported
+  if (length(manifest$assays))
+    manifest$default_assay <- .scroll_pick_default_assay(manifest$default_assay,
+                                                         names(manifest$assays))
   cells <- as.data.frame(arrow::read_parquet(file.path(dir, "cells.parquet")))
   # `.gidx` is the canonical global row-index a v2 expr store joins on; it rides
   # along on subset/filtered cells so joins stay correct under the app-bar filter.

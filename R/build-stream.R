@@ -1,10 +1,20 @@
 # Streaming/incremental build: assemble one scroll project from many sources
 # without ever holding them all in RAM. Reads one source at a time, exports its
 # expression with a running GLOBAL cell offset, moves the part-file into the shared
-# store (one part per source; arrow concatenates them), accumulates the small cells
-# frame, and writes the manifest once at the end. Idempotent and append-safe: re-run
-# as more sources arrive; sources already added are skipped. A final compaction
-# merges the per-source parts into one feature-sorted file per assay.
+# store (one part per source; arrow concatenates them), and commits the source.
+# Idempotent and append-safe: re-run as more sources arrive; sources already added
+# are skipped. At the end of a run the project files (cells.parquet, stats/,
+# manifest) are rebuilt from the commits and the per-source parts are merged into
+# one feature-sorted file per assay.
+#
+# Commits live in outdir/.stream/: `<tag>.cells.parquet` (the source's cells) and
+# `<tag>.rds` (its offset, cell count, settings, and per-assay features, gene sums,
+# max and cell stats). The .rds is renamed into place last, so it is the commit
+# point: a source either has one, and its expr / counts parts are complete, or it
+# has not and whatever it left behind is removed on the next run. That keeps the
+# global cell index of every stored value matched to its row of cells.parquet even
+# after a run dies part-way. A run that finishes deletes .stream/: the project files
+# then hold everything, and the next append adopts them as its base commit.
 
 # Move a source's exported assay part-file(s) into the combined store, tagging them
 # so they never collide across sources.
@@ -27,8 +37,10 @@
 #' (one part-file per feature) on completion.
 #'
 #' Idempotent and **append-safe**: re-running with more `sources` adds only the new
-#' ones (tracked in `outdir/.stream_sources.txt`), so a build can grow as data
-#' arrives. Values are stored unquantized (`float32`); a global quantization max is
+#' ones, so a build can grow as data arrives. Each source is committed on its own
+#' (under the hidden `outdir/.stream/` folder), so a run that stops part-way --
+#' an error, a full disk, a killed session -- keeps the sources it finished; run
+#' it again to carry on. `.stream/` is removed once a run finishes. Values are stored unquantized (`float32`); a global quantization max is
 #' unknown while streaming, so `quantize = TRUE` is not supported here.
 #'
 #' @param outdir Project directory to create or append to.
@@ -69,6 +81,16 @@ scroll_build_stream <- function(outdir, sources, reader, assays = NULL,
   if (!is.function(reader)) stop("`reader` must be function(source) -> Seurat object.", call. = FALSE)
   if (is.null(meta_cols)) stop("`meta_cols` must be given for a streaming build.", call. = FALSE)
   sources <- as.list(sources)
+  ids  <- vapply(sources, id_of, character(1))
+  tags <- .scroll_safe_tag(ids)
+  if (anyDuplicated(ids))
+    stop("scroll_build_stream: duplicate source id '", ids[anyDuplicated(ids)], "'.", call. = FALSE)
+  if (anyDuplicated(tags)) {
+    k <- anyDuplicated(tags)
+    stop(sprintf("scroll_build_stream: source ids '%s' and '%s' map to the same file tag; ",
+                 ids[match(tags[k], tags)], ids[k]),
+         "give them ids that differ in letters or digits (`id_of`).", call. = FALSE)
+  }
 
   kept_style <- if (dir.exists(outdir) && isTRUE(overwrite)) .scroll_keep_style(outdir)
   if (dir.exists(outdir) && isTRUE(overwrite)) unlink(outdir, recursive = TRUE)
@@ -76,45 +98,48 @@ scroll_build_stream <- function(outdir, sources, reader, assays = NULL,
   .scroll_restore_style(outdir, kept_style)       # saved plot styles survive a rebuild
   tmp_root <- file.path(outdir, ".stream_tmp")
   srcfile  <- file.path(outdir, ".stream_sources.txt")
+  sdir <- .scroll_stream_dir(outdir)
 
-  ids  <- vapply(sources, id_of, character(1))
-  done <- if (file.exists(srcfile)) readLines(srcfile) else character(0)
+  # recover from an interrupted run: finish / roll back a compaction, adopt a
+  # project streamed by an older scroll, then drop anything no commit owns
+  for (adir in list.dirs(file.path(outdir, "expr"), recursive = FALSE)) .scroll_compact_recover(adir)
+  .scroll_stream_adopt(outdir)
+  recs <- .scroll_stream_records(outdir)
+  .scroll_stream_cleanup(outdir, recs)
+  unlink(tmp_root, recursive = TRUE)
+
+  done <- unlist(lapply(recs, `[[`, "ids"))
   todo <- which(!(ids %in% done))
-  if (!length(todo)) { message("scroll_build_stream: nothing new to add."); return(invisible(outdir)) }
+  finalized <- length(recs) && file.exists(srcfile) &&
+    setequal(readLines(srcfile, warn = FALSE), done)
+  if (!length(todo) && finalized) {
+    unlink(sdir, recursive = TRUE)                 # the project files hold it all
+    message("scroll_build_stream: nothing new to add.")
+    return(invisible(outdir))
+  }
 
-  cells_path <- file.path(outdir, "cells.parquet")
-  old_cells  <- if (file.exists(cells_path)) as.data.frame(arrow::read_parquet(cells_path, mmap = FALSE)) else NULL
-  offset <- if (is.null(old_cells)) 0L else nrow(old_cells)
-  old_man <- if (file.exists(file.path(outdir, "manifest.yaml")))
-               tryCatch(scroll_manifest(outdir), error = function(e) NULL)
-  gmax   <- if (is.null(old_man)) list() else lapply(old_man$assays, function(a) a$max)
+  set <- if (length(recs)) recs[[1]]$settings
   # A counts store must cover every cell or pseudobulk would silently drop the
   # sources without one, so an append run must match the original setting.
-  if (!is.null(old_man) && !identical(isTRUE(old_man$has_counts), isTRUE(counts)))
+  if (!is.null(set) && !identical(isTRUE(set$counts), isTRUE(counts)))
     stop(sprintf(paste0("scroll_build_stream: this project was built with counts = %s; ",
                         "append with the same setting, or rebuild with overwrite = TRUE."),
-                 isTRUE(old_man$has_counts)), call. = FALSE)
-
-  old_ranks <- if (!is.null(old_man)) isTRUE(old_man$assays[[1]]$ranks)
-  if (is.null(ranks)) ranks <- old_ranks %||% FALSE
-  if (!is.null(old_man) && !identical(isTRUE(ranks), old_ranks))
+                 isTRUE(set$counts)), call. = FALSE)
+  if (is.null(ranks)) ranks <- isTRUE(set$ranks)
+  if (!is.null(set) && !identical(isTRUE(ranks), isTRUE(set$ranks)))
     stop(sprintf(paste0("scroll_build_stream: this project was built with ranks = %s; ",
                         "append with the same setting, or rebuild with overwrite = TRUE."),
-                 old_ranks), call. = FALSE)
-  # gene / cell statistics accumulate across runs: they need every source, so a
-  # project first built without them (an older scroll) stays without them
-  keep_stats <- is.null(old_man) || isTRUE(old_man$assays[[1]]$stats)
-  gstats <- list(); cstats <- list()
-  if (!is.null(old_man) && keep_stats)
-    for (a in names(old_man$assays)) {
-      sd <- file.path(outdir, "stats", a)
-      gstats[[a]] <- as.data.frame(arrow::read_parquet(file.path(sd, "genes.parquet"), mmap = FALSE))
-      cstats[[a]] <- list(as.data.frame(arrow::read_parquet(file.path(sd, "cells.parquet"), mmap = FALSE)))
-    }
+                 isTRUE(set$ranks)), call. = FALSE)
+  if (!is.null(set) && !setequal(meta_cols, set$meta_cols))
+    stop("scroll_build_stream: this project was built with meta_cols = c(",
+         paste0('"', set$meta_cols, '"', collapse = ", "), "); append with the same ",
+         "columns, or rebuild with overwrite = TRUE.", call. = FALSE)
+  lock <- if (!is.null(set)) set[c("assays", "embeddings", "meta_cols")]
+  offset <- sum(vapply(recs, function(r) as.numeric(r$n), numeric(1)))
 
-  lock <- NULL; new_cells <- list(); last_seu <- NULL
+  if (length(todo)) dir.create(sdir, showWarnings = FALSE)
   for (i in todo) {
-    id <- ids[[i]]
+    id <- ids[[i]]; tag <- tags[[i]]
     .scroll_step(verbose, sprintf("[stream] %s ...", id))
     seu <- reader(sources[[i]])
     seu <- tryCatch(SeuratObject::UpdateSeuratObject(seu), error = function(e) seu)
@@ -142,65 +167,181 @@ scroll_build_stream <- function(outdir, sources, reader, assays = NULL,
                    id, paste(miss_m, collapse = ", ")), call. = FALSE)
     cframe <- .scroll_extract_cells(seu, md, lock$meta_cols, lock$embeddings)
 
+    info <- list()
     for (assay in lock$assays) {
       ai <- .scroll_export_assay(seu, assay, tmp_root, quantize = FALSE, offset = offset,
                                  cell_ids = cframe$cell, ranks = ranks)
-      if (keep_stats) {                                  # per-gene sums add up across sources
-        g <- ai$stats$genes; old <- gstats[[assay]]
-        if (!is.null(old)) {
-          feats <- union(old$feature, g$feature)
-          sm <- stats::setNames(numeric(length(feats)), feats)
-          sm[old$feature] <- old$sum; sm[g$feature] <- sm[g$feature] + g$sum
-          g <- data.frame(feature = feats, sum = unname(sm), stringsAsFactors = FALSE)
-        }
-        gstats[[assay]] <- g[, c("feature", "sum")]
-        cstats[[assay]] <- c(cstats[[assay]], list(ai$stats$cells))
-      }
+      info[[assay]] <- list(features = ai$features, sums = unname(ai$stats$genes$sum),
+                            max = ai$max, cstats = ai$stats$cells)
       .scroll_stream_move(file.path(tmp_root, "expr", assay),
-                          file.path(outdir, "expr", assay), tag = .scroll_safe_tag(id))
-      gmax[[assay]] <- max(gmax[[assay]] %||% 0, ai$max)
+                          file.path(outdir, "expr", assay), tag = tag)
       if (isTRUE(counts)) {
         cdir <- file.path(outdir, "counts", assay)
         dir.create(cdir, recursive = TRUE, showWarnings = FALSE)
         .scroll_export_counts(seu, assay, outdir, cell_ids = cframe$cell, offset = offset,
-                              dest = file.path(cdir, paste0(.scroll_safe_tag(id), "-part.parquet")))
+                              dest = file.path(cdir, paste0(tag, "-part.parquet")))
       }
     }
     unlink(file.path(tmp_root, "expr"), recursive = TRUE)
 
-    new_cells[[id]] <- cframe
+    # commit: the cells first, the record (renamed into place) last
+    arrow::write_parquet(cframe, file.path(sdir, paste0(tag, ".cells.parquet")),
+                         compression = "zstd")
+    rec <- list(ids = id, tags = tag, key = tag, offset = offset, n = nrow(cframe),
+                settings = c(lock, list(counts = isTRUE(counts), ranks = isTRUE(ranks))),
+                emb_dims = vapply(lock$embeddings, function(r)
+                  ncol(SeuratObject::Embeddings(seu, reduction = r)), integer(1)),
+                assays = info)
+    .scroll_save_rds_atomic(rec, file.path(sdir, paste0(tag, ".rds")))
+    recs <- c(recs, list(rec))
     offset <- offset + nrow(cframe)
-    last_seu <- seu
-    cat(id, "\n", sep = "", file = srcfile, append = TRUE)
-    rm(seu); gc(FALSE)
+    rm(seu, cframe); gc(FALSE)
   }
   unlink(tmp_root, recursive = TRUE)
 
-  # merge cells (old + new, in the same order the global offsets were assigned)
-  cells <- do.call(rbind, c(list(old_cells), unname(new_cells)))
-  .scroll_rewrite_parquet(cells, cells_path)
-  .scroll_compact_store(outdir, quantize = FALSE)
-
-  SeuratObject::DefaultAssay(last_seu) <- lock$assays[1]
-  assay_info <- lapply(lock$assays, function(assay) {
-    feats <- rownames(SeuratObject::GetAssayData(last_seu, assay = assay, layer = "data"))
-    list(features = feats, max = gmax[[assay]] %||% 1, n_features = length(feats))
-  })
-  names(assay_info) <- lock$assays
-  for (assay in lock$assays) {
-    assay_info[[assay]]$ranks <- isTRUE(ranks)
-    if (keep_stats && !is.null(gstats[[assay]])) {
-      g <- gstats[[assay]]; g$mean <- g$sum / nrow(cells)
-      st <- list(genes = g, cells = do.call(rbind, cstats[[assay]]))
-      .scroll_write_stats(outdir, assay, st)
-      assay_info[[assay]]$stats <- st
-    }
-  }
-  .scroll_write_manifest(outdir, last_seu, assay_info, lock$embeddings, cells,
-                         lock$meta_cols, n_cells = nrow(cells), quantize = FALSE,
-                         has_counts = isTRUE(counts), cells = cells, subsets = NULL)
-  scroll_scaffold_app(outdir)
+  cells <- .scroll_stream_finalize(outdir, recs)
+  writeLines(unlist(lapply(recs, `[[`, "ids")), srcfile)   # what the project files now hold
+  # the project files now carry everything an append needs (the next run adopts
+  # them as its base), so the per-source copies can go
+  unlink(sdir, recursive = TRUE)
   message("scroll (streamed) project built at: ", normalizePath(outdir),
           "  (", format(nrow(cells), big.mark = ","), " cells)")
   invisible(outdir)
+}
+
+.scroll_stream_dir <- function(outdir) file.path(outdir, ".stream")
+
+# saveRDS to a temp name, then rename: the file is either absent or complete.
+.scroll_save_rds_atomic <- function(x, path) {
+  tmp <- paste0(path, ".tmp")
+  saveRDS(x, tmp)
+  if (!file.rename(tmp, path)) stop("Could not write '", path, "'.", call. = FALSE)
+  invisible(path)
+}
+
+# The committed sources, in cell-index order. Their cell counts must tile the
+# global index from 1 with no gap or overlap.
+.scroll_stream_records <- function(outdir) {
+  files <- list.files(.scroll_stream_dir(outdir), pattern = "\\.rds$", full.names = TRUE)
+  recs <- lapply(files, readRDS)
+  if (!length(recs)) return(list())
+  recs <- recs[order(vapply(recs, function(r) as.numeric(r$offset), numeric(1)))]
+  n <- vapply(recs, function(r) as.numeric(r$n), numeric(1))
+  off <- vapply(recs, function(r) as.numeric(r$offset), numeric(1))
+  if (!isTRUE(all.equal(off, c(0, cumsum(n)[-length(n)]))))
+    stop("scroll_build_stream: the saved sources in '", .scroll_stream_dir(outdir),
+         "' do not line up (cell offsets ", paste(off, collapse = ", "), "). Rebuild with ",
+         "overwrite = TRUE.", call. = FALSE)
+  recs
+}
+
+# Remove whatever no committed source owns: expr / counts parts of a source that
+# never committed, and its half-written files in .stream/.
+.scroll_stream_cleanup <- function(outdir, recs) {
+  keep <- unlist(lapply(recs, `[[`, "tags"))
+  owned <- function(files, rx) {
+    tag <- sub(rx, "\\1", basename(files))
+    !grepl(rx, basename(files)) | tag %in% keep
+  }
+  for (adir in list.dirs(file.path(outdir, "expr"), recursive = FALSE)) {
+    f <- list.files(adir, pattern = "\\.parquet$", full.names = TRUE)
+    unlink(f[!owned(f, "^([A-Za-z0-9_]+)-part-[0-9]+\\.parquet$")])
+  }
+  for (cdir in list.dirs(file.path(outdir, "counts"), recursive = FALSE)) {
+    f <- list.files(cdir, pattern = "\\.parquet$", full.names = TRUE)
+    unlink(f[!owned(f, "^([A-Za-z0-9_]+)-part\\.parquet$")])
+  }
+  sdir <- .scroll_stream_dir(outdir)
+  keys <- vapply(recs, function(r) r$key, character(1))
+  f <- list.files(sdir, full.names = TRUE, all.files = TRUE, no.. = TRUE)
+  cf <- f[grepl("\\.cells\\.parquet$", f)]
+  unlink(c(f[grepl("\\.tmp$", f)],
+           cf[!sub("\\.cells\\.parquet$", "", basename(cf)) %in% keys]))
+  invisible(NULL)
+}
+
+# A finished project (or one streamed by scroll < 0.3.16) has no .stream/ commits:
+# turn what it has (cells.parquet, stats, manifest, .stream_sources.txt) into one
+# base commit.
+# Sources whose expr parts were never merged belong to a run that died before
+# writing the project files, so they are left out (and re-added on this run).
+.scroll_stream_adopt <- function(outdir) {
+  sdir <- .scroll_stream_dir(outdir)
+  if (dir.exists(sdir)) return(invisible(NULL))
+  cells_path <- file.path(outdir, "cells.parquet")
+  mpath <- file.path(outdir, "manifest.yaml")
+  if (!file.exists(cells_path) || !file.exists(mpath)) return(invisible(NULL))
+  man <- scroll_manifest(outdir)
+  cells <- as.data.frame(arrow::read_parquet(cells_path, mmap = FALSE))
+  if (!identical(as.numeric(man$n_cells), as.numeric(nrow(cells))))
+    stop("scroll_build_stream: this project's cells.parquet and manifest disagree on the ",
+         "cell count (an earlier run stopped part-way). Rebuild with overwrite = TRUE.",
+         call. = FALSE)
+  srcfile <- file.path(outdir, ".stream_sources.txt")
+  ids <- if (file.exists(srcfile)) unique(readLines(srcfile, warn = FALSE)) else character(0)
+  tags <- .scroll_safe_tag(ids)
+  loose <- unique(sub("^([A-Za-z0-9_]+)-part-[0-9]+\\.parquet$", "\\1",
+                      grep("^[A-Za-z0-9_]+-part-[0-9]+\\.parquet$",
+                           basename(list.files(file.path(outdir, "expr"), recursive = TRUE)),
+                           value = TRUE)))
+  keep <- !tags %in% loose
+  info <- lapply(names(man$assays), function(a) {
+    ma <- man$assays[[a]]
+    sd <- file.path(outdir, "stats", a)
+    st <- isTRUE(ma$stats) && file.exists(file.path(sd, "genes.parquet"))
+    g <- if (st) as.data.frame(arrow::read_parquet(file.path(sd, "genes.parquet"), mmap = FALSE))
+    list(features = if (st) g$feature else unlist(ma$features),
+         sums = if (st) g$sum,
+         max = ma$max %||% 1,
+         cstats = if (st) as.data.frame(arrow::read_parquet(file.path(sd, "cells.parquet"), mmap = FALSE)))
+  })
+  names(info) <- names(man$assays)
+  dir.create(sdir, showWarnings = FALSE)
+  arrow::write_parquet(cells, file.path(sdir, "_base.cells.parquet"), compression = "zstd")
+  rec <- list(ids = ids[keep], tags = tags[keep], key = "_base", offset = 0, n = nrow(cells),
+              settings = list(assays = names(man$assays), embeddings = names(man$embeddings),
+                              meta_cols = names(man$meta), counts = isTRUE(man$has_counts),
+                              ranks = isTRUE(man$assays[[1]]$ranks)),
+              emb_dims = vapply(man$embeddings, function(e) as.integer(e$dims), integer(1)),
+              assays = info)
+  .scroll_save_rds_atomic(rec, file.path(sdir, "_base.rds"))
+  invisible(NULL)
+}
+
+# Rebuild the project files from the commits: cells.parquet, stats/, the merged
+# expr store, the manifest (features = the union over sources) and the scaffold.
+.scroll_stream_finalize <- function(outdir, recs) {
+  sdir <- .scroll_stream_dir(outdir)
+  cells <- do.call(rbind, lapply(recs, function(r) as.data.frame(
+    arrow::read_parquet(file.path(sdir, paste0(r$key, ".cells.parquet")), mmap = FALSE))))
+  rownames(cells) <- NULL
+  .scroll_rewrite_parquet(cells, file.path(outdir, "cells.parquet"))
+  set <- recs[[1]]$settings
+  assay_info <- list()
+  for (a in set$assays) {
+    parts <- lapply(recs, function(r) r$assays[[a]])
+    feats <- unique(unlist(lapply(parts, `[[`, "features")))
+    info <- list(features = feats, n_features = length(feats), ranks = isTRUE(set$ranks),
+                 max = max(vapply(parts, function(p) as.numeric(p$max %||% 0), numeric(1))))
+    # gene / cell statistics need every source: a project first built without
+    # them (an older scroll) stays without them
+    if (all(vapply(parts, function(p) !is.null(p$sums), logical(1)))) {
+      sm <- stats::setNames(numeric(length(feats)), feats)
+      for (p in parts) sm[p$features] <- sm[p$features] + p$sums
+      st <- list(genes = data.frame(feature = feats, sum = unname(sm),
+                                    mean = unname(sm) / nrow(cells), stringsAsFactors = FALSE),
+                 cells = do.call(rbind, lapply(parts, `[[`, "cstats")))
+      .scroll_write_stats(outdir, a, st)
+      info$stats <- st
+    }
+    assay_info[[a]] <- info
+  }
+  .scroll_compact_store(outdir, quantize = FALSE)
+  .scroll_write_manifest(outdir, NULL, assay_info, set$embeddings, cells, set$meta_cols,
+                         n_cells = nrow(cells), quantize = FALSE,
+                         has_counts = isTRUE(set$counts), cells = cells, subsets = NULL,
+                         default_assay = set$assays[[1]],
+                         emb_dims = recs[[length(recs)]]$emb_dims)
+  scroll_scaffold_app(outdir)
+  cells
 }

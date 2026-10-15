@@ -40,7 +40,13 @@ spatial_spec <- function(image = NULL, name = "spatial", image_asset = TRUE) {
 # Pull the (cell x 2) tissue coordinates for `image` as a plain matrix with
 # columns (col, row) in full-resolution pixel space, robust across Visium v1/v2.
 .scroll_tissue_xy <- function(object, image) {
-  co <- SeuratObject::GetTissueCoordinates(object[[image]])
+  img <- object[[image]]
+  # Visium images default to `scale = "lowres"` in VisiumV1 (but NULL = full
+  # resolution in VisiumV2); ask for full resolution explicitly, since the caller
+  # applies the lowres factor itself. Other image classes take no `scale`.
+  co <- if (inherits(img, c("VisiumV1", "VisiumV2")))
+          SeuratObject::GetTissueCoordinates(img, scale = NULL)
+        else SeuratObject::GetTissueCoordinates(img)
   if (is.null(co) || !nrow(co)) stop("Image '", image, "' has no tissue coordinates.", call. = FALSE)
   rn <- if (!is.null(co$cell)) as.character(co$cell) else rownames(co)
   # v2: columns x (col), y (row); v1: imagecol / imagerow

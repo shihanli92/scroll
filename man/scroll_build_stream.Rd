@@ -67,8 +67,10 @@ cell index, and the manifest written once at the end. The store is \strong{compa
 }
 \details{
 Idempotent and \strong{append-safe}: re-running with more \code{sources} adds only the new
-ones (tracked in \code{outdir/.stream_sources.txt}), so a build can grow as data
-arrives. Values are stored unquantized (\code{float32}); a global quantization max is
+ones, so a build can grow as data arrives. Each source is committed on its own
+(under the hidden \verb{outdir/.stream/} folder), so a run that stops part-way --
+an error, a full disk, a killed session -- keeps the sources it finished; run
+it again to carry on. \verb{.stream/} is removed once a run finishes. Values are stored unquantized (\code{float32}); a global quantization max is
 unknown while streaming, so \code{quantize = TRUE} is not supported here.
 }
 \seealso{

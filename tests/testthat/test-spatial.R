@@ -164,3 +164,20 @@ test_that("real Visium build path extracts coords + bakes the image", {
   expect_true(all(cells$spatial_1 >= 0 & cells$spatial_1 <= man$images$spatial$width))
   expect_true(all(cells$spatial_2 >= 0 & cells$spatial_2 <= man$images$spatial$height))
 })
+
+test_that("VisiumV1 coordinates are scaled to the lowres image once", {
+  skip_if_not_installed("Seurat")
+  obj <- make_test_object(40, 1)
+  cn <- colnames(obj)
+  coords <- data.frame(tissue = 1L, row = seq_along(cn), col = seq_along(cn),
+                       imagerow = seq(1000, 9000, length.out = length(cn)),
+                       imagecol = seq(800, 8000, length.out = length(cn)), row.names = cn)
+  img <- methods::new("VisiumV1", image = array(0.5, dim = c(500, 500, 3)),
+                      scale.factors = Seurat::scalefactors(spot = 50, fiducial = 80,
+                                                           hires = 0.2, lowres = 0.05),
+                      coordinates = coords, spot.radius = 0.01, assay = "RNA", key = "slice1_")
+  obj@images$slice1 <- img
+  e <- SeuratObject::Embeddings(scroll:::.scroll_prepare_spatial(obj, spatial_spec())$reduction)
+  expect_equal(range(e[, 1]), range(coords$imagecol) * 0.05)            # 40 .. 400 px
+  expect_equal(range(e[, 2]), 500 - rev(range(coords$imagerow)) * 0.05)  # flipped rows
+})

@@ -44,7 +44,10 @@
                                    cells = NULL, subsets = NULL, vdj = NULL,
                                    images = NULL, spatial_embeddings = character(),
                                    atac = NULL, peaks_assay = character(),
-                                   max_levels = .SCROLL_MAX_LEVELS) {
+                                   max_levels = .SCROLL_MAX_LEVELS,
+                                   default_assay = NULL, emb_dims = NULL) {
+  # `object` may be NULL (a streamed build finalizing from its saved records):
+  # then `default_assay` and `emb_dims` (reduction -> dims) must be given.
   assays <- lapply(names(assay_info), function(a) {
     info <- assay_info[[a]]
     l <- list(max = info$max, n_features = info$n_features,
@@ -60,7 +63,9 @@
   # embedding covers every cell; a reprocessed-subset embedding covers fewer.
   emb <- lapply(embeddings, function(r) {
     cov <- if (!is.null(cells)) sum(!is.na(cells[[sprintf("%s_1", r)]])) else n_cells
-    e <- list(dims = ncol(SeuratObject::Embeddings(object, reduction = r)),
+    dims <- if (!is.null(emb_dims)) emb_dims[[r]]
+            else ncol(SeuratObject::Embeddings(object, reduction = r))
+    e <- list(dims = as.integer(dims),
               n_covered = as.integer(cov))
     if (r %in% spatial_embeddings) e$kind <- "spatial"   # tissue-map coordinates
     e
@@ -93,7 +98,8 @@
     n_cells = n_cells,
     quantize = quantize,
     has_counts = has_counts,
-    default_assay = SeuratObject::DefaultAssay(object),
+    default_assay = .scroll_pick_default_assay(
+      default_assay %||% SeuratObject::DefaultAssay(object), names(assay_info)),
     default_embedding = .scroll_default_embedding(embeddings),
     assays = assays,
     embeddings = emb,
@@ -117,6 +123,14 @@
   # form that would no longer match the store's feature column.
   yaml::write_yaml(manifest, file.path(outdir, "manifest.yaml"), unicode = TRUE)
   invisible(manifest)
+}
+
+# The assay panels open on: the object's default assay when it was exported, else
+# the first exported one (an SCT-default object built with assays = "RNA" must not
+# point the app at an expr/SCT folder that was never written).
+.scroll_pick_default_assay <- function(want, assays) {
+  want <- as.character(want %||% character(0))
+  if (length(want) == 1L && want %in% assays) want else assays[[1]]
 }
 
 #' Read a scroll project manifest

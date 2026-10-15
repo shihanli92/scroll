@@ -505,22 +505,84 @@ scroll_build <- function(object, outdir,
 }
 
 # Compact each expr/<assay>/ that has >1 part-file (a streaming build appends one
-# part per source) into a single zstd part-file, re-sorted by feature so row-group
-# statistics prune. Preserves the int32/float32(uint8) schema and reads one assay at
-# a time (flat memory). No-op for assays already holding a single file (the common
+# part per source) into a single zstd part-file, sorted by feature so row-group
+# statistics prune. No-op for assays already holding a single file (the common
 # single-object build, which .scroll_export_assay writes pre-sorted).
-.scroll_compact_store <- function(outdir, quantize) {
+#
+# Memory stays bounded: the features are counted in arrow, cut into contiguous
+# name ranges of about `batch_rows` rows, and each range is read (the parts are
+# feature-sorted, so row-group statistics prune), sorted, and appended as row
+# groups to one file -- the assay is never all in RAM at once. Crash-safe: the
+# new file is written to a hidden temp file, a `.compact-done` marker is dropped
+# once it is complete, and only then are the old parts replaced. A run that died
+# part-way is finished (marker present) or rolled back (no marker) next time.
+.SCROLL_COMPACT_ROWS <- 2e7
+.scroll_compact_store <- function(outdir, quantize, batch_rows = .SCROLL_COMPACT_ROWS) {
   root <- file.path(outdir, "expr")
   for (adir in list.dirs(root, recursive = FALSE)) {     # expr/<assay> dirs
+    .scroll_compact_recover(adir)
     parts <- list.files(adir, pattern = "\\.parquet$", full.names = TRUE)
     if (length(parts) <= 1L) next
-    tab <- dplyr::collect(arrow::open_dataset(adir))      # (feature, cell, value[, rank2]) in RAM
-    tab <- tab[order(tab$feature), , drop = FALSE]        # re-sort so row-group stats prune
-    sch <- .scroll_expr_schema(quantize, "rank2" %in% names(tab))
-    unlink(parts)
-    arrow::write_parquet(arrow::as_arrow_table(tab)$cast(sch),
-                         file.path(adir, "part-0.parquet"), compression = "zstd")
+    .scroll_compact_assay(adir, parts, quantize, batch_rows)
   }
+  invisible(NULL)
+}
+
+# Merge one assay's parts into `.compact.parquet.tmp`, then swap it in.
+.scroll_compact_assay <- function(adir, parts, quantize, batch_rows) {
+  ds <- arrow::open_dataset(parts)
+  sch <- .scroll_expr_schema(quantize, "rank2" %in% names(ds$schema))
+  # rows per feature, in arrow's own (byte-wise) string order, so the name ranges
+  # below partition the rows exactly
+  cnt <- dplyr::collect(dplyr::arrange(dplyr::count(ds, .data$feature), .data$feature))
+  grp <- .scroll_compact_batches(cnt$n, batch_rows)
+  tmp <- file.path(adir, ".compact.parquet.tmp")
+  sink <- arrow::FileOutputStream$create(tmp)
+  writer <- arrow::ParquetFileWriter$create(
+    sch, sink, properties = arrow::ParquetWriterProperties$create(names(sch), compression = "zstd"))
+  ok <- FALSE
+  on.exit(if (!ok) {
+    try(writer$Close(), silent = TRUE); try(sink$close(), silent = TRUE); unlink(tmp)
+  })
+  written <- 0
+  for (g in split(seq_along(grp), grp)) {
+    lo <- cnt$feature[[g[1]]]; hi <- cnt$feature[[g[length(g)]]]
+    tab <- dplyr::compute(dplyr::arrange(
+      dplyr::filter(ds, .data$feature >= !!lo, .data$feature <= !!hi),
+      .data$feature, .data$cell))
+    written <- written + tab$num_rows
+    writer$WriteTable(tab$cast(sch), chunk_size = 1048576L)
+  }
+  writer$Close(); sink$close()
+  if (written != sum(cnt$n))
+    stop(sprintf("Compacting '%s' wrote %s of %s rows; the old parts are left as they were.",
+                 basename(adir), format(written), format(sum(cnt$n))), call. = FALSE)
+  ok <- TRUE
+  file.create(file.path(adir, ".compact-done"))
+  .scroll_compact_recover(adir)
+  invisible(NULL)
+}
+
+# Consecutive features -> batch numbers, about `batch_rows` rows per batch (a
+# feature larger than that gets a batch of its own).
+.scroll_compact_batches <- function(n, batch_rows) {
+  grp <- integer(length(n)); b <- 1L; acc <- 0
+  for (k in seq_along(n)) {
+    if (acc > 0 && acc + n[[k]] > batch_rows) { b <- b + 1L; acc <- 0 }
+    grp[[k]] <- b; acc <- acc + n[[k]]
+  }
+  grp
+}
+
+# Finish or roll back an interrupted compaction of one expr/<assay> dir.
+.scroll_compact_recover <- function(adir) {
+  tmp <- file.path(adir, ".compact.parquet.tmp")
+  done <- file.path(adir, ".compact-done")
+  if (file.exists(done) && file.exists(tmp)) {         # complete: swap it in
+    unlink(list.files(adir, pattern = "\\.parquet$", full.names = TRUE))
+    file.rename(tmp, file.path(adir, "part-0.parquet"))
+  } else if (file.exists(tmp)) unlink(tmp)               # incomplete: discard
+  unlink(done)
   invisible(NULL)
 }
 

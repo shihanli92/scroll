@@ -70,3 +70,27 @@ test_that("a filter-invariant score is added for every cell, even from a filtere
     expect_equal(sum(!is.na(reg$derived()$cols$s2$values)), shown)
   })
 })
+
+test_that("sessions share plot-cache keys until one adds its own columns", {
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con), add = TRUE)
+  panels <- Filter(function(p) p$id %in% c("dimplot", "signature"), scroll:::.scroll_builtin_panels())
+  # two sessions add a column of the same name and version, from different genes
+  key_for <- function(genes) {
+    key <- NULL
+    shiny::testServer(function(input, output, session) {
+      reg <- scroll:::.scroll_wire(input, output, session, data, panels)
+    }, {
+      key <<- list(before = reg$cache_key())
+      session$setInputs(`signature-sig` = genes, `signature-method` = "mean",
+                        `signature-view` = "umap", `signature-compute` = 1)
+      session$setInputs(`signature-col_name` = "sig", `signature-col_groups` = FALSE,
+                        `signature-col_add` = 1)
+      key$after <<- reg$cache_key()
+    })
+    key
+  }
+  a <- key_for(c("CD3D", "CD4")); b <- key_for(c("CD3D", "CD8A"))
+  expect_identical(a$before, b$before)          # nothing added: one shared cache entry
+  expect_false(identical(a$after, b$after))     # same name + version, different data
+})
