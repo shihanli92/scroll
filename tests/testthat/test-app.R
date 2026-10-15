@@ -329,4 +329,26 @@ test_that("module conditions are rewritten to full input ids", {
   expect_equal(f("input['fill'] && input['fill'].length > 1", ns),
                "input['ds1-ridge-fill'] && input['ds1-ridge-fill'].length > 1")
   expect_equal(f("input[\"x\"]", ns), "input['ds1-ridge-x']")
+  # not input references: left alone
+  expect_equal(f("myinput.x == 1 && 'input.y' != output.z", ns),
+               "myinput.x == 1 && 'input.y' != output.z")
+  expect_equal(f("true", ns), "true")
+  expect_equal(f("input[ 'a' ] == input.b", ns), "input['ds1-ridge-a'] == input['ds1-ridge-b']")
+})
+
+test_that("no panel UI uses conditionalPanel(ns = ) (slow under scroll_multi_app)", {
+  src <- list.files(test_path("..", "..", "R"), pattern = "\\.R$", full.names = TRUE)
+  skip_if(!length(src), "package sources not available")
+  # walk the parsed code for conditionalPanel( / shiny::conditionalPanel( calls with ns =
+  bad <- function(e) {
+    if (!is.call(e)) return(FALSE)
+    fn <- e[[1]]
+    is_cp <- identical(fn, quote(conditionalPanel)) ||
+      (is.call(fn) && identical(fn[[1]], quote(`::`)) && identical(fn[[3]], quote(conditionalPanel)))
+    if (is_cp && "ns" %in% names(e)) return(TRUE)
+    any(vapply(as.list(e)[-1], function(a) !missing(a) && bad(a), logical(1)))
+  }
+  hits <- Filter(function(f) any(vapply(as.list(parse(f, keep.source = FALSE)), bad, logical(1))), src)
+  expect_identical(basename(hits), character(0))
+  expect_true(bad(quote(div(shiny::conditionalPanel("x", div(p(1)), ns = ns)))))   # it can see one
 })

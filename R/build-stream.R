@@ -92,8 +92,12 @@ scroll_build_stream <- function(outdir, sources, reader, assays = NULL,
          "give them ids that differ in letters or digits (`id_of`).", call. = FALSE)
   }
 
-  kept_style <- if (dir.exists(outdir) && isTRUE(overwrite)) .scroll_keep_style(outdir)
-  if (dir.exists(outdir) && isTRUE(overwrite)) unlink(outdir, recursive = TRUE)
+  kept_style <- NULL
+  if (dir.exists(outdir) && isTRUE(overwrite)) {
+    .scroll_check_wipe(outdir)
+    kept_style <- .scroll_keep_style(outdir)
+    unlink(outdir, recursive = TRUE)
+  }
   dir.create(file.path(outdir, "expr"), recursive = TRUE, showWarnings = FALSE)
   .scroll_restore_style(outdir, kept_style)       # saved plot styles survive a rebuild
   tmp_root <- file.path(outdir, ".stream_tmp")

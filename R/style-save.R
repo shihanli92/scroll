@@ -80,11 +80,16 @@
   out
 }
 
-# All saved styles for a project: a named list, panel id -> entry. Never errors.
-.scroll_read_styles <- function(dir) {
+# All saved styles for a project: a named list, panel id -> entry. Never errors,
+# unless `strict`: Save must not treat a file it can't read as empty, or rewriting
+# it would drop every other panel's saved style.
+.scroll_read_styles <- function(dir, strict = FALSE) {
   path <- .scroll_style_path(dir)
   if (is.null(dir) || !file.exists(path)) return(list())
   bad <- function(why) {
+    if (strict)
+      stop(basename(path), " could not be read (", why, "). Fix or delete it, then save ",
+           "again; nothing was written, so the styles saved in it are kept.", call. = FALSE)
     warning("scroll: ignoring ", path, " (", why, ").", call. = FALSE)
     list()
   }
@@ -182,7 +187,7 @@
   dirty <- names(cur)[!vapply(names(cur), function(k)
     .scroll_style_same(cur[[k]], ctx$saved[[k]]), logical(1))]
   if (!length(dirty)) return(character(0))
-  disk <- .scroll_read_styles(data$dir)
+  disk <- .scroll_read_styles(data$dir, strict = TRUE)
   for (k in dirty) { disk[[k]] <- cur[[k]]; ctx$saved[[k]] <- cur[[k]] }
   if (file.access(data$dir, 2L) == 0L) .scroll_write_styles(data$dir, disk)
   else .scroll_write_styles_inplace(data$dir, disk)        # only style.yaml is writable

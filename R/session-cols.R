@@ -9,6 +9,7 @@
 #   [D1, D2]: 2, [D3, D4]: 1      several levels -> one label
 #   D5: 3                         one level -> a label
 #   *: other                      every level not listed (default: missing)
+#   ["B, memory", "T:CD4"]: x     quote a level with a comma, colon or bracket
 #
 # config `session_columns: false` hides the section.
 
@@ -40,31 +41,42 @@
 
 # Parse a mapping against a column's levels. Returns list(map = named character
 # (level -> label), default = label for unlisted levels or NA). Stops with a
-# readable message on anything it can't use.
+# readable message on anything it can't use. A level (or label) that holds a comma,
+# colon or bracket is written in quotes: ["B, memory", 'Treg [act]']: x.
 .scroll_parse_level_map <- function(text, levels) {
   text <- paste(text %||% "", collapse = "\n")
   if (!nzchar(trimws(text))) stop("Type a mapping, e.g. [D1, D2]: 2, [D3, D4]: 1", call. = FALSE)
-  unq <- function(x) gsub("^[\"'`]+|[\"'`]+$", "", trimws(x))
-  # an entry is "[a, b]: label" or "a: label"; commas inside [] belong to the group
-  rx <- "(\\[[^]]*\\]|[^,:\n\\[\\]]+)\\s*:\\s*([^,\n\\[\\]]+)"
-  hits <- regmatches(text, gregexpr(rx, text, perl = TRUE))[[1]]
-  rest <- gsub("[\\s,\\[\\]]", "", gsub(rx, "", text, perl = TRUE), perl = TRUE)
-  if (!length(hits) || nzchar(rest))
-    stop("Couldn't read the mapping", if (nzchar(rest)) paste0(" near '", substr(rest, 1, 20), "'"),
-         ". Use [level, level]: label, separated by commas.", call. = FALSE)
   map <- character(0); default <- NA_character_
-  for (h in hits) {
-    lhs <- sub(rx, "\\1", h, perl = TRUE); lab <- unq(sub(rx, "\\2", h, perl = TRUE))
-    if (!nzchar(lab)) stop("An entry has an empty label: ", trimws(h), call. = FALSE)
-    vals <- unq(strsplit(gsub("^\\[|\\]$", "", trimws(lhs)), ",", fixed = TRUE)[[1]])
+  for (entry in .scroll_map_split(text, c(",", "\n"))) {
+    entry <- trimws(entry)
+    if (!nzchar(entry)) next
+    at <- .scroll_map_colons(entry)
+    if (!length(at))
+      stop("Couldn't read '", substr(entry, 1, 30), "'. Use [level, level]: label, ",
+           "separated by commas.", call. = FALSE)
+    at <- at[[length(at)]]                      # the label follows the last colon
+    lhs <- trimws(substr(entry, 1, at - 1L)); lab <- .scroll_map_unquote(substr(entry, at + 1L, nchar(entry)))
+    if (!nzchar(lab)) stop("An entry has an empty label: ", entry, call. = FALSE)
+    if (grepl("[][]", lab) && !.scroll_map_quoted(trimws(substr(entry, at + 1L, nchar(entry)))))
+      stop("Couldn't read the label '", lab, "'. Put a label with brackets in quotes.", call. = FALSE)
+    vals <- if (startsWith(lhs, "[") && endsWith(lhs, "]"))
+              .scroll_map_split(substr(lhs, 2L, nchar(lhs) - 1L), ",")
+            else lhs
+    vals <- vapply(vals, .scroll_map_unquote, "", USE.NAMES = FALSE)
     vals <- vals[nzchar(vals)]
+    if (!length(vals)) stop("An entry names no levels: ", entry, call. = FALSE)
     if (identical(vals, "*")) { default <- lab; next }
     # exact level names first, then a case-insensitive match
     hit <- match(vals, levels)
     ci <- is.na(hit)
     hit[ci] <- match(tolower(vals[ci]), tolower(levels))
-    if (anyNA(hit))
-      stop("Not a level of this column: ", paste(vals[is.na(hit)], collapse = ", "), call. = FALSE)
+    if (anyNA(hit)) {
+      miss <- vals[is.na(hit)]
+      stop("Not a level of this column: ", paste(miss, collapse = ", "),
+           if (any(grepl(":", miss, fixed = TRUE))) " (a comma missing between entries?)"
+           else ". Put a level name with a comma, colon or bracket in quotes",
+           call. = FALSE)
+    }
     lv <- levels[hit]
     dup <- lv[lv %in% names(map) & map[lv] != lab]
     if (length(dup)) stop("Mapped twice: ", paste(unique(dup), collapse = ", "), call. = FALSE)
@@ -72,6 +84,41 @@
   }
   if (!length(map) && is.na(default)) stop("The mapping names no levels.", call. = FALSE)
   list(map = map, default = default)
+}
+
+# Walk `text` tracking quotes and [ ] depth: the positions of the characters in
+# `seps` that sit outside both. A stray closing bracket at the top level is ignored.
+.scroll_map_scan <- function(text, seps) {
+  ch <- strsplit(text, "", fixed = TRUE)[[1]]
+  q <- ""; depth <- 0L; at <- integer(0); drop <- integer(0)
+  for (k in seq_along(ch)) {
+    c <- ch[[k]]
+    if (nzchar(q)) { if (c == q) q <- ""; next }
+    if (c %in% c("\"", "'", "`")) q <- c
+    else if (c == "[") depth <- depth + 1L
+    else if (c == "]") { if (depth > 0L) depth <- depth - 1L else drop <- c(drop, k) }
+    else if (depth == 0L && c %in% seps) at <- c(at, k)
+  }
+  list(chars = ch, at = at, drop = drop)
+}
+
+.scroll_map_split <- function(text, seps) {
+  sc <- .scroll_map_scan(text, seps)
+  ch <- sc$chars; ch[sc$drop] <- ""
+  cut <- c(0L, sc$at, length(ch) + 1L)
+  vapply(seq_len(length(cut) - 1L), function(i)
+    paste(ch[seq_len(cut[i + 1L] - cut[i] - 1L) + cut[i]], collapse = ""), "")
+}
+
+.scroll_map_colons <- function(entry) .scroll_map_scan(entry, ":")$at
+
+.scroll_map_quoted <- function(x)
+  nchar(x) >= 2L && substr(x, 1, 1) %in% c("\"", "'", "`") &&
+    substr(x, nchar(x), nchar(x)) == substr(x, 1, 1)
+
+.scroll_map_unquote <- function(x) {
+  x <- trimws(gsub("]+$", "", trimws(x)))   # a stray closing bracket
+  if (.scroll_map_quoted(x)) substr(x, 2L, nchar(x) - 1L) else x
 }
 
 # The new column's values, aligned to `src` (the source column's values).

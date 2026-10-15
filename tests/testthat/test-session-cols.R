@@ -88,3 +88,12 @@ test_that("New column can map a subset view's own column", {
     expect_true(all(v[!is.na(src)] == ifelse(src[!is.na(src)] == lv[1], "a", "b")))
   })
 })
+
+test_that("quoted levels may hold commas, colons and brackets; a missing comma is caught", {
+  lv <- c("D1", "D2", "B, memory", "Treg [act]", "T:CD4")
+  p <- scroll:::.scroll_parse_level_map('["B, memory", "Treg [act]"]: x, "T:CD4": y, D1: z', lv)
+  expect_equal(p$map, c(`B, memory` = "x", `Treg [act]` = "x", `T:CD4` = "y", D1 = "z"))
+  expect_equal(scroll:::.scroll_parse_level_map("[T:CD4]: a", lv)$map, c(`T:CD4` = "a"))
+  expect_error(scroll:::.scroll_parse_level_map("D1: 2 D2: 3", lv), "comma missing")
+  expect_error(scroll:::.scroll_parse_level_map("[B, memory]: x", lv), "in quotes")
+})

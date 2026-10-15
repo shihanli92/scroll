@@ -128,6 +128,7 @@ scroll_build <- function(object, outdir,
   kept_style <- NULL
   if (dir.exists(outdir)) {
     if (overwrite) {
+      .scroll_check_wipe(outdir)
       kept_style <- .scroll_keep_style(outdir)    # saved plot styles survive a rebuild
       unlink(outdir, recursive = TRUE)
     }
@@ -205,6 +206,30 @@ scroll_build <- function(object, outdir,
 
   message("scroll project built at: ", normalizePath(outdir))
   invisible(outdir)
+}
+
+# `overwrite = TRUE` deletes `outdir` with everything in it, so only do that to a
+# scroll project (or an empty folder) -- never the working directory, one of its
+# parents, the home folder or a root, which a typo or a wrong variable can name.
+.scroll_check_wipe <- function(outdir) {
+  p <- normalizePath(outdir, winslash = "/", mustWork = TRUE)
+  wd <- normalizePath(getwd(), winslash = "/")
+  home <- normalizePath("~", winslash = "/")
+  inside <- function(child, parent) identical(child, parent) ||
+    startsWith(child, paste0(sub("/$", "", parent), "/"))
+  if (inside(wd, p) || identical(p, home) || identical(dirname(p), p))
+    stop("overwrite = TRUE would delete '", p, "', which is ",
+         if (identical(dirname(p), p)) "a root folder"
+         else if (identical(p, home)) "your home folder"
+         else "the working directory or a folder containing it",
+         ". Build into a project subfolder instead (e.g. \"projects/<name>\").", call. = FALSE)
+  marks <- c("manifest.yaml", "cells.parquet", "expr", ".stream_sources.txt", ".stream")
+  if (length(list.files(p, all.files = TRUE, no.. = TRUE)) &&
+      !any(file.exists(file.path(p, marks))))
+    stop("overwrite = TRUE would delete '", p, "', which is not a scroll project ",
+         "(no manifest.yaml, cells.parquet or expr/). Pick a new or empty folder, or ",
+         "delete it yourself first.", call. = FALSE)
+  invisible(TRUE)
 }
 
 # SeuratObject is only needed for the offline build (reading the Seurat object);
@@ -351,6 +376,13 @@ scroll_build <- function(object, outdir,
   trip <- Matrix::summary(mat)             # i (feature), j (cell), x (value)
   max_a <- max(trip$x)
   value <- trip$x
+  # The 0..255 code covers 0..max only, so negative values (centred or integrated
+  # data, CLR protein data) would all become 0: store such an assay unquantized.
+  if (quantize && min(trip$x) < 0) {
+    message(sprintf(paste0("scroll: assay '%s' has negative values (min %.3g); storing it ",
+                           "unquantized (float32) so they are kept."), assay, min(trip$x)))
+    quantize <- FALSE
+  }
   if (quantize) {
     value <- as.integer(pmin(pmax(round(value / max_a * 255), 0L), 255L))
   }
@@ -402,7 +434,8 @@ scroll_build <- function(object, outdir,
     arrow::write_parquet(tbl, file.path(dest, sprintf("part-%d.parquet", offset)),
                          compression = "zstd")
   }
-  list(features = feats, max = max_a, n_features = nfeat, stats = stats, ranks = isTRUE(ranks))
+  list(features = feats, max = max_a, n_features = nfeat, stats = stats, ranks = isTRUE(ranks),
+       quantize = quantize)
 }
 
 # The expr store's schema: `rank2` (uint16) only when within-cell ranks are baked.
@@ -531,7 +564,10 @@ scroll_build <- function(object, outdir,
 # Merge one assay's parts into `.compact.parquet.tmp`, then swap it in.
 .scroll_compact_assay <- function(adir, parts, quantize, batch_rows) {
   ds <- arrow::open_dataset(parts)
-  sch <- .scroll_expr_schema(quantize, "rank2" %in% names(ds$schema))
+  # keep the stored value type: an assay with negative values is float32 even in
+  # a quantized project
+  vt <- ds$schema$GetFieldByName("value")$type$ToString()
+  sch <- .scroll_expr_schema(identical(vt, "uint8"), "rank2" %in% names(ds$schema))
   # rows per feature, in arrow's own (byte-wise) string order, so the name ranges
   # below partition the rows exactly
   cnt <- dplyr::collect(dplyr::arrange(dplyr::count(ds, .data$feature), .data$feature))
@@ -736,6 +772,18 @@ scroll_add_subset <- function(object, sub_object, name, embeddings = "auto",
     object[[newn]] <- SeuratObject::CreateDimReducObject(
       embeddings = em, key = sprintf("%s_", gsub("[^A-Za-z0-9]", "", newn)),
       assay = SeuratObject::DefaultAssay(object))
+  }
+  # never overwrite a parent column: the copy is NA outside the subset, so the
+  # whole-dataset annotation would be lost (re-adding this same subset is fine)
+  if (length(meta)) {
+    targets <- paste0(prefix, meta)
+    mine <- unlist(SeuratObject::Misc(object, "scroll_subsets")[[name]]$meta)
+    clash <- setdiff(intersect(targets, colnames(object[[]])), mine)
+    if (length(clash))
+      stop(sprintf(paste0("scroll_add_subset('%s'): would overwrite the parent's column(s) %s ",
+                          "(the copy is NA outside the subset). Give them a prefix, e.g. ",
+                          "prefix = \"%s_\"."), name,
+                   paste0("'", clash, "'", collapse = ", "), name), call. = FALSE)
   }
   for (mc in meta) {
     src_vals <- sub_object[[mc]][[1]]

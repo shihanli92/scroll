@@ -201,7 +201,9 @@ scroll_aggregate_counts <- function(con, assay, mapping) {
 #' @return Numeric vector in normalized units.
 #' @export
 scroll_dequantize <- function(values, manifest, assay) {
-  if (!isTRUE(manifest$quantize)) return(as.numeric(values))
+  # an assay can opt out of a quantized project (one with negative values)
+  if (!isTRUE(manifest$quantize) || isFALSE(manifest$assays[[assay]]$quantize))
+    return(as.numeric(values))
   max_a <- manifest$assays[[assay]]$max
   as.numeric(values) / 255 * max_a
 }

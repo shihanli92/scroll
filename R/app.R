@@ -302,6 +302,30 @@ scroll_reset_panels <- function() {
   specs
 }
 
+# Applied filters against the current specs: a filter whose column is gone is
+# dropped; a categorical one keeps only the values its column still has, a numeric
+# one is clamped to the column's range -- and either is dropped once nothing is
+# left or it no longer narrows anything. (A session column re-added under the same
+# name otherwise kept the old values, and every cell was filtered out.)
+.scroll_filter_reconcile <- function(applied, specs, data) {
+  if (!length(applied)) return(applied)
+  by_id <- stats::setNames(specs, vapply(specs, `[[`, "", "id"))
+  out <- list()
+  for (id in names(applied)) {
+    s <- by_id[[id]]
+    if (is.null(s)) next
+    v <- applied[[id]]$value
+    if (identical(s$type, "categorical")) {
+      v <- v[v %in% .scroll_meta_levels(data, s$col)]
+    } else {
+      v <- c(max(v[[1]], s$min), min(v[[2]], s$max))
+      if (v[[1]] > v[[2]]) next
+    }
+    if (.scroll_filter_active(s, v)) out[[id]] <- c(s, list(value = v))
+  }
+  out
+}
+
 # A collapsible <details> section (native, no JS). open = TRUE renders it expanded.
 .scroll_details <- function(title, ..., open = TRUE)
   tags$details(class = "scroll-ctl-details", open = if (isTRUE(open)) NA,
@@ -379,15 +403,17 @@ scroll_reset_panels <- function() {
     .scroll_filter_specs(data, active_view())
   })
   output$scroll_filter_controls <- renderUI({
-    specs <- specs_r(); applied <- isolate(filt_rv())
+    specs <- specs_r(); applied <- .scroll_filter_reconcile(isolate(filt_rv()), specs, data)
     if (!length(specs)) return(helpText("No columns to filter."))
     tagList(lapply(specs, function(s)
       .scroll_filter_control(s, data, session$ns, applied[[s$id]]$value)))
   })
+  # the column list changed (View switch, session column added / re-added / removed):
+  # applied filters keep only what still exists in their column
   observeEvent(specs_r(), {
-    ids <- vapply(specs_r(), `[[`, "", "id")
     cur <- isolate(filt_rv())
-    if (length(cur) && !all(names(cur) %in% ids)) filt_rv(cur[names(cur) %in% ids])
+    new <- .scroll_filter_reconcile(cur, specs_r(), data)
+    if (!identical(new, cur)) filt_rv(new)
   }, ignoreInit = TRUE)
   observeEvent(input$scroll_filter_apply, {
     app <- list()

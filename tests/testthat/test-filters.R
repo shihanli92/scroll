@@ -117,3 +117,39 @@ test_that("session columns (New column, Add as column) can be filtered on", {
     expect_true(all(as.character(reg$cells()$celltype) == lv[1]))
   })
 })
+
+test_that("an applied filter on a re-added session column keeps only what still exists", {
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  panels <- Filter(function(p) p$id == "dimplot", scroll:::.scroll_builtin_panels())
+  shiny::testServer(function(input, output, session) {
+    reg <- scroll:::.scroll_wire(input, output, session, data, panels, prewarm = FALSE)
+  }, {
+    n <- nrow(reg$cells())
+    session$setInputs(scroll_newcol_from = "celltype", scroll_newcol_name = "grp",
+                      scroll_newcol_map = "[T, NK]: lymph, *: other", scroll_newcol_add = 1)
+    id <- scroll:::.scroll_filter_id("grp")
+    do.call(session$setInputs, stats::setNames(list("lymph"), id))
+    session$setInputs(scroll_filter_apply = 1)
+    expect_lt(nrow(reg$cells()), n)
+    # re-add `grp` with new labels: "lymph" is gone, so the filter goes too
+    session$setInputs(scroll_newcol_map = "[T]: tcell, *: rest", scroll_newcol_add = 2)
+    expect_identical(nrow(reg$cells()), n)
+  })
+})
+
+test_that(".scroll_filter_reconcile trims values and clamps ranges", {
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  cat_s <- list(col = "celltype", type = "categorical", id = "f_ct")
+  num_s <- list(col = "score", type = "numeric", id = "f_sc", min = 0, max = 10)
+  applied <- list(f_ct = c(cat_s, list(value = c("T", "gone"))),
+                  f_sc = c(num_s, list(value = c(-5, 4))),
+                  f_old = list(col = "old", type = "categorical", id = "f_old", value = "x"))
+  out <- scroll:::.scroll_filter_reconcile(applied, list(cat_s, num_s), data)
+  expect_identical(names(out), c("f_ct", "f_sc"))
+  expect_identical(out$f_ct$value, "T")
+  expect_identical(out$f_sc$value, c(0, 4))
+  wide <- c(num_s, list(value = c(-5, 20)))           # covers the new range: no filter
+  expect_length(scroll:::.scroll_filter_reconcile(list(f_sc = wide), list(num_s), data), 0)
+})

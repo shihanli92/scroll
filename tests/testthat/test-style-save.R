@@ -168,3 +168,16 @@ test_that("Save writes style.yaml in place when only that file is writable", {
   expect_false(scroll:::.scroll_style_writable(d))
   expect_match(scroll:::.scroll_style_unwritable_msg(d), "chown")
 })
+
+test_that("Save refuses to rewrite a style.yaml it cannot read", {
+  dir <- tempfile("style-bad"); dir.create(dir)
+  scroll:::.scroll_write_styles(dir, list(dimplot = list(theme = list(legend = "bottom")),
+                                          violin = list(theme = list(legend = "none"))))
+  cat("  oops: [unclosed\n", file = file.path(dir, "style.yaml"), append = TRUE)
+  before <- readLines(file.path(dir, "style.yaml"))
+  ctx <- new.env(); ctx$saved <- list()
+  ctx$snap <- list(heatmap = function() list(theme = list(legend = "top")))
+  expect_error(scroll:::.scroll_save_styles(list(dir = dir), ctx), "could not be read.*nothing was written")
+  expect_identical(readLines(file.path(dir, "style.yaml")), before)
+  expect_warning(expect_identical(scroll:::.scroll_read_styles(dir), list()), "ignoring")
+})

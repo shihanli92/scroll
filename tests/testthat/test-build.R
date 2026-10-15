@@ -214,3 +214,39 @@ test_that("default_assay names an exported assay", {
   expect_identical(data$manifest$default_assay, "ADT")
   expect_gt(nrow(data$query1("ADT", unlist(data$manifest$assays$ADT$features)[1])), 0)
 })
+
+test_that("negative values survive quantize = TRUE (that assay is stored unquantized)", {
+  obj <- make_test_object()
+  adt <- SeuratObject::GetAssayData(obj, assay = "ADT", layer = "data")
+  adt <- Matrix::Matrix(as.matrix(adt) - 1, sparse = TRUE)        # centred-style data
+  obj <- SeuratObject::SetAssayData(obj, assay = "ADT", layer = "data", new.data = adt)
+  dir <- tempfile("neg")
+  expect_message(suppressWarnings(scroll_build(obj, dir, assays = c("RNA", "ADT"), embeddings = "umap",
+                                               meta_cols = "celltype", verbose = FALSE)),
+                 "negative values")
+  man <- scroll_manifest(dir)
+  expect_true(man$quantize); expect_false(man$assays$ADT$quantize)
+  expect_null(man$assays$RNA$quantize)
+  data <- scroll:::.scroll_load(dir); on.exit(scroll_disconnect(data$con))
+  f <- rownames(adt)[1]
+  v <- scroll:::.scroll_expr_vector(data$cells, data$query1("ADT", f))
+  expect_equal(v, unname(as.matrix(adt)[f, ]), tolerance = 1e-6)
+  expect_lt(min(v), 0)
+})
+
+test_that("overwrite = TRUE only deletes a scroll project or an empty folder", {
+  other <- tempfile("not-a-project"); dir.create(other)
+  writeLines("keep me", file.path(other, "notes.txt"))
+  expect_error(suppressMessages(scroll_build(make_test_object(), other, assays = "RNA",
+                                             embeddings = "umap", meta_cols = "celltype",
+                                             overwrite = TRUE, verbose = FALSE)),
+               "not a scroll project")
+  expect_true(file.exists(file.path(other, "notes.txt")))
+  old <- setwd(other); on.exit(setwd(old))
+  expect_error(scroll:::.scroll_check_wipe("."), "working directory")
+  expect_error(scroll:::.scroll_check_wipe(".."), "working directory")
+  expect_error(scroll:::.scroll_check_wipe("~"), "home folder|working directory")
+  setwd(old)
+  empty <- tempfile("empty"); dir.create(empty)
+  expect_true(scroll:::.scroll_check_wipe(empty))
+})

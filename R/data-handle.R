@@ -34,52 +34,78 @@
     config = scroll_config(dir),
     con = con
   )
-  # bound query helpers that dequantize to normalized units, memoized by one LRU
-  # so cosmetic re-renders, the vector-export path, and re-selecting a recent gene
-  # never re-hit the store.
-  cache <- .scroll_lru(256L)
-  d$query1 <- .scroll_cached_query(cache, manifest, "1",
-                                   function(a, f) scroll_query_feature(con, a, f))
-  d$queryN <- .scroll_cached_query(cache, manifest, "N",
-                                   function(a, f) scroll_query_features(con, a, f))
+  # bound query helpers that dequantize to normalized units, memoized per feature
+  # by one LRU (bounded in bytes) so cosmetic re-renders, the vector-export path,
+  # re-selecting a recent gene, and a gene list edited one gene at a time never
+  # re-read what they already have.
+  cache <- .scroll_lru(max_bytes = .scroll_query_cache_bytes())
+  d$query1 <- function(assay, feature) {
+    .scroll_cached_features(cache, manifest, con, assay, feature)[[1]]
+  }
+  d$queryN <- function(assay, features) {
+    parts <- .scroll_cached_features(cache, manifest, con, assay, features)
+    n <- vapply(parts, nrow, integer(1))
+    data.frame(feature = rep(names(parts), n),
+               cell = unlist(lapply(parts, `[[`, "cell"), use.names = FALSE) %||% integer(0),
+               value = unlist(lapply(parts, `[[`, "value"), use.names = FALSE) %||% numeric(0),
+               stringsAsFactors = FALSE)
+  }
   d
 }
 
-# One dequantizing, LRU-cached query closure. `prefix` ("1"/"N") disambiguates the
-# single- vs multi-feature cache keys; `run(assay, features)` does the store read.
-# For a single feature `sort(unique(.))` is a no-op, so both closures share one key
-# scheme.
-.scroll_cached_query <- function(cache, manifest, prefix, run) {
-  function(assay, features) {
-    key <- paste0(prefix, "|", assay, "|", paste(sort(unique(features)), collapse = ","))
-    hit <- cache$get(key)
-    if (is.null(hit)) {
-      hit <- run(assay, features)
-      if (nrow(hit)) hit$value <- scroll_dequantize(hit$value, manifest, assay)
-      cache$set(key, hit)
+# The query cache's size, in MB: option `scroll.query_cache_mb` (default 512).
+.scroll_query_cache_bytes <- function()
+  as.numeric(getOption("scroll.query_cache_mb", 512)) * 2^20
+
+# Each requested feature's (cell, value) table, dequantized, from the cache; the
+# features it lacks are read in one store query and cached one by one. Returns a
+# named list in `features` order (unique), each a data.frame (0 rows if unexpressed).
+.scroll_cached_features <- function(cache, manifest, con, assay, features) {
+  features <- unique(as.character(features))
+  keys <- paste0(assay, "|", features)
+  out <- stats::setNames(lapply(keys, cache$get), features)
+  miss <- features[vapply(out, is.null, logical(1))]
+  if (length(miss)) {
+    long <- if (length(miss) == 1L) {                  # `==` prunes row groups best
+              one <- scroll_query_feature(con, assay, miss)
+              data.frame(feature = rep(miss, nrow(one)), cell = one$cell, value = one$value,
+                         stringsAsFactors = FALSE)
+            } else scroll_query_features(con, assay, miss)
+    if (nrow(long)) long$value <- scroll_dequantize(long$value, manifest, assay)
+    by <- split(long[, c("cell", "value"), drop = FALSE],
+                factor(as.character(long$feature), levels = miss))
+    for (f in miss) {
+      v <- by[[f]]; rownames(v) <- NULL
+      cache$set(paste0(assay, "|", f), v, size = 16 * nrow(v) + 1000)
+      out[[f]] <- v
     }
-    hit
   }
+  out
 }
 
-# A bounded LRU over query results keyed by a string. Bounded so a long session
-# browsing many genes cannot grow memory without limit; each entry is one
-# feature's small sparse long table, so a generous bound is cheap.
-.scroll_lru <- function(max = 256L) {
+# A bounded LRU over query results keyed by a string. Bounded by the entries'
+# estimated bytes (and their number), so a long session -- or many sessions of one
+# app process, which share it -- cannot grow memory without limit.
+.scroll_lru <- function(max = 4096L, max_bytes = Inf) {
   store <- new.env(parent = emptyenv())
-  order <- character(0)
+  order <- character(0); sizes <- numeric(0); total <- 0
   list(
     get = function(key) {
       if (!exists(key, store, inherits = FALSE)) return(NULL)
       order <<- c(setdiff(order, key), key)                # accessing bumps to MRU
       base::get(key, store)
     },
-    set = function(key, val) {
+    set = function(key, val, size = 0) {
+      if (!is.na(sizes[key])) total <<- total - sizes[[key]]
       order <<- c(setdiff(order, key), key)                # most-recently-used last
-      assign(key, val, store)
-      while (length(order) > max) {                        # evict least-recently-used
-        rm(list = order[[1]], envir = store); order <<- order[-1L]
+      assign(key, val, store); sizes[key] <<- size; total <<- total + size
+      # evict least-recently-used (always keeping the entry just set)
+      while (length(order) > 1L && (length(order) > max || total > max_bytes)) {
+        k <- order[[1]]
+        rm(list = k, envir = store); order <<- order[-1L]
+        total <<- total - sizes[[k]]; sizes <<- sizes[names(sizes) != k]
       }
-    }
+    },
+    size = function() total
   )
 }

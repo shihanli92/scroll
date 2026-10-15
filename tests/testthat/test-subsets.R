@@ -264,3 +264,22 @@ test_that("pseudobulk aggregate-by exposes subset-scoped columns in a subset vie
     expect_gt(length(.scroll_combo_choices(cells_r(), "tsub")), 0)
   })
 })
+
+test_that("scroll_add_subset will not overwrite a parent column", {
+  obj <- make_test_object()
+  tcells <- colnames(obj)[obj$celltype == "T"]
+  sub <- subset(obj, cells = tcells)
+  sub[["umap"]] <- SeuratObject::CreateDimReducObject(
+    embeddings = matrix(stats::rnorm(length(tcells) * 2), ncol = 2,
+                        dimnames = list(tcells, c("UMAP_1", "UMAP_2"))),
+    key = "UMAP_", assay = "RNA")
+  expect_error(scroll_add_subset(obj, sub, "tc", embeddings = c(umap_tc = "umap"),
+                                 meta = "condition"),
+               "overwrite the parent's column.*'condition'.*prefix = \"tc_\"")
+  # re-adding the same subset may replace its own columns
+  sub$tsub <- "Tfh"
+  out <- scroll_add_subset(obj, sub, "tc", embeddings = c(umap_tc = "umap"), meta = "tsub")
+  sub$tsub <- "Th1"
+  out <- scroll_add_subset(out, sub, "tc", embeddings = c(umap_tc = "umap"), meta = "tsub")
+  expect_setequal(stats::na.omit(out$tsub), "Th1")
+})

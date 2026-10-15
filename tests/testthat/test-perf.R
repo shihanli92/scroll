@@ -61,6 +61,31 @@ test_that("query results are memoized (repeat lookup does not re-hit the store)"
     .package = "scroll")
 })
 
+test_that("a gene list reuses the genes already read, and the cache is bounded in bytes", {
+  data <- scroll:::.scroll_load(test_project())
+  on.exit(scroll_disconnect(data$con))
+  asked <- character(0)
+  real <- scroll::scroll_query_features
+  testthat::with_mocked_bindings(
+    scroll_query_features = function(con, assay, features) {
+      asked <<- c(asked, features); real(con, assay, features)
+    },
+    {
+      a <- data$queryN("RNA", c("CD3D", "CD8A"))
+      b <- data$queryN("RNA", c("CD3D", "CD8A", "NKG7", "MS4A1"))
+      expect_setequal(asked, c("CD3D", "CD8A", "NKG7", "MS4A1"))   # CD3D / CD8A read once
+      expect_equal(b[b$feature %in% c("CD3D", "CD8A"), ], a, ignore_attr = TRUE)
+      expect_equal(data$query1("RNA", "NKG7"),
+                   b[b$feature == "NKG7", c("cell", "value")], ignore_attr = TRUE)
+    },
+    .package = "scroll")
+  lru <- scroll:::.scroll_lru(max_bytes = 100)
+  lru$set("a", 1, size = 60); lru$set("b", 2, size = 60)   # over budget: 'a' goes
+  expect_null(lru$get("a")); expect_equal(lru$get("b"), 2); expect_equal(lru$size(), 60)
+  lru$set("big", 3, size = 500)                            # a lone oversized entry stays
+  expect_equal(lru$get("big"), 3); expect_null(lru$get("b"))
+})
+
 test_that("cosmetic changes do not re-query; data changes do (featureplot)", {
   data <- scroll:::.scroll_load(test_project())
   on.exit(scroll_disconnect(data$con))

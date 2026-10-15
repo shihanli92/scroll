@@ -20,19 +20,19 @@
   method <- match.arg(method)
   n <- nrow(cells)
   if (!length(genes) || n == 0) return(rep(0, n))
-  mat <- vapply(genes, function(g) {
-    v <- if (!is.null(long) && nrow(long))
-           long[long$feature == g, c("cell", "value"), drop = FALSE] else NULL
-    .scroll_expr_vector(cells, v)                       # dense, zero-filled, aligned to `cells`
-  }, numeric(n))
-  if (!is.matrix(mat)) mat <- matrix(mat, nrow = n)     # n == 1 guard
-  if (identical(method, "scaled")) {                    # z per gene over the shown cells
-    mat <- apply(mat, 2, function(x) {
-      s <- stats::sd(x); if (is.na(s) || s == 0) x * 0 else (x - mean(x)) / s
-    })
-    if (!is.matrix(mat)) mat <- matrix(mat, nrow = n)
+  # one pass to split the long table by gene, then a running sum: no per-gene rescan
+  # of `long` and no cells x genes matrix
+  by <- if (!is.null(long) && nrow(long))
+          split(long[, c("cell", "value"), drop = FALSE], as.character(long$feature)) else list()
+  acc <- numeric(n)
+  for (g in genes) {
+    x <- .scroll_expr_vector(cells, by[[g]])            # dense, zero-filled, aligned to `cells`
+    if (identical(method, "scaled")) {                  # z per gene over the shown cells
+      s <- stats::sd(x); x <- if (is.na(s) || s == 0) x * 0 else (x - mean(x)) / s
+    }
+    acc <- acc + x
   }
-  rowMeans(mat)
+  acc / length(genes)
 }
 
 # Per-gene mean expression across ALL cells (dequantized), for an assay. One grouped-sum
@@ -153,10 +153,11 @@
 
 .scroll_has_ranks <- function(manifest, assay) isTRUE(manifest$assays[[assay]]$ranks)
 
-# The signature genes' within-cell ranks as a cells x genes matrix (ranks, not x2):
-# stored ranks from the expr `rank2` column; a gene a cell doesn't express takes that
-# cell's zero-tie rank, from the per-cell positive / negative counts.
-.scroll_rank_matrix <- function(cells, genes, data, assay) {
+# Sum over the signature genes of `f(rank)`, per cell (ranks, not x2): stored ranks
+# from the expr `rank2` column; a gene a cell doesn't express takes that cell's
+# zero-tie rank, from the per-cell positive / negative counts. Accumulated a gene at
+# a time from one split of the query, so memory stays one vector per cell.
+.scroll_rank_sum <- function(cells, genes, data, assay, f = identity) {
   m <- data$manifest
   if (!.scroll_has_ranks(m, assay))
     stop("Rank-based scores need within-cell ranks: rebuild the project with ",
@@ -170,11 +171,15 @@
   i <- match(key, cs$cell)
   zero <- (2 * cs$n_pos[i] + (G - cs$n_pos[i] - cs$n_neg[i]) + 1) / 2
   zero[is.na(zero)] <- (G + 1) / 2                      # a cell with nothing stored
-  vapply(genes, function(g) {
-    sub <- long[long$feature == g, , drop = FALSE]
-    r <- sub$rank2[match(key, sub$cell)] / 2
-    ifelse(is.na(r), zero, r)
-  }, numeric(nrow(cells)))
+  by <- split(long[, c("cell", "rank2"), drop = FALSE], as.character(long$feature))
+  acc <- numeric(nrow(cells))
+  for (g in genes) {
+    sub <- by[[g]]
+    r <- if (is.null(sub)) zero else sub$rank2[match(key, sub$cell)] / 2
+    if (!is.null(sub)) r[is.na(r)] <- zero[is.na(r)]
+    acc <- acc + f(r)
+  }
+  acc
 }
 
 # UCell (Andreatta & Carmona 2021): 1 - U / (n * max_rank), with ranks at or beyond
@@ -185,10 +190,9 @@
   if (!length(genes) || !nrow(cells)) return(rep(0, nrow(cells)))
   max_rank <- min(max_rank, data$manifest$assays[[assay]]$n_features)
   if (length(genes) > max_rank) stop("The signature has more genes than the max rank.", call. = FALSE)
-  r <- pmin(.scroll_rank_matrix(cells, genes, data, assay), max_rank)
-  if (!is.matrix(r)) r <- matrix(r, nrow = nrow(cells))
+  rs <- .scroll_rank_sum(cells, genes, data, assay, function(r) pmin(r, max_rank))
   n <- length(genes); rmin <- n * (n + 1) / 2
-  1 - (rowSums(r) - rmin) / (n * max_rank - rmin)
+  1 - (rs - rmin) / (n * max_rank - rmin)
 }
 
 # AUCell-style (Aibar et al. 2017): the area under each cell's recovery curve over its
@@ -201,12 +205,10 @@
   genes <- intersect(genes, .scroll_features_of(data$manifest, assay))
   if (!length(genes) || !nrow(cells)) return(rep(0, nrow(cells)))
   thr <- auc_max_rank %||% ceiling(0.05 * data$manifest$assays[[assay]]$n_features)
-  r <- .scroll_rank_matrix(cells, genes, data, assay)
-  if (!is.matrix(r)) r <- matrix(r, nrow = nrow(cells))
   best <- seq_len(length(genes)); best <- best[best < thr]
   max_auc <- sum(thr - best)
   if (max_auc <= 0) return(rep(0, nrow(cells)))
-  rowSums(pmax(thr - r, 0)) / max_auc
+  .scroll_rank_sum(cells, genes, data, assay, function(r) pmax(thr - r, 0)) / max_auc
 }
 
 # ---- up / down signatures ---------------------------------------------------------
