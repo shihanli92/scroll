@@ -1,5 +1,61 @@
 # Changelog
 
+## scroll 0.3.17
+
+### Bug fixes
+
+- **Negative values are kept with `quantize = TRUE`.** The 0-255 code
+  covers 0 to the assay’s maximum only, so negative values (centred or
+  integrated data, CLR protein data) were all stored as 0. An assay with
+  negative values is now stored unquantized (float32), with a message at
+  build time; the manifest marks it `quantize: false` and
+  [`scroll_dequantize()`](https://shihanli92.github.io/scroll/reference/scroll_dequantize.md)
+  follows that.
+- **[`scroll_add_subset()`](https://shihanli92.github.io/scroll/reference/scroll_add_subset.md)
+  no longer overwrites a parent column.** With an explicit `meta =` (no
+  prefix), a column the parent already had (e.g. `condition`) was
+  replaced by the subset’s copy, `NA` outside the subset. That is now an
+  error that suggests a prefix; re-adding the same subset may still
+  replace its own columns.
+- **`overwrite = TRUE` only deletes a scroll project.**
+  [`scroll_build()`](https://shihanli92.github.io/scroll/reference/scroll_build.md)
+  and
+  [`scroll_build_stream()`](https://shihanli92.github.io/scroll/reference/scroll_build_stream.md)
+  refuse to delete a folder that is not a scroll project (no
+  `manifest.yaml`, `cells.parquet` or `expr/`), the working directory or
+  a folder containing it, the home folder, or a root. An empty folder is
+  fine.
+- **Save keeps a style.yaml it can’t read.** If `style.yaml` had a typo,
+  Save treated it as empty and rewrote it with only the plot being
+  saved, losing every other saved style. Save now stops with a message
+  and writes nothing.
+- **Filters on a re-added session column.** Re-adding a New column (or a
+  signature score) under the same name kept the old applied filter,
+  which could filter out every cell while the filter box looked empty.
+  Applied filters now keep only the values their column still has
+  (numeric ranges are clamped), and are dropped when nothing is left.
+- **New column mapping: quotes and a missing comma.** A level with a
+  comma, colon or bracket can be written in quotes
+  (`["B, memory", "T:CD4"]: x`). A missing comma (`D1: 2 D2: 3`) is
+  reported instead of giving D1 the label `2 D2: 3`.
+
+### Performance
+
+- **Signature scores** (Scaled, UCell, AUCell) split the gene query once
+  and add up a gene at a time, instead of rescanning it per gene and
+  building a cells x genes matrix (200,000 cells x 150 genes: 6.4 s to 2
+  s, a fraction of the memory).
+- **The query cache holds genes, not gene lists, and is bounded in
+  size.** A DotPlot’s gene list edited one gene at a time now reads only
+  the new gene, and the cache (shared by all sessions of an app) is
+  capped at 512 MB (option `scroll.query_cache_mb`) instead of 256
+  entries of any size.
+
+### Packaging
+
+- Minimum versions for `ggplot2 (>= 3.4.0)` and `bslib (>= 0.7.0)`,
+  which the code needs; CI checks R 4.1, the oldest R in `Depends`.
+
 ## scroll 0.3.16
 
 ### Bug fixes

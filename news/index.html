@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">scroll</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.16</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.17</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,6 +32,35 @@
       <small>Source: <a href="https://github.com/shihanli92/scroll/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.3.17" id="scroll-0317">scroll 0.3.17<a class="anchor" aria-label="anchor" href="#scroll-0317"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-3-17">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-3-17"></a></h3>
+<ul><li>
+<strong>Negative values are kept with <code>quantize = TRUE</code>.</strong> The 0-255 code covers 0 to the assay’s maximum only, so negative values (centred or integrated data, CLR protein data) were all stored as 0. An assay with negative values is now stored unquantized (float32), with a message at build time; the manifest marks it <code>quantize: false</code> and <code><a href="../reference/scroll_dequantize.html">scroll_dequantize()</a></code> follows that.</li>
+<li>
+<strong><code><a href="../reference/scroll_add_subset.html">scroll_add_subset()</a></code> no longer overwrites a parent column.</strong> With an explicit <code>meta =</code> (no prefix), a column the parent already had (e.g. <code>condition</code>) was replaced by the subset’s copy, <code>NA</code> outside the subset. That is now an error that suggests a prefix; re-adding the same subset may still replace its own columns.</li>
+<li>
+<strong><code>overwrite = TRUE</code> only deletes a scroll project.</strong> <code><a href="../reference/scroll_build.html">scroll_build()</a></code> and <code><a href="../reference/scroll_build_stream.html">scroll_build_stream()</a></code> refuse to delete a folder that is not a scroll project (no <code>manifest.yaml</code>, <code>cells.parquet</code> or <code>expr/</code>), the working directory or a folder containing it, the home folder, or a root. An empty folder is fine.</li>
+<li>
+<strong>Save keeps a style.yaml it can’t read.</strong> If <code>style.yaml</code> had a typo, Save treated it as empty and rewrote it with only the plot being saved, losing every other saved style. Save now stops with a message and writes nothing.</li>
+<li>
+<strong>Filters on a re-added session column.</strong> Re-adding a New column (or a signature score) under the same name kept the old applied filter, which could filter out every cell while the filter box looked empty. Applied filters now keep only the values their column still has (numeric ranges are clamped), and are dropped when nothing is left.</li>
+<li>
+<strong>New column mapping: quotes and a missing comma.</strong> A level with a comma, colon or bracket can be written in quotes (<code>["B, memory", "T:CD4"]: x</code>). A missing comma (<code>D1: 2 D2: 3</code>) is reported instead of giving D1 the label <code>2 D2: 3</code>.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="performance-0-3-17">Performance<a class="anchor" aria-label="anchor" href="#performance-0-3-17"></a></h3>
+<ul><li>
+<strong>Signature scores</strong> (Scaled, UCell, AUCell) split the gene query once and add up a gene at a time, instead of rescanning it per gene and building a cells x genes matrix (200,000 cells x 150 genes: 6.4 s to 2 s, a fraction of the memory).</li>
+<li>
+<strong>The query cache holds genes, not gene lists, and is bounded in size.</strong> A DotPlot’s gene list edited one gene at a time now reads only the new gene, and the cache (shared by all sessions of an app) is capped at 512 MB (option <code>scroll.query_cache_mb</code>) instead of 256 entries of any size.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="packaging-0-3-17">Packaging<a class="anchor" aria-label="anchor" href="#packaging-0-3-17"></a></h3>
+<ul><li>Minimum versions for <code>ggplot2 (&gt;= 3.4.0)</code> and <code>bslib (&gt;= 0.7.0)</code>, which the code needs; CI checks R 4.1, the oldest R in <code>Depends</code>.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.3.16" id="scroll-0316">scroll 0.3.16<a class="anchor" aria-label="anchor" href="#scroll-0316"></a></h2>
 <div class="section level3">
