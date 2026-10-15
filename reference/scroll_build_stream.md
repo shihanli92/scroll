@@ -97,10 +97,13 @@ Invisibly, `outdir`.
 ## Details
 
 Idempotent and **append-safe**: re-running with more `sources` adds only
-the new ones (tracked in `outdir/.stream_sources.txt`), so a build can
-grow as data arrives. Values are stored unquantized (`float32`); a
-global quantization max is unknown while streaming, so `quantize = TRUE`
-is not supported here.
+the new ones, so a build can grow as data arrives. Each source is
+committed on its own (under the hidden `outdir/.stream/` folder), so a
+run that stops part-way – an error, a full disk, a killed session –
+keeps the sources it finished; run it again to carry on. `.stream/` is
+removed once a run finishes. Values are stored unquantized (`float32`);
+a global quantization max is unknown while streaming, so
+`quantize = TRUE` is not supported here.
 
 ## See also
 

@@ -17,7 +17,7 @@ cell index, and the manifest written once at the end. The store is compacted
 
     <a class="navbar-brand me-2" href="../index.html">scroll</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.15</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.16</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -137,8 +137,10 @@ part-file tags (default <code>as.character</code>).</p></dd>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>Idempotent and <strong>append-safe</strong>: re-running with more <code>sources</code> adds only the new
-ones (tracked in <code>outdir/.stream_sources.txt</code>), so a build can grow as data
-arrives. Values are stored unquantized (<code>float32</code>); a global quantization max is
+ones, so a build can grow as data arrives. Each source is committed on its own
+(under the hidden <code>outdir/.stream/</code> folder), so a run that stops part-way –
+an error, a full disk, a killed session – keeps the sources it finished; run
+it again to carry on. <code>.stream/</code> is removed once a run finishes. Values are stored unquantized (<code>float32</code>); a global quantization max is
 unknown while streaming, so <code>quantize = TRUE</code> is not supported here.</p>
     </div>
     <div class="section level2">

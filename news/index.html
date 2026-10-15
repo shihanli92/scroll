@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">scroll</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.15</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.16</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,6 +32,24 @@
       <small>Source: <a href="https://github.com/shihanli92/scroll/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.3.16" id="scroll-0316">scroll 0.3.16<a class="anchor" aria-label="anchor" href="#scroll-0316"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-3-16">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-3-16"></a></h3>
+<ul><li>
+<strong>Streaming builds survive a failed run.</strong> If <code><a href="../reference/scroll_build_stream.html">scroll_build_stream()</a></code> stopped part-way (a reader error, a full disk, a killed session), the next run skipped the sources it had finished but gave the following ones the same cell numbers, so expression values were attached to the wrong cells. Each source is now committed on its own (in a hidden <code>.stream/</code> folder, removed when the run finishes); a re-run keeps the sources that finished, clears what an unfinished one left behind, and carries on. Projects streamed by an earlier scroll are taken over on their next append.</li>
+<li>
+<strong>Streamed projects list every source’s genes.</strong> The manifest took its gene list from the last source only, so genes missing there could not be picked in the app. It now lists the union over all sources.</li>
+<li>
+<strong>Merging a streamed store uses bounded memory.</strong> The final merge of the per-source files read the whole assay into R. It now works through the genes a batch at a time and replaces the old files only once the new one is complete.</li>
+<li>
+<strong>Plots from one user’s added columns are no longer shown to another.</strong> Two users of the same app who each added a column of the same name (e.g. two different <code>sig_CD3D</code> scores) could be served each other’s cached DimPlot, FeaturePlot or Biaxial image. A session with added columns now keeps its own cache entries.</li>
+<li>
+<strong>VisiumV1 spots land on the tissue.</strong> Spot coordinates from a VisiumV1 image were scaled to the low-resolution image twice, crowding every spot into one corner. VisiumV2 was not affected.</li>
+<li>
+<strong>The default assay is always one that was built.</strong> A project built with <code>assays =</code> not including the object’s default assay (e.g. an SCT default built with <code>assays = "RNA"</code>) named the missing assay as its default, and every panel failed to read it. The build now picks the first exported assay, and older projects with this problem open on their first assay.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.3.15" id="scroll-0315">scroll 0.3.15<a class="anchor" aria-label="anchor" href="#scroll-0315"></a></h2>
 <ul><li>
